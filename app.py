@@ -2,19 +2,39 @@
 VALD Athlete Report — type-in web app.
 Enter results, see traffic lights live, download the premium PDF.
 """
-import json
+import json, os
 import streamlit as st
 import engine
 import report_pdf
 
-st.set_page_config(page_title="VALD Athlete Report", page_icon="\U0001F3C3", layout="wide")
+_icon = "favicon.png" if os.path.exists("favicon.png") else "\U0001F3C3"
+st.set_page_config(page_title="BASE Health \u2014 Athlete Report", page_icon=_icon, layout="wide")
+
+BRAND = "#5088C0"
+st.markdown(f"""<style>
+.stApp .stButton>button, .stApp .stDownloadButton>button {{background:{BRAND};color:#fff;border:0;font-weight:700;}}
+.stApp .stButton>button:hover, .stApp .stDownloadButton>button:hover {{background:#3D6FA3;color:#fff;}}
+.stApp h1,.stApp h2,.stApp h3,.stApp h4 {{color:#17191C;}}
+</style>""", unsafe_allow_html=True)
+
+def show_logo(width=64):
+    cols = st.columns([1, 9])
+    if os.path.exists("favicon.png"):
+        cols[0].image("favicon.png", width=width)
+    cols[1].markdown(
+        f"<div style='line-height:1.05;margin-top:6px'>"
+        f"<span style='font-size:24px;font-weight:800;letter-spacing:1px;color:#17191C'>BASE "
+        f"<span style='color:{BRAND}'>HEALTH</span></span><br>"
+        f"<span style='font-size:10px;letter-spacing:3px;color:#8a93a0'>NOOSA</span></div>",
+        unsafe_allow_html=True)
 
 # ---------- simple password gate ----------
 PASSWORD = st.secrets.get("app_password", "changeme")   # set this in Streamlit > Settings > Secrets
 if "ok" not in st.session_state:
     st.session_state.ok = False
 if not st.session_state.ok:
-    st.title("VALD Athlete Report")
+    show_logo(60)
+    st.title("Athlete Report")
     pw = st.text_input("Enter password", type="password")
     if st.button("Enter"):
         st.session_state.ok = (pw == PASSWORD)
@@ -57,6 +77,7 @@ meta = dict(
 )
 
 # ---------- main: data entry ----------
+show_logo(64)
 st.title("Athlete Performance & Readiness Report")
 st.caption("Enter this test's result, and (optional) the previous result to track change. Leave a metric blank to skip it.")
 
