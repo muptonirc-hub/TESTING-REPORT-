@@ -253,6 +253,7 @@ def render_pdf(meta, population, groups, counts, prios):
     .asy-note{{font-size:7.5px;color:{MUTE};font-style:italic;margin:5px 2px 0;}}
     .radar-wrap{{text-align:center;margin:4px 0 0;}}
     .radar-note{{font-size:7.5px;color:{MUTE};font-style:italic;margin:2px 2px 0;text-align:center;}}
+    .newpage{{break-before:page;page-break-before:always;}}
     """
     rsvg = radar_svg(groups)
     radar_block = (f'<div class="sec">Athlete profile \u2014 key components</div>'
@@ -275,7 +276,7 @@ def render_pdf(meta, population, groups, counts, prios):
       <span style="background:{A}">Amber: {counts['Amber']}</span><span style="background:{R}">Red: {counts['Red']}</span></div></div>
     <div class="sec">Overview by area</div>{scorecard(groups)}
     {radar_block}
-    <div class="sec">Top priorities \u2014 worst first</div>{prio_html}
+    <div class="sec newpage">Top priorities \u2014 worst first</div>{prio_html}
     {asym_section(groups)}
     <div class="sec">Full results</div>{body}
     <div class="foot">Confidence shown in grey (\u2605\u2605\u2605 strong \u00b7 \u2605\u2605\u2606 moderate \u00b7 \u2605\u2606\u2606 weak).
