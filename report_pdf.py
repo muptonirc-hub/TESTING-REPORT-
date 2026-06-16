@@ -59,13 +59,16 @@ def render_pdf(meta, population, groups, counts, prios):
         return f'<span style="color:{col};font-weight:700">{esc(c)}</span>'
     prio_html="".join(
         f'<div class="prow">{chip(r["status"])}<b>{esc(r["name"])}</b>'
-        f'<span class="pdet">= {fmt(r["result"])} {esc(r["unit"])}  \u00b7  needs {esc(r["target"])}  \u00b7  {esc(r["source"])}</span></div>'
+        f'<span class="pdet">= {fmt(r["result"])} {esc(r["unit"])}'
+        f'{(" (" + esc(r["side"]) + " higher)") if r.get("side") else ""}'
+        f'  \u00b7  needs {esc(r["target"])}  \u00b7  {esc(r["source"])}</span></div>'
         for r in prios) or f'<div class="prow"><span style="color:{G}">\u2713 Nothing flagged \u2014 all tested metrics on target.</span></div>'
     body=""
     for gp in groups:
         body+=f'<div class="grp">{esc(gp["title"])}</div>'
         for m in gp["rows"]:
-            body+=(f'<div class="row"><div class="mname">{esc(m["name"])}<span class="unit">{esc(m["unit"])}</span></div>'
+            sd=f' <span style="color:{BLUE};font-weight:700;font-size:8.5px">\u00b7 {esc(m["side"])} higher</span>' if m.get("side") else ""
+            body+=(f'<div class="row"><div class="mname">{esc(m["name"])}<span class="unit">{esc(m["unit"])}</span>{sd}</div>'
                    f'<div class="mval">{fmt(m["result"])}</div>'
                    f'<div class="mmeter">{meter(m["result"],m.get("norm"))}<div class="tgt">target {esc(m["target"])}</div></div>'
                    f'<div class="mstat">{chip(m["status"])}<div class="chgc">{chg(m)}</div></div></div>')

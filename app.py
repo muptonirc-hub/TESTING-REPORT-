@@ -119,18 +119,31 @@ st.title("Athlete Performance & Readiness Report")
 st.caption("Enter this test's result, and (optional) the previous result to track change. Leave a metric blank to skip it.")
 
 inputs = {}
+def is_asym(n):
+    return ("Asymmetry" in n) or ("Imbalance" in n)
 for g in NORMS["groups"]:
     st.markdown(f"#### {g['title']}")
     for m in g["metrics"]:
         if m["calc"] == "DSI":
             st.caption("DSI is calculated automatically from CMJ Peak Force \u00f7 IMTP Peak Force.")
             continue
-        c0, c1, c2 = st.columns([3, 1.3, 1.3])
-        c0.markdown(f"**{m['name']}**  \n<span style='color:#5A6573;font-size:12px'>{m['unit']}</span>",
-                    unsafe_allow_html=True)
-        res = c1.text_input("Result", key="r_" + m["name"], label_visibility="collapsed", placeholder="result")
-        prev = c2.text_input("Previous", key="p_" + m["name"], label_visibility="collapsed", placeholder="previous")
-        inputs[m["name"]] = {"result": parse(res), "previous": parse(prev)}
+        name = m["name"]
+        if is_asym(name):
+            c0, c1, cs, c2 = st.columns([3, 1.2, 1.0, 1.2])
+            c0.markdown(f"**{name}**  \n<span style='color:#5A6573;font-size:12px'>{m['unit']} \u00b7 higher side</span>",
+                        unsafe_allow_html=True)
+            res = c1.text_input("Result", key="r_" + name, label_visibility="collapsed", placeholder="result")
+            side = cs.selectbox("Side", ["\u2014", "L", "R"], key="s_" + name, label_visibility="collapsed")
+            prev = c2.text_input("Previous", key="p_" + name, label_visibility="collapsed", placeholder="previous")
+            inputs[name] = {"result": parse(res), "previous": parse(prev),
+                            "side": (side if side in ("L", "R") else "")}
+        else:
+            c0, c1, c2 = st.columns([3, 1.3, 1.3])
+            c0.markdown(f"**{name}**  \n<span style='color:#5A6573;font-size:12px'>{m['unit']}</span>",
+                        unsafe_allow_html=True)
+            res = c1.text_input("Result", key="r_" + name, label_visibility="collapsed", placeholder="result")
+            prev = c2.text_input("Previous", key="p_" + name, label_visibility="collapsed", placeholder="previous")
+            inputs[name] = {"result": parse(res), "previous": parse(prev)}
 
 # ---------- compute ----------
 if population is None:
@@ -149,9 +162,10 @@ st.markdown("**Top priorities (worst first)**")
 if prios:
     for r in prios:
         col = STATUS_COLOR.get(r["status"], "#999")
+        sd = f" <b>({r['side']} higher)</b>" if r.get("side") else ""
         st.markdown(
             f"<span style='background:{col};color:#fff;border-radius:3px;padding:1px 7px;font-weight:700'>{r['status']}</span> "
-            f"**{r['name']}** &nbsp; = {r['result']} {r['unit']} · needs {r['target']}",
+            f"**{r['name']}** &nbsp; = {r['result']} {r['unit']}{sd} · needs {r['target']}",
             unsafe_allow_html=True)
 else:
     st.success("Nothing flagged — all tested metrics on target.")
@@ -162,9 +176,10 @@ with st.expander("See all entered results"):
         for r in gp["rows"]:
             col = STATUS_COLOR.get(r["status"], "#999")
             chg = f" · {r['change']}" if r["change"] else ""
+            sd = f" ({r['side']} higher)" if r.get("side") else ""
             st.markdown(
                 f"<span style='background:{col};color:#fff;border-radius:3px;padding:0 6px'>{r['status'] or '—'}</span> "
-                f"{r['name']}: **{r['result']}** {r['unit']} (target {r['target']}){chg}",
+                f"{r['name']}: **{r['result']}** {r['unit']}{sd} (target {r['target']}){chg}",
                 unsafe_allow_html=True)
 
 # ---------- generate PDF ----------

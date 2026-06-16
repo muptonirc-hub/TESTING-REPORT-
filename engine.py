@@ -84,7 +84,7 @@ def build_rows(inputs, population, norms, age_band=None):
             ch, kind = change(result, inp.get("previous"), m["dir"], m["thr"])
             rows.append(dict(name=name, unit=m["unit"], result=result, status=st,
                              target=target_str(norm), source=(norm or {}).get("source", ""),
-                             norm=norm, change=ch, change_kind=kind))
+                             norm=norm, change=ch, change_kind=kind, side=inp.get("side", "")))
         if rows:
             groups.append(dict(title=g["title"], rows=rows))
     return groups
