@@ -48,6 +48,72 @@ def meter(result, n):
     mk=min(100,max(0,(r-lo)/span*100))
     return f'<div class="mt">{segs}<i class="mk" style="left:{mk:.1f}%"></i></div>'
 
+ASYM = lambda n: ("Asymmetry" in n) or ("Imbalance" in n)
+DOMAIN_MAP = [("COUNTERMOVEMENT", "Jump / power"), ("MID-THIGH", "Max strength"),
+              ("HOP", "Reactive"), ("NORDIC", "Hamstring"), ("HIP", "Hip / groin"),
+              ("DYNAMIC STRENGTH", "DSI"), ("DYNAMO", "Isometric")]
+WORST = {"Red": 3, "Amber": 2, "Green": 1}
+
+def _short_domain(title):
+    for k, v in DOMAIN_MAP:
+        if k in title:
+            return v
+    return title.title()
+
+def scorecard(groups):
+    cards = []
+    for gp in groups:
+        sts = [r["status"] for r in gp["rows"] if r["status"] in WORST]
+        if not sts:
+            continue
+        worst = max(sts, key=lambda s: WORST[s])
+        green = sum(1 for s in sts if s == "Green")
+        col = COL[worst]
+        cards.append(
+            f'<div class="card"><div class="ctop" style="background:{col}"></div>'
+            f'<div class="cbody"><span class="cst" style="color:{col}">{worst}</span>'
+            f'<div class="cdom">{esc(_short_domain(gp["title"]))}</div>'
+            f'<div class="csub">{green}/{len(sts)} on target</div></div></div>')
+    return f'<div class="scorecard">{"".join(cards)}</div>' if cards else ""
+
+def asym_section(groups):
+    rows = [r for gp in groups for r in gp["rows"] if ASYM(r["name"])]
+    if not rows:
+        return ""
+    SCALE = 25.0
+    out = ['<div class="sec">Limb symmetry \u2014 L vs R</div>',
+           '<div class="asy-head"><span>\u25c0 LEFT higher</span><span>balanced</span>'
+           '<span>RIGHT higher \u25b6</span></div>']
+    for r in rows:
+        pct = _f(r["result"])
+        if pct is None:
+            continue
+        w = min(50.0, pct / SCALE * 50.0)
+        col = COL.get(r["status"], "#999")
+        side = r.get("side", "")
+        if side == "L":
+            fill = f"left:{50-w:.1f}%;width:{w:.1f}%"
+        elif side == "R":
+            fill = f"left:50%;width:{w:.1f}%"
+        else:
+            fill = "left:49%;width:2%"
+        ticks = ""
+        g = (r.get("norm") or {}).get("green")
+        gg = _f(g)
+        if gg is not None:
+            tw = min(50.0, gg / SCALE * 50.0)
+            ticks = (f'<i class="asy-tick" style="left:{50-tw:.1f}%"></i>'
+                     f'<i class="asy-tick" style="left:{50+tw:.1f}%"></i>')
+        sd = f" ({side} higher)" if side else ""
+        out.append(
+            f'<div class="asy-row"><div class="asy-name">{esc(r["name"])}</div>'
+            f'<div class="asy-track"><div class="asy-center"></div>{ticks}'
+            f'<div class="asy-fill" style="{fill};background:{col}"></div></div>'
+            f'<div class="asy-val">{fmt(pct)}%{sd}</div></div>')
+    out.append('<div class="asy-note">Bar length = asymmetry magnitude; faint ticks mark the '
+               'balanced (green) limit. Direction = higher/dominant side.</div>')
+    return "".join(out)
+
 def render_pdf(meta, population, groups, counts, prios):
     icon=_icon_uri()
     icon_html=f'<img class="icon" src="{icon}"/>' if icon else ""
@@ -104,6 +170,22 @@ def render_pdf(meta, population, groups, counts, prios):
     .mk{{position:absolute;top:-2px;width:3px;height:13px;background:{BLACK};border-radius:2px;box-shadow:0 0 0 1.5px #fff;}}
     .tgt{{font-size:8px;color:{MUTE};margin-top:2px;}} .mstat{{text-align:right;}} .chgc{{font-size:8.5px;margin-top:2px;}}
     .foot{{margin-top:12px;font-size:8px;color:{MUTE};font-style:italic;border-top:2px solid {BLUE};padding-top:6px;}}
+    .scorecard{{display:flex;flex-wrap:wrap;gap:6px;margin:2px 0;}}
+    .card{{flex:1;min-width:108px;border:1px solid {LINE};border-radius:5px;overflow:hidden;}}
+    .card .ctop{{height:5px;}}
+    .card .cbody{{padding:4px 8px 6px;}}
+    .card .cst{{float:right;font-weight:800;font-size:9px;}}
+    .card .cdom{{font-weight:700;font-size:9.5px;color:{BLACK};}}
+    .card .csub{{font-size:8px;color:{MUTE};margin-top:1px;}}
+    .asy-head{{display:flex;justify-content:space-between;font-size:7.5px;color:{MUTE};font-weight:700;letter-spacing:.5px;margin:3px 2px;}}
+    .asy-row{{display:grid;grid-template-columns:150px 1fr 96px;align-items:center;gap:8px;padding:4px 6px;border-bottom:1px solid {LINE};break-inside:avoid;}}
+    .asy-name{{font-weight:700;font-size:9.5px;}}
+    .asy-track{{position:relative;height:13px;background:#F0F2F5;border-radius:3px;}}
+    .asy-center{{position:absolute;left:50%;top:0;bottom:0;width:2px;margin-left:-1px;background:#8A93A0;}}
+    .asy-tick{{position:absolute;top:0;bottom:0;width:1px;background:#C2C9D2;}}
+    .asy-fill{{position:absolute;top:2px;bottom:2px;border-radius:2px;}}
+    .asy-val{{font-size:9px;text-align:right;font-weight:700;color:{BLACK};}}
+    .asy-note{{font-size:7.5px;color:{MUTE};font-style:italic;margin:5px 2px 0;}}
     """
     doc=f"""<html><head><meta charset="utf-8"><style>{css}</style></head><body>
     <div class="hd">
@@ -119,7 +201,9 @@ def render_pdf(meta, population, groups, counts, prios):
     <div class="band"><div>Compared against <span class="pop">{esc(population)}</span></div>
       <div class="counts"><span style="background:{G}">Green: {counts['Green']}</span>
       <span style="background:{A}">Amber: {counts['Amber']}</span><span style="background:{R}">Red: {counts['Red']}</span></div></div>
+    <div class="sec">Overview by area</div>{scorecard(groups)}
     <div class="sec">Top priorities \u2014 worst first</div>{prio_html}
+    {asym_section(groups)}
     <div class="sec">Full results</div>{body}
     <div class="foot">Confidence shown in grey (\u2605\u2605\u2605 strong \u00b7 \u2605\u2605\u2606 moderate \u00b7 \u2605\u2606\u2606 weak).
     Norms are population- and protocol-dependent; targets reflect the selected reference population only.
