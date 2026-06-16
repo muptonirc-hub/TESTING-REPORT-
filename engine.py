@@ -59,13 +59,15 @@ def change(result, previous, direction, thr):
         return f"\u25cf meaningful shift   {disp}", "shift"
     return (f"\u25b2 real gain   {disp}", "gain") if good else (f"\u25bc real drop   {disp}", "drop")
 
-def build_rows(inputs, population, norms, age_band=None):
-    """inputs: {metric: {'result':x,'previous':y}}.  age_band e.g. '30-40 years' or None/'All ages'.
+def build_rows(inputs, population, norms, age_band=None, mass=None):
+    """inputs: {metric: {'result':x,'previous':y,'side':...}}.  age_band e.g. '30-40 years'.
+    mass (kg) is used to body-weight-score metrics whose calc == 'PERKG' (entered in N -> N/kg).
     Band-specific norm used where available; otherwise falls back to the all-ages norm."""
     popnorms = norms["populations"].get(population, {})
     band = {}
     if age_band and age_band != "All ages":
         band = norms.get("age_norms", {}).get(population, {}).get(age_band, {})
+    m_kg = _num(mass)
     # DSI is derived from CMJ Peak Force / IMTP Peak Force
     cmj = _num(inputs.get("CMJ Peak Force", {}).get("result"))
     imtp = _num(inputs.get("IMTP Peak Force", {}).get("result"))
@@ -76,12 +78,21 @@ def build_rows(inputs, population, norms, age_band=None):
         for m in g["metrics"]:
             name = m["name"]
             inp = inputs.get(name, {})
-            result = dsi_val if m["calc"] == "DSI" else inp.get("result")
+            prev_for_change = inp.get("previous")
+            if m["calc"] == "DSI":
+                result = dsi_val
+            elif m["calc"] == "PERKG":
+                raw = _num(inp.get("result"))
+                result = round(raw / m_kg, 2) if (raw and m_kg) else None
+                pr = _num(inp.get("previous"))
+                prev_for_change = round(pr / m_kg, 2) if (pr and m_kg) else None
+            else:
+                result = inp.get("result")
             if result in (None, ""):
                 continue
             norm = band.get(name) or popnorms.get(name)
             st = status(result, norm)
-            ch, kind = change(result, inp.get("previous"), m["dir"], m["thr"])
+            ch, kind = change(result, prev_for_change, m["dir"], m["thr"])
             rows.append(dict(name=name, unit=m["unit"], result=result, status=st,
                              target=target_str(norm), source=(norm or {}).get("source", ""),
                              norm=norm, change=ch, change_kind=kind, side=inp.get("side", "")))

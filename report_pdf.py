@@ -1,5 +1,5 @@
 """Render the premium athlete PDF (returns bytes). Uses weasyprint. BASE Health branded."""
-import html, base64, os
+import html, base64, os, math
 from weasyprint import HTML
 
 BLUE="#5688C7";BLUEINK="#345E86";DARK="#15171B";BLACK="#17191C";INK="#1A2233";MUTE="#5A6573";LINE="#D7DCE5"
@@ -114,6 +114,71 @@ def asym_section(groups):
                'balanced (green) limit. Direction = higher/dominant side.</div>')
     return "".join(out)
 
+RADAR_KEYS = [("Jump Height", "CMJ jump ht"), ("IMTP Relative Force", "IMTP N/kg"),
+              ("__NORDIC__", "Nordic ecc"), ("Adductor Peak Force", "Hip ADD"),
+              ("Abductor Peak Force", "Hip ABD"), ("Quad ISO @ 60\u00b0", "Quad ISO")]
+_WORST = {"Green": 1, "Amber": 2, "Red": 3}
+
+def _rowmap(groups):
+    return {r["name"]: r for gp in groups for r in gp["rows"]}
+
+def _spoke(name, rm):
+    if name == "__NORDIC__":
+        L = rm.get("Nordic Peak Force \u2014 Left"); R = rm.get("Nordic Peak Force \u2014 Right")
+        present = [x for x in (L, R) if x and _f(x["result"]) is not None]
+        ref = L or R
+        if not present or not ref or not (ref.get("norm") or {}).get("green"):
+            return None
+        g = _f(ref["norm"]["green"])
+        v = sum(_f(x["result"]) for x in present) / len(present)
+        worst = max((x["status"] for x in present), key=lambda s: _WORST.get(s, 0))
+        return dict(value=v, target=g, status=worst, unit="N")
+    r = rm.get(name)
+    if not r:
+        return None
+    v = _f(r["result"]); g = _f((r.get("norm") or {}).get("green"))
+    if v is None or not g:
+        return None
+    return dict(value=v, target=g, status=r["status"], unit=r["unit"])
+
+def radar_svg(groups):
+    rm = _rowmap(groups)
+    spokes = []
+    for name, label in RADAR_KEYS:
+        s = _spoke(name, rm)
+        if s:
+            s["label"] = label; s["score"] = s["value"] / s["target"]; spokes.append(s)
+    if len(spokes) < 3:
+        return ""
+    W, H, cx, cy, Rmax, CAP = 480, 300, 240, 150, 98, 1.5
+    n = len(spokes)
+    def pt(score, i):
+        ang = math.radians(-90 + i * 360 / n); rr = min(score, CAP) / CAP * Rmax
+        return cx + rr * math.cos(ang), cy + rr * math.sin(ang)
+    svg = [f'<svg viewBox="0 0 {W} {H}" xmlns="http://www.w3.org/2000/svg" width="100%">']
+    for s in (0.5, 1.0, 1.5):
+        pts = " ".join(f"{x:.1f},{y:.1f}" for x, y in (pt(s, i) for i in range(n)))
+        if abs(s - 1.0) < 1e-6:
+            svg.append(f'<polygon points="{pts}" fill="none" stroke="{G}" stroke-width="1.4" stroke-dasharray="4 3"/>')
+        else:
+            svg.append(f'<polygon points="{pts}" fill="none" stroke="#D7DCE5" stroke-width="1"/>')
+    for i, sp in enumerate(spokes):
+        ex, ey = pt(CAP, i)
+        svg.append(f'<line x1="{cx}" y1="{cy}" x2="{ex:.1f}" y2="{ey:.1f}" stroke="#D7DCE5" stroke-width="1"/>')
+        lx, ly = pt(CAP + 0.30, i)
+        ca = math.cos(math.radians(-90 + i * 360 / n))
+        anchor = "middle" if abs(ca) < 0.3 else ("start" if ca > 0 else "end")
+        vtxt = fmt(sp["value"]) + (" " + sp["unit"] if sp["unit"] else "")
+        svg.append(f'<text x="{lx:.1f}" y="{ly:.1f}" text-anchor="{anchor}" font-size="9" font-weight="700" fill="{BLACK}">{esc(sp["label"])}</text>')
+        svg.append(f'<text x="{lx:.1f}" y="{ly+11:.1f}" text-anchor="{anchor}" font-size="8" fill="{MUTE}">{esc(vtxt)}</text>')
+    poly = " ".join(f"{x:.1f},{y:.1f}" for x, y in (pt(sp["score"], i) for i, sp in enumerate(spokes)))
+    svg.append(f'<polygon points="{poly}" fill="{BLUE}" fill-opacity="0.18" stroke="{BLUE}" stroke-width="2"/>')
+    for i, sp in enumerate(spokes):
+        x, y = pt(sp["score"], i)
+        svg.append(f'<circle cx="{x:.1f}" cy="{y:.1f}" r="3.2" fill="{COL.get(sp["status"],"#999")}" stroke="#fff" stroke-width="1"/>')
+    svg.append('</svg>')
+    return "".join(svg)
+
 def render_pdf(meta, population, groups, counts, prios):
     icon=_icon_uri()
     icon_html=f'<img class="icon" src="{icon}"/>' if icon else ""
@@ -186,7 +251,14 @@ def render_pdf(meta, population, groups, counts, prios):
     .asy-fill{{position:absolute;top:2px;bottom:2px;border-radius:2px;}}
     .asy-val{{font-size:9px;text-align:right;font-weight:700;color:{BLACK};}}
     .asy-note{{font-size:7.5px;color:{MUTE};font-style:italic;margin:5px 2px 0;}}
+    .radar-wrap{{text-align:center;margin:4px 0 0;}}
+    .radar-note{{font-size:7.5px;color:{MUTE};font-style:italic;margin:2px 2px 0;text-align:center;}}
     """
+    rsvg = radar_svg(groups)
+    radar_block = (f'<div class="sec">Athlete profile \u2014 key components</div>'
+                   f'<div class="radar-wrap">{rsvg}</div>'
+                   f'<div class="radar-note">Each axis = result vs the athlete\u2019s age/sex norm target '
+                   f'(dashed green ring). Dots show status. Quad ISO @ 60\u00b0 uses a placeholder norm.</div>') if rsvg else ""
     doc=f"""<html><head><meta charset="utf-8"><style>{css}</style></head><body>
     <div class="hd">
       <div class="brand">{icon_html}<div class="name">BASE <b>HEALTH</b><span>NOOSA</span></div></div>
@@ -202,6 +274,7 @@ def render_pdf(meta, population, groups, counts, prios):
       <div class="counts"><span style="background:{G}">Green: {counts['Green']}</span>
       <span style="background:{A}">Amber: {counts['Amber']}</span><span style="background:{R}">Red: {counts['Red']}</span></div></div>
     <div class="sec">Overview by area</div>{scorecard(groups)}
+    {radar_block}
     <div class="sec">Top priorities \u2014 worst first</div>{prio_html}
     {asym_section(groups)}
     <div class="sec">Full results</div>{body}

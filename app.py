@@ -139,7 +139,8 @@ for g in NORMS["groups"]:
                             "side": (side if side in ("L", "R") else "")}
         else:
             c0, c1, c2 = st.columns([3, 1.3, 1.3])
-            c0.markdown(f"**{name}**  \n<span style='color:#5A6573;font-size:12px'>{m['unit']}</span>",
+            uhint = "N \u00b7 enter force, scored as N/kg via Mass" if m["calc"] == "PERKG" else m["unit"]
+            c0.markdown(f"**{name}**  \n<span style='color:#5A6573;font-size:12px'>{uhint}</span>",
                         unsafe_allow_html=True)
             res = c1.text_input("Result", key="r_" + name, label_visibility="collapsed", placeholder="result")
             prev = c2.text_input("Previous", key="p_" + name, label_visibility="collapsed", placeholder="previous")
@@ -149,7 +150,7 @@ for g in NORMS["groups"]:
 if population is None:
     groups, counts, prios = [], {"Green": 0, "Amber": 0, "Red": 0}, []
 else:
-    groups = engine.build_rows(inputs, population, NORMS, age_band)
+    groups = engine.build_rows(inputs, population, NORMS, age_band, parse(meta.get("mass")))
     counts = engine.counts(groups)
     prios = engine.priorities(groups)
 
