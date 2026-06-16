@@ -59,9 +59,13 @@ def change(result, previous, direction, thr):
         return f"\u25cf meaningful shift   {disp}", "shift"
     return (f"\u25b2 real gain   {disp}", "gain") if good else (f"\u25bc real drop   {disp}", "drop")
 
-def build_rows(inputs, population, norms):
-    """inputs: {metric: {'result':x,'previous':y}}.  Returns grouped rows with computed fields."""
+def build_rows(inputs, population, norms, age_band=None):
+    """inputs: {metric: {'result':x,'previous':y}}.  age_band e.g. '30-40 years' or None/'All ages'.
+    Band-specific norm used where available; otherwise falls back to the all-ages norm."""
     popnorms = norms["populations"].get(population, {})
+    band = {}
+    if age_band and age_band != "All ages":
+        band = norms.get("age_norms", {}).get(population, {}).get(age_band, {})
     # DSI is derived from CMJ Peak Force / IMTP Peak Force
     cmj = _num(inputs.get("CMJ Peak Force", {}).get("result"))
     imtp = _num(inputs.get("IMTP Peak Force", {}).get("result"))
@@ -75,7 +79,7 @@ def build_rows(inputs, population, norms):
             result = dsi_val if m["calc"] == "DSI" else inp.get("result")
             if result in (None, ""):
                 continue
-            norm = popnorms.get(name)
+            norm = band.get(name) or popnorms.get(name)
             st = status(result, norm)
             ch, kind = change(result, inp.get("previous"), m["dir"], m["thr"])
             rows.append(dict(name=name, unit=m["unit"], result=result, status=st,

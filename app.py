@@ -60,21 +60,58 @@ def parse(s):
 
 STATUS_COLOR = {"Green": "#2E7D32", "Amber": "#DD8800", "Red": "#C62828", "n/a": "#999"}
 
-# ---------- sidebar: population + athlete details ----------
-st.sidebar.header("Setup")
-population = st.sidebar.selectbox("Compare against", NORMS["population_order"])
-st.sidebar.caption("Pick the reference population. Metrics it doesn't cover show 'n/a'.")
+# ---------- sidebar: athlete details + auto population ----------
+GEN_M = "General Clinical \u2014 Male (all ages)"
+GEN_F = "General Clinical \u2014 Female (all ages)"
+
+def age_to_band(age):
+    try:
+        a = int(float(age))
+    except (TypeError, ValueError):
+        return "All ages"
+    base = (a // 10) * 10
+    return f"{base}-{base+10} years" if base in (10, 20, 30, 40, 50) else "All ages"
+
+st.sidebar.header("Athlete details")
+name = st.sidebar.text_input("Athlete name")
+date = st.sidebar.text_input("Test date")
+sex = st.sidebar.selectbox("Sex", ["\u2014", "Male", "Female"])
+age = st.sidebar.text_input("Age (years)")
+sport = st.sidebar.text_input("Sport")
+tester = st.sidebar.text_input("Tester")
+mass = st.sidebar.text_input("Mass (kg)")
+notes = st.sidebar.text_input("Notes")
+meta = dict(name=name, date=date, sex=(sex if sex != "\u2014" else ""), age=age,
+            sport=sport, tester=tester, mass=mass, notes=notes)
+
 st.sidebar.divider()
-st.sidebar.subheader("Athlete details")
-meta = dict(
-    name=st.sidebar.text_input("Athlete name"),
-    date=st.sidebar.text_input("Test date"),
-    sport=st.sidebar.text_input("Sport"),
-    tester=st.sidebar.text_input("Tester"),
-    age=st.sidebar.text_input("Age"),
-    mass=st.sidebar.text_input("Mass (kg)"),
-    notes=st.sidebar.text_input("Notes"),
-)
+st.sidebar.header("Compare against")
+SPORTS = [p for p in NORMS["population_order"] if not p.startswith("General Clinical")]
+choice = st.sidebar.selectbox("Reference population",
+                              ["General population (auto by age & sex)"] + SPORTS)
+
+if choice.startswith("General population"):
+    population = GEN_M if sex == "Male" else (GEN_F if sex == "Female" else None)
+    age_band = age_to_band(age)
+    if population is None:
+        pop_label = None
+        st.sidebar.warning("Choose Sex to compare against the general norms.")
+    else:
+        base = "Male" if sex == "Male" else "Female"
+        if age_band != "All ages":
+            pop_label = f"General Clinical \u2014 {base} \u00b7 {age_band.replace(' years','')} yr"
+            st.sidebar.success(f"Auto-selected: {base}, {age_band.replace(' years','')} yr")
+        else:
+            pop_label = f"General Clinical \u2014 {base} \u00b7 all ages"
+            why = "no age entered" if not age.strip() else "age outside 10\u201360"
+            st.sidebar.info(f"Auto-selected: {base}, all ages ({why}).")
+    st.sidebar.caption("Jump/Nordic/hip metrics use the matched age band; IMTP & DSI stay all-ages. "
+                       "Any metric without that band falls back to all-ages (shown per row).")
+else:
+    population = choice
+    age_band = "All ages"
+    pop_label = choice
+    st.sidebar.caption("Sport populations are single-band (no age split).")
 
 # ---------- main: data entry ----------
 show_logo(64)
@@ -96,9 +133,12 @@ for g in NORMS["groups"]:
         inputs[m["name"]] = {"result": parse(res), "previous": parse(prev)}
 
 # ---------- compute ----------
-groups = engine.build_rows(inputs, population, NORMS)
-counts = engine.counts(groups)
-prios = engine.priorities(groups)
+if population is None:
+    groups, counts, prios = [], {"Green": 0, "Amber": 0, "Red": 0}, []
+else:
+    groups = engine.build_rows(inputs, population, NORMS, age_band)
+    counts = engine.counts(groups)
+    prios = engine.priorities(groups)
 
 st.divider()
 st.subheader("Live summary")
@@ -129,11 +169,13 @@ with st.expander("See all entered results"):
 
 # ---------- generate PDF ----------
 st.divider()
-if not groups:
+if population is None:
+    st.info("Choose **Sex** in the sidebar (or pick a sport population) to compare against norms.")
+elif not groups:
     st.info("Enter at least one result above to generate a report.")
 else:
     if st.button("Generate PDF report", type="primary"):
-        pdf = report_pdf.render_pdf(meta, population, groups, counts, prios)
+        pdf = report_pdf.render_pdf(meta, pop_label, groups, counts, prios)
         fname = (meta.get("name") or "athlete").strip().replace(" ", "_") + "_report.pdf"
         st.download_button("Download PDF", data=pdf, file_name=fname, mime="application/pdf")
         st.success("Report ready — click Download PDF above.")

@@ -110,7 +110,8 @@ def render_pdf(meta, population, groups, counts, prios):
     <div class="meta">
       <span><b>Athlete</b> {esc(meta.get('name'))}</span><span><b>Date</b> {esc(meta.get('date'))}</span>
       <span><b>Sport</b> {esc(meta.get('sport'))}</span><span><b>Tester</b> {esc(meta.get('tester'))}</span>
-      <span><b>Age</b> {esc(meta.get('age'))}</span><span><b>Mass</b> {esc(meta.get('mass'))} kg</span>
+      <span><b>Age</b> {esc(meta.get('age'))}</span><span><b>Sex</b> {esc(meta.get('sex'))}</span>
+      <span><b>Mass</b> {esc(meta.get('mass'))} kg</span>
       <span><b>Notes</b> {esc(meta.get('notes'))}</span></div>
     <div class="band"><div>Compared against <span class="pop">{esc(population)}</span></div>
       <div class="counts"><span style="background:{G}">Green: {counts['Green']}</span>
