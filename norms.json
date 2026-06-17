@@ -203,11 +203,18 @@
      "thr": 30
     },
     {
-     "name": "Quad ISO @ 60°",
-     "unit": "N/kg",
-     "calc": "PERKG",
+     "name": "Quad ISO @ 60° — Left",
+     "unit": "× BW",
+     "calc": "PERBW",
      "dir": "Higher",
-     "thr": 0.4
+     "thr": 0.05
+    },
+    {
+     "name": "Quad ISO @ 60° — Right",
+     "unit": "× BW",
+     "calc": "PERBW",
+     "dir": "Higher",
+     "thr": 0.05
     }
    ]
   }
@@ -358,13 +365,21 @@
     "amax": null,
     "source": "★★★ VALD Norms · General clinical, all ages · Male · percentile-anchored"
    },
-   "Quad ISO @ 60°": {
+   "Quad ISO @ 60° — Left": {
     "dir": "Higher",
-    "green": 5.0,
-    "amber": 4.0,
+    "green": 0.75,
+    "amber": 0.6,
     "gmax": null,
     "amax": null,
-    "source": "★☆☆ PLACEHOLDER · replace with your DynaMo quad N/kg norm"
+    "source": "★★★ Šarabon et al. · iso knee-ext reference (× BW), per leg · active general"
+   },
+   "Quad ISO @ 60° — Right": {
+    "dir": "Higher",
+    "green": 0.75,
+    "amber": 0.6,
+    "gmax": null,
+    "amax": null,
+    "source": "★★★ Šarabon et al. · iso knee-ext reference (× BW), per leg · active general"
    }
   },
   "General Clinical — Female (all ages)": {
@@ -512,13 +527,21 @@
     "amax": null,
     "source": "★★★ VALD Norms · General clinical, all ages · Female · percentile-anchored"
    },
-   "Quad ISO @ 60°": {
+   "Quad ISO @ 60° — Left": {
     "dir": "Higher",
-    "green": 5.0,
-    "amber": 4.0,
+    "green": 0.75,
+    "amber": 0.6,
     "gmax": null,
     "amax": null,
-    "source": "★☆☆ PLACEHOLDER · replace with your DynaMo quad N/kg norm"
+    "source": "★★★ Šarabon et al. · iso knee-ext reference (× BW), per leg · active general"
+   },
+   "Quad ISO @ 60° — Right": {
+    "dir": "Higher",
+    "green": 0.75,
+    "amber": 0.6,
+    "gmax": null,
+    "amax": null,
+    "source": "★★★ Šarabon et al. · iso knee-ext reference (× BW), per leg · active general"
    }
   },
   "Men's Football (Soccer)": {
@@ -650,13 +673,21 @@
     "amax": 0.9,
     "source": "★★★ Lit: Suchomel 2020 / Comfort 2018 · 0.60–0.80 balanced (applies to all populations)"
    },
-   "Quad ISO @ 60°": {
+   "Quad ISO @ 60° — Left": {
     "dir": "Higher",
-    "green": 5.0,
-    "amber": 4.0,
+    "green": 0.9,
+    "amber": 0.75,
     "gmax": null,
     "amax": null,
-    "source": "★☆☆ PLACEHOLDER · replace with your DynaMo quad N/kg norm"
+    "source": "★★★ Šarabon et al. · iso knee-ext (× BW), per leg · field-sport target"
+   },
+   "Quad ISO @ 60° — Right": {
+    "dir": "Higher",
+    "green": 0.9,
+    "amber": 0.75,
+    "gmax": null,
+    "amax": null,
+    "source": "★★★ Šarabon et al. · iso knee-ext (× BW), per leg · field-sport target"
    }
   },
   "Women's Football (Soccer)": {
@@ -772,13 +803,21 @@
     "amax": 0.9,
     "source": "★★★ Lit: Suchomel 2020 / Comfort 2018 · 0.60–0.80 balanced (applies to all populations)"
    },
-   "Quad ISO @ 60°": {
+   "Quad ISO @ 60° — Left": {
     "dir": "Higher",
-    "green": 5.0,
-    "amber": 4.0,
+    "green": 0.9,
+    "amber": 0.75,
     "gmax": null,
     "amax": null,
-    "source": "★☆☆ PLACEHOLDER · replace with your DynaMo quad N/kg norm"
+    "source": "★★★ Šarabon et al. · iso knee-ext (× BW), per leg · field-sport target"
+   },
+   "Quad ISO @ 60° — Right": {
+    "dir": "Higher",
+    "green": 0.9,
+    "amber": 0.75,
+    "gmax": null,
+    "amax": null,
+    "source": "★★★ Šarabon et al. · iso knee-ext (× BW), per leg · field-sport target"
    }
   },
   "AFL": {
@@ -910,13 +949,21 @@
     "amax": 0.9,
     "source": "★★★ Lit: Suchomel 2020 / Comfort 2018 · 0.60–0.80 balanced (applies to all populations)"
    },
-   "Quad ISO @ 60°": {
+   "Quad ISO @ 60° — Left": {
     "dir": "Higher",
-    "green": 5.0,
-    "amber": 4.0,
+    "green": 0.9,
+    "amber": 0.75,
     "gmax": null,
     "amax": null,
-    "source": "★☆☆ PLACEHOLDER · replace with your DynaMo quad N/kg norm"
+    "source": "★★★ Šarabon et al. · iso knee-ext (× BW), per leg · field-sport target"
+   },
+   "Quad ISO @ 60° — Right": {
+    "dir": "Higher",
+    "green": 0.9,
+    "amber": 0.75,
+    "gmax": null,
+    "amax": null,
+    "source": "★★★ Šarabon et al. · iso knee-ext (× BW), per leg · field-sport target"
    }
   },
   "Custom (in-house)": {
@@ -1048,13 +1095,21 @@
     "amax": 0.9,
     "source": "★★★ Lit: Suchomel 2020 / Comfort 2018 · 0.60–0.80 balanced (applies to all populations)"
    },
-   "Quad ISO @ 60°": {
+   "Quad ISO @ 60° — Left": {
     "dir": "Higher",
-    "green": 5.0,
-    "amber": 4.0,
+    "green": 0.75,
+    "amber": 0.6,
     "gmax": null,
     "amax": null,
-    "source": "★☆☆ PLACEHOLDER · replace with your DynaMo quad N/kg norm"
+    "source": "★★★ Šarabon et al. · iso knee-ext reference (× BW), per leg · active general"
+   },
+   "Quad ISO @ 60° — Right": {
+    "dir": "Higher",
+    "green": 0.75,
+    "amber": 0.6,
+    "gmax": null,
+    "amax": null,
+    "source": "★★★ Šarabon et al. · iso knee-ext reference (× BW), per leg · active general"
    }
   }
  },

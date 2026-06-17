@@ -139,7 +139,7 @@ for g in NORMS["groups"]:
                             "side": (side if side in ("L", "R") else "")}
         else:
             c0, c1, c2 = st.columns([3, 1.3, 1.3])
-            uhint = "N \u00b7 enter force, scored as N/kg via Mass" if m["calc"] == "PERKG" else m["unit"]
+            uhint = "N \u00b7 enter force, scored as \u00d7 BW via Mass" if m["calc"] in ("PERKG", "PERBW") else m["unit"]
             c0.markdown(f"**{name}**  \n<span style='color:#5A6573;font-size:12px'>{uhint}</span>",
                         unsafe_allow_html=True)
             res = c1.text_input("Result", key="r_" + name, label_visibility="collapsed", placeholder="result")

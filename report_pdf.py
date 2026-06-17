@@ -116,23 +116,30 @@ def asym_section(groups):
 
 RADAR_KEYS = [("Jump Height", "CMJ jump ht"), ("IMTP Relative Force", "IMTP N/kg"),
               ("__NORDIC__", "Nordic ecc"), ("Adductor Peak Force", "Hip ADD"),
-              ("Abductor Peak Force", "Hip ABD"), ("Quad ISO @ 60\u00b0", "Quad ISO")]
+              ("Abductor Peak Force", "Hip ABD"), ("__QUAD__", "Quad ISO")]
 _WORST = {"Green": 1, "Amber": 2, "Red": 3}
 
 def _rowmap(groups):
     return {r["name"]: r for gp in groups for r in gp["rows"]}
 
+def _avg_spoke(rm, left, right, unit):
+    L = rm.get(left); R = rm.get(right)
+    present = [x for x in (L, R) if x and _f(x["result"]) is not None]
+    ref = L or R
+    if not present or not ref or not (ref.get("norm") or {}).get("green"):
+        return None
+    g = _f(ref["norm"]["green"])
+    if not g:
+        return None
+    v = sum(_f(x["result"]) for x in present) / len(present)
+    worst = max((x["status"] for x in present), key=lambda s: _WORST.get(s, 0))
+    return dict(value=v, target=g, status=worst, unit=unit)
+
 def _spoke(name, rm):
     if name == "__NORDIC__":
-        L = rm.get("Nordic Peak Force \u2014 Left"); R = rm.get("Nordic Peak Force \u2014 Right")
-        present = [x for x in (L, R) if x and _f(x["result"]) is not None]
-        ref = L or R
-        if not present or not ref or not (ref.get("norm") or {}).get("green"):
-            return None
-        g = _f(ref["norm"]["green"])
-        v = sum(_f(x["result"]) for x in present) / len(present)
-        worst = max((x["status"] for x in present), key=lambda s: _WORST.get(s, 0))
-        return dict(value=v, target=g, status=worst, unit="N")
+        return _avg_spoke(rm, "Nordic Peak Force \u2014 Left", "Nordic Peak Force \u2014 Right", "N")
+    if name == "__QUAD__":
+        return _avg_spoke(rm, "Quad ISO @ 60\u00b0 \u2014 Left", "Quad ISO @ 60\u00b0 \u2014 Right", "\u00d7 BW")
     r = rm.get(name)
     if not r:
         return None

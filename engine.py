@@ -86,6 +86,11 @@ def build_rows(inputs, population, norms, age_band=None, mass=None):
                 result = round(raw / m_kg, 2) if (raw and m_kg) else None
                 pr = _num(inp.get("previous"))
                 prev_for_change = round(pr / m_kg, 2) if (pr and m_kg) else None
+            elif m["calc"] == "PERBW":
+                raw = _num(inp.get("result"))
+                result = round(raw / (m_kg * 9.81), 2) if (raw and m_kg) else None
+                pr = _num(inp.get("previous"))
+                prev_for_change = round(pr / (m_kg * 9.81), 2) if (pr and m_kg) else None
             else:
                 result = inp.get("result")
             if result in (None, ""):
