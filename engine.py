@@ -122,3 +122,25 @@ def priorities(groups, n=5):
     flagged = [r for r in rows if r["status"] in order]
     flagged.sort(key=lambda r: order[r["status"]])
     return flagged[:n]
+
+def build_ham_rows(inputs, phase, ham):
+    """Hamstring rehab rows: injured-limb result vs the selected phase's target."""
+    pnorms = ham["norms"].get(phase, {})
+    groups = []
+    for g in ham["groups"]:
+        rows = []
+        for m in g["metrics"]:
+            name = m["name"]
+            inp = inputs.get(name, {})
+            result = inp.get("result")
+            if result in (None, ""):
+                continue
+            norm = pnorms.get(name)
+            rows.append(dict(name=name, unit=m["unit"], result=result,
+                             status=status(result, norm), target=target_str(norm),
+                             source=(norm or {}).get("source", ""), norm=norm, side="",
+                             change=change(result, inp.get("previous"), m["dir"], m["thr"])[0],
+                             change_kind=change(result, inp.get("previous"), m["dir"], m["thr"])[1]))
+        if rows:
+            groups.append(dict(title=g["title"], rows=rows))
+    return groups

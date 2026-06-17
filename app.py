@@ -60,6 +60,76 @@ def parse(s):
 
 STATUS_COLOR = {"Green": "#2E7D32", "Amber": "#DD8800", "Red": "#C62828", "n/a": "#999"}
 
+# ---------- tool mode (Screening vs Hamstring rehab) ----------
+@st.cache_data
+def load_ham():
+    with open("hamstring_norms.json", encoding="utf-8") as f:
+        return json.load(f)
+HAM = load_ham()
+
+mode = st.sidebar.radio("Tool", ["Screening report", "Hamstring rehab"])
+st.sidebar.divider()
+
+def hamstring_page():
+    show_logo(64)
+    st.title("Hamstring Rehab & Return-to-Play")
+    st.caption("Injured-limb tracking against rehab-phase targets. Pick the phase, then enter the injured-limb results.")
+    st.sidebar.header("Athlete / injury")
+    meta = dict(
+        name=st.sidebar.text_input("Athlete name", key="h_name"),
+        date=st.sidebar.text_input("Test date", key="h_date"),
+        injured=st.sidebar.selectbox("Injured side", ["\u2014", "Left", "Right"], key="h_side"),
+        clinician=st.sidebar.text_input("Clinician", key="h_clin"),
+        doi=st.sidebar.text_input("Date of injury", key="h_doi"),
+        weeks=st.sidebar.text_input("Weeks since injury", key="h_wks"),
+        sport=st.sidebar.text_input("Sport", key="h_sport"),
+        notes=st.sidebar.text_input("Notes", key="h_notes"))
+    meta["injured"] = meta["injured"] if meta["injured"] != "\u2014" else ""
+    st.sidebar.divider()
+    phase = st.sidebar.selectbox("Rehab phase", HAM["phases"], index=len(HAM["phases"]) - 1, key="h_phase")
+    st.sidebar.caption("Targets update to the selected phase. Metrics with no target this phase show n/a.")
+    pnorms = HAM["norms"].get(phase, {})
+    inputs = {}
+    for g in HAM["groups"]:
+        st.markdown(f"#### {g['title']}")
+        for m in g["metrics"]:
+            name = m["name"]
+            tgt = "" if name in pnorms else " \u00b7 (no target this phase)"
+            c0, c1, c2 = st.columns([3, 1.3, 1.3])
+            c0.markdown(f"**{name}**  \n<span style='color:#5A6573;font-size:12px'>{m['unit']}{tgt}</span>",
+                        unsafe_allow_html=True)
+            res = c1.text_input("Result", key="hr_" + name, label_visibility="collapsed", placeholder="injured")
+            prev = c2.text_input("Previous", key="hp_" + name, label_visibility="collapsed", placeholder="previous")
+            inputs[name] = {"result": parse(res), "previous": parse(prev)}
+    groups = engine.build_ham_rows(inputs, phase, HAM)
+    counts = engine.counts(groups)
+    st.divider()
+    st.subheader(f"Phase progress \u2014 {phase}")
+    a, b, c = st.columns(3)
+    a.metric("On / ahead", counts["Green"]); b.metric("Within 1 SD", counts["Amber"]); c.metric(">1 SD behind", counts["Red"])
+    with st.expander("See all entered results"):
+        for gp in groups:
+            st.markdown(f"**{gp['title']}**")
+            for r in gp["rows"]:
+                col = STATUS_COLOR.get(r["status"], "#999")
+                chg = f" \u00b7 {r['change']}" if r["change"] else ""
+                st.markdown(
+                    f"<span style='background:{col};color:#fff;border-radius:3px;padding:0 6px'>{r['status'] or '—'}</span> "
+                    f"{r['name']}: **{r['result']}** {r['unit']} (target {r['target']}){chg}", unsafe_allow_html=True)
+    st.divider()
+    if not groups:
+        st.info("Enter at least one injured-limb result to generate the rehab report.")
+    else:
+        if st.button("Generate rehab PDF", type="primary", key="h_pdf"):
+            pdf = report_pdf.render_ham_pdf(meta, phase, groups, counts, HAM.get("disclaimer", ""))
+            fname = (meta.get("name") or "athlete").strip().replace(" ", "_") + "_hamstring.pdf"
+            st.download_button("Download PDF", data=pdf, file_name=fname, mime="application/pdf", key="h_dl")
+            st.success("Report ready — click Download PDF above.")
+
+if mode == "Hamstring rehab":
+    hamstring_page()
+    st.stop()
+
 # ---------- sidebar: athlete details + auto population ----------
 GEN_M = "General Clinical \u2014 Male (all ages)"
 GEN_F = "General Clinical \u2014 Female (all ages)"
