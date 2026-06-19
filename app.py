@@ -142,15 +142,39 @@ def age_to_band(age):
     base = (a // 10) * 10
     return f"{base}-{base+10} years" if base in (10, 20, 30, 40, 50) else "All ages"
 
+# ---- import from VALD Hub CSV (runs before the form so it can pre-fill it) ----
+import vald_import
+with st.sidebar.expander("\u2b06 Import from VALD Hub CSV"):
+    st.caption("Upload one or more VALD exports (ForceDecks, NordBord, ForceFrame, DynaMo). "
+               "Recognised metrics, plus Name, Date and Mass, pre-fill the form below.")
+    up = st.file_uploader("VALD CSV export(s)", type="csv", accept_multiple_files=True, key="vald_files")
+    if st.button("Load into form", key="vald_load"):
+        if up:
+            m_imp, r_imp, msgs = vald_import.parse_files([(f.name, f.getvalue()) for f in up])
+            if m_imp.get("name"): st.session_state["sc_name"] = m_imp["name"]
+            if m_imp.get("date"): st.session_state["sc_date"] = m_imp["date"]
+            if m_imp.get("mass"): st.session_state["sc_mass"] = m_imp["mass"]
+            if m_imp.get("sex") in ("Male", "Female"): st.session_state["sc_sex"] = m_imp["sex"]
+            for metric, val in r_imp.items():
+                st.session_state["r_" + metric] = str(val)
+            st.session_state["vald_msg"] = msgs
+            st.rerun()
+        else:
+            st.warning("Choose a CSV file first.")
+if st.session_state.get("vald_msg"):
+    for _m in st.session_state["vald_msg"]:
+        st.sidebar.caption(_m)
+    st.sidebar.caption("Review the pre-filled values, then set **Sex** and **Age** for age/sex norms.")
+
 st.sidebar.header("Athlete details")
-name = st.sidebar.text_input("Athlete name")
-date = st.sidebar.text_input("Test date")
-sex = st.sidebar.selectbox("Sex", ["\u2014", "Male", "Female"])
-age = st.sidebar.text_input("Age (years)")
-sport = st.sidebar.text_input("Sport")
-tester = st.sidebar.text_input("Tester")
-mass = st.sidebar.text_input("Mass (kg)")
-notes = st.sidebar.text_input("Notes")
+name = st.sidebar.text_input("Athlete name", key="sc_name")
+date = st.sidebar.text_input("Test date", key="sc_date")
+sex = st.sidebar.selectbox("Sex", ["\u2014", "Male", "Female"], key="sc_sex")
+age = st.sidebar.text_input("Age (years)", key="sc_age")
+sport = st.sidebar.text_input("Sport", key="sc_sport")
+tester = st.sidebar.text_input("Tester", key="sc_tester")
+mass = st.sidebar.text_input("Mass (kg)", key="sc_mass")
+notes = st.sidebar.text_input("Notes", key="sc_notes")
 meta = dict(name=name, date=date, sex=(sex if sex != "\u2014" else ""), age=age,
             sport=sport, tester=tester, mass=mass, notes=notes)
 
