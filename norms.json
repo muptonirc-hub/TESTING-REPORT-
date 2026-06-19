@@ -217,6 +217,32 @@
      "thr": 0.05
     }
    ]
+  },
+  {
+   "title": "SMARTSPEED - LINEAR SPRINT",
+   "metrics": [
+    {
+     "name": "10 m sprint",
+     "unit": "s",
+     "calc": null,
+     "dir": "Lower",
+     "thr": 0.04
+    },
+    {
+     "name": "20 m sprint",
+     "unit": "s",
+     "calc": null,
+     "dir": "Lower",
+     "thr": 0.05
+    },
+    {
+     "name": "30 m sprint",
+     "unit": "s",
+     "calc": null,
+     "dir": "Lower",
+     "thr": 0.06
+    }
+   ]
   }
  ],
  "populations": {
@@ -380,6 +406,30 @@
     "gmax": null,
     "amax": null,
     "source": "★★★ Šarabon et al. · iso knee-ext reference (× BW), per leg · active general"
+   },
+   "10 m sprint": {
+    "dir": "Lower",
+    "green": 1.85,
+    "amber": 2.0,
+    "gmax": null,
+    "amax": null,
+    "source": "★☆☆ Indicative · general population, standing start (derived)"
+   },
+   "20 m sprint": {
+    "dir": "Lower",
+    "green": 3.2,
+    "amber": 3.5,
+    "gmax": null,
+    "amax": null,
+    "source": "★☆☆ Indicative · general population, standing start (derived)"
+   },
+   "30 m sprint": {
+    "dir": "Lower",
+    "green": 4.2,
+    "amber": 4.6,
+    "gmax": null,
+    "amax": null,
+    "source": "★★☆ Recreational / PE norms · standing 0–30 m"
    }
   },
   "General Clinical — Female (all ages)": {
@@ -542,6 +592,30 @@
     "gmax": null,
     "amax": null,
     "source": "★★★ Šarabon et al. · iso knee-ext reference (× BW), per leg · active general"
+   },
+   "10 m sprint": {
+    "dir": "Lower",
+    "green": 2.05,
+    "amber": 2.2,
+    "gmax": null,
+    "amax": null,
+    "source": "★☆☆ Indicative · general population, standing start (derived)"
+   },
+   "20 m sprint": {
+    "dir": "Lower",
+    "green": 3.6,
+    "amber": 3.9,
+    "gmax": null,
+    "amax": null,
+    "source": "★☆☆ Indicative · general population, standing start (derived)"
+   },
+   "30 m sprint": {
+    "dir": "Lower",
+    "green": 4.6,
+    "amber": 5.0,
+    "gmax": null,
+    "amax": null,
+    "source": "★★☆ Recreational / PE norms · standing 0–30 m"
    }
   },
   "Men's Football (Soccer)": {
@@ -688,6 +762,30 @@
     "gmax": null,
     "amax": null,
     "source": "★★★ Šarabon et al. · iso knee-ext (× BW), per leg · field-sport target"
+   },
+   "10 m sprint": {
+    "dir": "Lower",
+    "green": 1.8,
+    "amber": 1.9,
+    "gmax": null,
+    "amax": null,
+    "source": "★★☆ Pooled elite-soccer reference (Haugen et al.) · standing start"
+   },
+   "20 m sprint": {
+    "dir": "Lower",
+    "green": 3.05,
+    "amber": 3.2,
+    "gmax": null,
+    "amax": null,
+    "source": "★★☆ Pooled elite-soccer reference (Haugen et al.) · standing start"
+   },
+   "30 m sprint": {
+    "dir": "Lower",
+    "green": 4.1,
+    "amber": 4.4,
+    "gmax": null,
+    "amax": null,
+    "source": "★★☆ Pooled elite-soccer reference (Haugen et al.) · standing start"
    }
   },
   "Women's Football (Soccer)": {
@@ -818,6 +916,30 @@
     "gmax": null,
     "amax": null,
     "source": "★★★ Šarabon et al. · iso knee-ext (× BW), per leg · field-sport target"
+   },
+   "10 m sprint": {
+    "dir": "Lower",
+    "green": 1.95,
+    "amber": 2.05,
+    "gmax": null,
+    "amax": null,
+    "source": "★★☆ Elite female soccer (Haugen 2014) · standing start"
+   },
+   "20 m sprint": {
+    "dir": "Lower",
+    "green": 3.35,
+    "amber": 3.55,
+    "gmax": null,
+    "amax": null,
+    "source": "★★☆ Elite female soccer (Haugen 2014) · standing start"
+   },
+   "30 m sprint": {
+    "dir": "Lower",
+    "green": 4.55,
+    "amber": 4.85,
+    "gmax": null,
+    "amax": null,
+    "source": "★★☆ Elite female soccer (Haugen 2014) · standing start"
    }
   },
   "AFL": {
@@ -964,6 +1086,30 @@
     "gmax": null,
     "amax": null,
     "source": "★★★ Šarabon et al. · iso knee-ext (× BW), per leg · field-sport target"
+   },
+   "10 m sprint": {
+    "dir": "Lower",
+    "green": 1.8,
+    "amber": 1.9,
+    "gmax": null,
+    "amax": null,
+    "source": "★☆☆ PROXY · field-sport (elite-soccer values) · confirm with in-house AFL data"
+   },
+   "20 m sprint": {
+    "dir": "Lower",
+    "green": 3.05,
+    "amber": 3.2,
+    "gmax": null,
+    "amax": null,
+    "source": "★☆☆ PROXY · field-sport (elite-soccer values) · confirm with in-house AFL data"
+   },
+   "30 m sprint": {
+    "dir": "Lower",
+    "green": 4.1,
+    "amber": 4.4,
+    "gmax": null,
+    "amax": null,
+    "source": "★☆☆ PROXY · field-sport (elite-soccer values) · confirm with in-house AFL data"
    }
   },
   "Custom (in-house)": {
@@ -1110,6 +1256,30 @@
     "gmax": null,
     "amax": null,
     "source": "★★★ Šarabon et al. · iso knee-ext reference (× BW), per leg · active general"
+   },
+   "10 m sprint": {
+    "dir": "Lower",
+    "green": 1.85,
+    "amber": 2.0,
+    "gmax": null,
+    "amax": null,
+    "source": "★☆☆ Placeholder · replace with your in-house SmartSpeed norms"
+   },
+   "20 m sprint": {
+    "dir": "Lower",
+    "green": 3.2,
+    "amber": 3.5,
+    "gmax": null,
+    "amax": null,
+    "source": "★☆☆ Placeholder · replace with your in-house SmartSpeed norms"
+   },
+   "30 m sprint": {
+    "dir": "Lower",
+    "green": 4.2,
+    "amber": 4.6,
+    "gmax": null,
+    "amax": null,
+    "source": "★☆☆ Placeholder · replace with your in-house SmartSpeed norms"
    }
   }
  },

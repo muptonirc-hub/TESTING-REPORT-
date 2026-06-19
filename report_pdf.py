@@ -51,7 +51,7 @@ def meter(result, n):
 ASYM = lambda n: ("Asymmetry" in n) or ("Imbalance" in n)
 DOMAIN_MAP = [("COUNTERMOVEMENT", "Jump / power"), ("MID-THIGH", "Max strength"),
               ("HOP", "Reactive"), ("NORDIC", "Hamstring"), ("HIP", "Hip / groin"),
-              ("DYNAMIC STRENGTH", "DSI"), ("DYNAMO", "Isometric")]
+              ("DYNAMIC STRENGTH", "DSI"), ("SPRINT", "Speed"), ("DYNAMO", "Isometric")]
 WORST = {"Red": 3, "Amber": 2, "Green": 1}
 
 def _short_domain(title):

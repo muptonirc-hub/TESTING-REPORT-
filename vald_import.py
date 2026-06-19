@@ -39,6 +39,16 @@ TYPE_MAP = {
         "contact time": "Hop Contact Time",
         "ground contact time": "Hop Contact Time",
     },
+    # SmartSpeed linear sprint (total times). Provisional column names \u2014
+    # confirm against a real SmartSpeed export.
+    "SPRINT": {
+        "10m": "10 m sprint", "10 m": "10 m sprint", "10m time": "10 m sprint",
+        "10m total": "10 m sprint", "time 10m": "10 m sprint", "split 10m": "10 m sprint",
+        "20m": "20 m sprint", "20 m": "20 m sprint", "20m time": "20 m sprint",
+        "20m total": "20 m sprint", "time 20m": "20 m sprint", "split 20m": "20 m sprint",
+        "30m": "30 m sprint", "30 m": "30 m sprint", "30m time": "30 m sprint",
+        "30m total": "30 m sprint", "time 30m": "30 m sprint", "split 30m": "30 m sprint",
+    },
 }
 # Columns that legitimately have no scored metric in the app (don't warn on these).
 IGNORE = {"peak landing force", "rsi-modified", "additional load", "reps", "tags", "externalid", "time"}
