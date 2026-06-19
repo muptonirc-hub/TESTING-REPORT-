@@ -369,11 +369,11 @@
    },
    "Add : Abd Ratio": {
     "dir": "Band",
-    "green": 0.87,
-    "amber": 0.58,
-    "gmax": 1.11,
-    "amax": 1.43,
-    "source": "★★★ VALD Norms · General clinical, all ages · Male · percentile-anchored"
+    "green": 0.9,
+    "gmax": 1.1,
+    "amber": 0.8,
+    "amax": 1.3,
+    "source": "★★☆ Evidence-based band · target ~1.0 (O'Brien 2019); flag <0.80 (Tyler 2001) or >1.30 (VALD youth academy). Ratio monitors balance — adductor strength is the primary predictor (2024 meta-analysis)."
    },
    "DSI (CMJ ÷ IMTP)": {
     "dir": "Band",
@@ -555,11 +555,11 @@
    },
    "Add : Abd Ratio": {
     "dir": "Band",
-    "green": 0.89,
-    "amber": 0.63,
+    "green": 0.9,
     "gmax": 1.1,
-    "amax": 1.35,
-    "source": "★★★ VALD Norms · General clinical, all ages · Female · percentile-anchored"
+    "amber": 0.8,
+    "amax": 1.3,
+    "source": "★★☆ Evidence-based band · target ~1.0 (O'Brien 2019); flag <0.80 (Tyler 2001) or >1.30 (VALD youth academy). Ratio monitors balance — adductor strength is the primary predictor (2024 meta-analysis)."
    },
    "DSI (CMJ ÷ IMTP)": {
     "dir": "Band",
@@ -733,11 +733,11 @@
    },
    "Add : Abd Ratio": {
     "dir": "Band",
-    "green": 0.89,
-    "amber": 0.59,
-    "gmax": 1.13,
-    "amax": 1.42,
-    "source": "★★★ VALD Norms · Men's Football (Soccer) · percentile-anchored · ForceFrame Hip Ad/Ab @ 90°"
+    "green": 0.9,
+    "gmax": 1.1,
+    "amber": 0.8,
+    "amax": 1.3,
+    "source": "★★☆ Evidence-based band · target ~1.0 (O'Brien 2019); flag <0.80 (Tyler 2001) or >1.30 (VALD youth academy). Ratio monitors balance — adductor strength is the primary predictor (2024 meta-analysis)."
    },
    "DSI (CMJ ÷ IMTP)": {
     "dir": "Band",
@@ -887,11 +887,11 @@
    },
    "Add : Abd Ratio": {
     "dir": "Band",
-    "green": 0.95,
-    "amber": 0.71,
-    "gmax": 1.16,
-    "amax": 1.42,
-    "source": "★★★ VALD Norms · Women's Football (Soccer) · percentile-anchored · ForceFrame Hip Ad/Ab @ 90°"
+    "green": 0.9,
+    "gmax": 1.1,
+    "amber": 0.8,
+    "amax": 1.3,
+    "source": "★★☆ Evidence-based band · target ~1.0 (O'Brien 2019); flag <0.80 (Tyler 2001) or >1.30 (VALD youth academy). Ratio monitors balance — adductor strength is the primary predictor (2024 meta-analysis)."
    },
    "DSI (CMJ ÷ IMTP)": {
     "dir": "Band",
@@ -1057,11 +1057,11 @@
    },
    "Add : Abd Ratio": {
     "dir": "Band",
-    "green": 0.84,
-    "amber": 0.55,
-    "gmax": 1.07,
-    "amax": 1.42,
-    "source": "★★★ VALD Norms · AFL · percentile-anchored · ForceFrame Hip Ad/Ab @ 90°"
+    "green": 0.9,
+    "gmax": 1.1,
+    "amber": 0.8,
+    "amax": 1.3,
+    "source": "★★☆ Evidence-based band · target ~1.0 (O'Brien 2019); flag <0.80 (Tyler 2001) or >1.30 (VALD youth academy). Ratio monitors balance — adductor strength is the primary predictor (2024 meta-analysis)."
    },
    "DSI (CMJ ÷ IMTP)": {
     "dir": "Band",
@@ -1227,11 +1227,11 @@
    },
    "Add : Abd Ratio": {
     "dir": "Band",
-    "green": 0.89,
-    "amber": 0.59,
-    "gmax": 1.13,
-    "amax": 1.42,
-    "source": "☆☆☆ Editable — your in-house data (seeded from Men's Soccer)"
+    "green": 0.9,
+    "gmax": 1.1,
+    "amber": 0.8,
+    "amax": 1.3,
+    "source": "★★☆ Evidence-based band · target ~1.0 (O'Brien 2019); flag <0.80 (Tyler 2001) or >1.30 (VALD youth academy). Ratio monitors balance — adductor strength is the primary predictor (2024 meta-analysis)."
    },
    "DSI (CMJ ÷ IMTP)": {
     "dir": "Band",
