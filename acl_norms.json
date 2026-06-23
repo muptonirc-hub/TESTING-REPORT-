@@ -1,0 +1,965 @@
+{
+  "phases": [
+    "Initial Assessment",
+    "3 Months",
+    "6 Months",
+    "9 Months",
+    "12 Months",
+    "2 Years"
+  ],
+  "sexes": [
+    "Female",
+    "Male"
+  ],
+  "groups": [
+    {
+      "title": "PATIENT-REPORTED OUTCOMES (PROMs)",
+      "metrics": [
+        {
+          "name": "IKDC",
+          "unit": "AU",
+          "dir": "Higher",
+          "thr": 5
+        },
+        {
+          "name": "KOOS — ADL",
+          "unit": "AU",
+          "dir": "Higher",
+          "thr": 5
+        },
+        {
+          "name": "KOOS — Pain",
+          "unit": "AU",
+          "dir": "Higher",
+          "thr": 5
+        },
+        {
+          "name": "KOOS — QOL",
+          "unit": "AU",
+          "dir": "Higher",
+          "thr": 5
+        },
+        {
+          "name": "KOOS — Sport & Rec",
+          "unit": "AU",
+          "dir": "Higher",
+          "thr": 5
+        },
+        {
+          "name": "KOOS — Symptoms",
+          "unit": "AU",
+          "dir": "Higher",
+          "thr": 5
+        },
+        {
+          "name": "ACL-RSI",
+          "unit": "AU",
+          "dir": "Higher",
+          "thr": 5
+        },
+        {
+          "name": "Cincinnati Knee Score",
+          "unit": "AU",
+          "dir": "Higher",
+          "thr": 5
+        },
+        {
+          "name": "GRS Perceived Function",
+          "unit": "AU",
+          "dir": "Higher",
+          "thr": 5
+        },
+        {
+          "name": "Pedi-IKDC",
+          "unit": "AU",
+          "dir": "Higher",
+          "thr": 5
+        }
+      ]
+    },
+    {
+      "title": "STRENGTH — ISOKINETIC / ISOMETRIC DYNAMOMETRY",
+      "metrics": [
+        {
+          "name": "Knee extension torque — injured",
+          "unit": "Nm",
+          "dir": "Higher",
+          "thr": 10
+        },
+        {
+          "name": "Knee flexion torque — injured",
+          "unit": "Nm",
+          "dir": "Higher",
+          "thr": 10
+        },
+        {
+          "name": "Knee extension LSI",
+          "unit": "%",
+          "dir": "Higher",
+          "thr": 5
+        },
+        {
+          "name": "Knee flexion LSI",
+          "unit": "%",
+          "dir": "Higher",
+          "thr": 5
+        },
+        {
+          "name": "Quadriceps LSI",
+          "unit": "%",
+          "dir": "Higher",
+          "thr": 5
+        },
+        {
+          "name": "Hamstring LSI",
+          "unit": "%",
+          "dir": "Higher",
+          "thr": 5
+        },
+        {
+          "name": "Quadriceps strength index (90° ISO)",
+          "unit": "%",
+          "dir": "Higher",
+          "thr": 5
+        }
+      ]
+    },
+    {
+      "title": "JUMP — CMJ / SQUAT (ForceDecks)",
+      "metrics": [
+        {
+          "name": "CMJ — Jump height",
+          "unit": "cm",
+          "dir": "Higher",
+          "thr": 1
+        },
+        {
+          "name": "CMJ — Peak power",
+          "unit": "W/kg",
+          "dir": "Higher",
+          "thr": 1
+        },
+        {
+          "name": "CMJ — Concentric impulse",
+          "unit": "Ns",
+          "dir": "Higher",
+          "thr": 5
+        },
+        {
+          "name": "CMJ — Concentric peak force",
+          "unit": "N",
+          "dir": "Higher",
+          "thr": 20
+        },
+        {
+          "name": "CMJ — Eccentric impulse",
+          "unit": "Ns",
+          "dir": "Higher",
+          "thr": 5
+        },
+        {
+          "name": "CMJ — Take-off impulse",
+          "unit": "BW/s",
+          "dir": "Higher",
+          "thr": 0.02
+        },
+        {
+          "name": "SJ — P1 concentric impulse",
+          "unit": "Ns",
+          "dir": "Higher",
+          "thr": 5
+        },
+        {
+          "name": "SJ — P2 concentric impulse",
+          "unit": "Ns",
+          "dir": "Higher",
+          "thr": 5
+        },
+        {
+          "name": "SJ — Peak power",
+          "unit": "W/kg",
+          "dir": "Higher",
+          "thr": 1
+        }
+      ]
+    },
+    {
+      "title": "SINGLE-LEG JUMP / REACTIVE (ForceDecks)",
+      "metrics": [
+        {
+          "name": "SLCMJ — Jump height (injured)",
+          "unit": "cm",
+          "dir": "Higher",
+          "thr": 1
+        },
+        {
+          "name": "SLCMJ — Power/BW (injured)",
+          "unit": "W/kg",
+          "dir": "Higher",
+          "thr": 50
+        },
+        {
+          "name": "SL Drop Jump 15cm — RSI (injured)",
+          "unit": "AU",
+          "dir": "Higher",
+          "thr": 0.03
+        },
+        {
+          "name": "SL Drop Jump 15cm — Jump height (injured)",
+          "unit": "cm",
+          "dir": "Higher",
+          "thr": 1
+        },
+        {
+          "name": "SL Drop Jump 15cm — Ground contact time (injured)",
+          "unit": "s",
+          "dir": "Lower",
+          "thr": 0.02
+        }
+      ]
+    },
+    {
+      "title": "HOP TESTS (ForceDecks)",
+      "metrics": [
+        {
+          "name": "Single hop LSI",
+          "unit": "%",
+          "dir": "Higher",
+          "thr": 5
+        },
+        {
+          "name": "Triple hop LSI",
+          "unit": "%",
+          "dir": "Higher",
+          "thr": 5
+        },
+        {
+          "name": "Crossover hop LSI",
+          "unit": "%",
+          "dir": "Higher",
+          "thr": 5
+        },
+        {
+          "name": "6 m timed hop LSI",
+          "unit": "%",
+          "dir": "Higher",
+          "thr": 5
+        },
+        {
+          "name": "Single-leg hop for distance (injured)",
+          "unit": "cm",
+          "dir": "Higher",
+          "thr": 5
+        },
+        {
+          "name": "Side hop (injured)",
+          "unit": "count",
+          "dir": "Higher",
+          "thr": 3
+        }
+      ]
+    },
+    {
+      "title": "BALANCE (Star Excursion / SEBT)",
+      "metrics": [
+        {
+          "name": "SEBT anterior reach composite (injured)",
+          "unit": "%",
+          "dir": "Higher",
+          "thr": 3
+        }
+      ]
+    }
+  ],
+  "norms": {
+    "Initial Assessment|Female": {
+      "IKDC": {
+        "dir": "Higher",
+        "green": 55,
+        "amber": 34,
+        "source": "★★☆ VALD Research Norms · ACLR · Female 20–30 yr · injured avg ± 1 SD"
+      },
+      "KOOS — ADL": {
+        "dir": "Higher",
+        "green": 84,
+        "amber": 57,
+        "source": "★★☆ VALD Research Norms · ACLR · Female 20–30 yr · injured avg ± 1 SD"
+      },
+      "KOOS — Pain": {
+        "dir": "Higher",
+        "green": 74,
+        "amber": 50,
+        "source": "★★☆ VALD Research Norms · ACLR · Female 20–30 yr · injured avg ± 1 SD"
+      },
+      "KOOS — QOL": {
+        "dir": "Higher",
+        "green": 32,
+        "amber": 5,
+        "source": "★★☆ VALD Research Norms · ACLR · Female 20–30 yr · injured avg ± 1 SD"
+      },
+      "KOOS — Sport & Rec": {
+        "dir": "Higher",
+        "green": 43,
+        "amber": 7,
+        "source": "★★☆ VALD Research Norms · ACLR · Female 20–30 yr · injured avg ± 1 SD"
+      },
+      "KOOS — Symptoms": {
+        "dir": "Higher",
+        "green": 65,
+        "amber": 36,
+        "source": "★★☆ VALD Research Norms · ACLR · Female 20–30 yr · injured avg ± 1 SD"
+      },
+      "Knee extension torque — injured": {
+        "dir": "Higher",
+        "green": 171.7,
+        "amber": 123.6,
+        "source": "★☆☆ VALD Research Norms · ACLR · combined M/F 20–30 yr · avg ± 1 SD"
+      },
+      "Knee flexion torque — injured": {
+        "dir": "Higher",
+        "green": 91.3,
+        "amber": 65.5,
+        "source": "★☆☆ VALD Research Norms · ACLR · combined M/F 20–30 yr · avg ± 1 SD"
+      }
+    },
+    "Initial Assessment|Male": {
+      "IKDC": {
+        "dir": "Higher",
+        "green": 55,
+        "amber": 34,
+        "source": "★★☆ VALD Research Norms · ACLR · Male 20–30 yr · injured avg ± 1 SD"
+      },
+      "KOOS — ADL": {
+        "dir": "Higher",
+        "green": 84,
+        "amber": 57,
+        "source": "★★☆ VALD Research Norms · ACLR · Male 20–30 yr · injured avg ± 1 SD"
+      },
+      "KOOS — Pain": {
+        "dir": "Higher",
+        "green": 74,
+        "amber": 50,
+        "source": "★★☆ VALD Research Norms · ACLR · Male 20–30 yr · injured avg ± 1 SD"
+      },
+      "KOOS — QOL": {
+        "dir": "Higher",
+        "green": 32,
+        "amber": 5,
+        "source": "★★☆ VALD Research Norms · ACLR · Male 20–30 yr · injured avg ± 1 SD"
+      },
+      "KOOS — Sport & Rec": {
+        "dir": "Higher",
+        "green": 43,
+        "amber": 7,
+        "source": "★★☆ VALD Research Norms · ACLR · Male 20–30 yr · injured avg ± 1 SD"
+      },
+      "KOOS — Symptoms": {
+        "dir": "Higher",
+        "green": 65,
+        "amber": 36,
+        "source": "★★☆ VALD Research Norms · ACLR · Male 20–30 yr · injured avg ± 1 SD"
+      },
+      "Knee extension torque — injured": {
+        "dir": "Higher",
+        "green": 171.7,
+        "amber": 123.6,
+        "source": "★☆☆ VALD Research Norms · ACLR · combined M/F 20–30 yr · avg ± 1 SD"
+      },
+      "Knee flexion torque — injured": {
+        "dir": "Higher",
+        "green": 91.3,
+        "amber": 65.5,
+        "source": "★☆☆ VALD Research Norms · ACLR · combined M/F 20–30 yr · avg ± 1 SD"
+      }
+    },
+    "3 Months|Female": {
+      "CMJ — Take-off impulse": {
+        "dir": "Higher",
+        "green": 0.38,
+        "amber": 0.33,
+        "source": "★★☆ VALD Research Norms · ACLR · Female 20–30 yr · injured avg ± 1 SD"
+      }
+    },
+    "3 Months|Male": {
+      "CMJ — Concentric impulse": {
+        "dir": "Higher",
+        "green": 178,
+        "amber": 132.6,
+        "source": "★★☆ VALD Research Norms · ACLR · Male 20–30 yr · injured avg ± 1 SD"
+      },
+      "CMJ — Concentric peak force": {
+        "dir": "Higher",
+        "green": 739,
+        "amber": 583,
+        "source": "★★☆ VALD Research Norms · ACLR · Male 20–30 yr · injured avg ± 1 SD"
+      },
+      "CMJ — Eccentric impulse": {
+        "dir": "Higher",
+        "green": 114.4,
+        "amber": 81.6,
+        "source": "★★☆ VALD Research Norms · ACLR · Male 20–30 yr · injured avg ± 1 SD"
+      },
+      "CMJ — Jump height": {
+        "dir": "Higher",
+        "green": 26.1,
+        "amber": 20.6,
+        "source": "★★☆ VALD Research Norms · ACLR · Male 20–30 yr · injured avg ± 1 SD"
+      },
+      "CMJ — Peak power": {
+        "dir": "Higher",
+        "green": 44.2,
+        "amber": 38.1,
+        "source": "★★☆ VALD Research Norms · ACLR · Male 20–30 yr · injured avg ± 1 SD"
+      }
+    },
+    "6 Months|Female": {
+      "ACL-RSI": {
+        "dir": "Higher",
+        "green": 68.7,
+        "amber": 47.8,
+        "source": "★★☆ VALD Research Norms · ACLR · Female 16–20 yr · injured avg ± 1 SD"
+      },
+      "IKDC": {
+        "dir": "Higher",
+        "green": 83.2,
+        "amber": 72,
+        "source": "★★☆ VALD Research Norms · ACLR · Female 16–20 yr · injured avg ± 1 SD"
+      },
+      "KOOS — ADL": {
+        "dir": "Higher",
+        "green": 98,
+        "amber": 93,
+        "source": "★★☆ VALD Research Norms · ACLR · Female 16–20 yr · injured avg ± 1 SD"
+      },
+      "KOOS — Pain": {
+        "dir": "Higher",
+        "green": 93,
+        "amber": 86,
+        "source": "★★☆ VALD Research Norms · ACLR · Female 16–20 yr · injured avg ± 1 SD"
+      },
+      "KOOS — QOL": {
+        "dir": "Higher",
+        "green": 68,
+        "amber": 49,
+        "source": "★★☆ VALD Research Norms · ACLR · Female 16–20 yr · injured avg ± 1 SD"
+      },
+      "KOOS — Sport & Rec": {
+        "dir": "Higher",
+        "green": 86,
+        "amber": 73,
+        "source": "★★☆ VALD Research Norms · ACLR · Female 16–20 yr · injured avg ± 1 SD"
+      },
+      "KOOS — Symptoms": {
+        "dir": "Higher",
+        "green": 79,
+        "amber": 63,
+        "source": "★★☆ VALD Research Norms · ACLR · Female 16–20 yr · injured avg ± 1 SD"
+      },
+      "Pedi-IKDC": {
+        "dir": "Higher",
+        "green": 85,
+        "amber": 73,
+        "source": "★★☆ VALD Research Norms · ACLR · Female 16–20 yr · injured avg ± 1 SD"
+      },
+      "Single hop LSI": {
+        "dir": "Higher",
+        "green": 92,
+        "amber": 81,
+        "source": "★★☆ VALD Research Norms · ACLR · Female 16–20 yr · injured avg ± 1 SD"
+      },
+      "Triple hop LSI": {
+        "dir": "Higher",
+        "green": 94,
+        "amber": 86,
+        "source": "★★☆ VALD Research Norms · ACLR · Female 16–20 yr · injured avg ± 1 SD"
+      },
+      "Crossover hop LSI": {
+        "dir": "Higher",
+        "green": 96,
+        "amber": 89,
+        "source": "★★☆ VALD Research Norms · ACLR · Female 16–20 yr · injured avg ± 1 SD"
+      },
+      "Knee extension LSI": {
+        "dir": "Higher",
+        "green": 81,
+        "amber": 64,
+        "source": "★★☆ VALD Research Norms · ACLR · Female 16–20 yr · injured avg ± 1 SD"
+      },
+      "Knee flexion LSI": {
+        "dir": "Higher",
+        "green": 81,
+        "amber": 64,
+        "source": "★★☆ VALD Research Norms · ACLR · Female 16–20 yr · injured avg ± 1 SD"
+      }
+    },
+    "6 Months|Male": {
+      "ACL-RSI": {
+        "dir": "Higher",
+        "green": 74,
+        "amber": 55,
+        "source": "★★☆ VALD Research Norms · ACLR · Male 16–20 yr · injured avg ± 1 SD"
+      },
+      "IKDC": {
+        "dir": "Higher",
+        "green": 85,
+        "amber": 75,
+        "source": "★★☆ VALD Research Norms · ACLR · Male 16–20 yr · injured avg ± 1 SD"
+      },
+      "KOOS — ADL": {
+        "dir": "Higher",
+        "green": 98,
+        "amber": 95,
+        "source": "★★☆ VALD Research Norms · ACLR · Male 16–20 yr · injured avg ± 1 SD"
+      },
+      "KOOS — Pain": {
+        "dir": "Higher",
+        "green": 94,
+        "amber": 87,
+        "source": "★★☆ VALD Research Norms · ACLR · Male 16–20 yr · injured avg ± 1 SD"
+      },
+      "KOOS — QOL": {
+        "dir": "Higher",
+        "green": 69,
+        "amber": 50,
+        "source": "★★☆ VALD Research Norms · ACLR · Male 16–20 yr · injured avg ± 1 SD"
+      },
+      "KOOS — Sport & Rec": {
+        "dir": "Higher",
+        "green": 87,
+        "amber": 74,
+        "source": "★★☆ VALD Research Norms · ACLR · Male 16–20 yr · injured avg ± 1 SD"
+      },
+      "KOOS — Symptoms": {
+        "dir": "Higher",
+        "green": 82,
+        "amber": 68,
+        "source": "★★☆ VALD Research Norms · ACLR · Male 16–20 yr · injured avg ± 1 SD"
+      },
+      "Pedi-IKDC": {
+        "dir": "Higher",
+        "green": 88,
+        "amber": 78,
+        "source": "★★☆ VALD Research Norms · ACLR · Male 16–20 yr · injured avg ± 1 SD"
+      },
+      "CMJ — Concentric impulse": {
+        "dir": "Higher",
+        "green": 60.2,
+        "amber": 46.5,
+        "source": "★★☆ VALD Research Norms · ACLR · Male 20–30 yr · injured avg ± 1 SD"
+      },
+      "CMJ — Concentric peak force": {
+        "dir": "Higher",
+        "green": 729,
+        "amber": 613,
+        "source": "★★☆ VALD Research Norms · ACLR · Male 20–30 yr · injured avg ± 1 SD"
+      },
+      "CMJ — Jump height": {
+        "dir": "Higher",
+        "green": 29.7,
+        "amber": 24.6,
+        "source": "★★☆ VALD Research Norms · ACLR · Male 20–30 yr · injured avg ± 1 SD"
+      },
+      "CMJ — Peak power": {
+        "dir": "Higher",
+        "green": 46.7,
+        "amber": 40.4,
+        "source": "★★☆ VALD Research Norms · ACLR · Male 20–30 yr · injured avg ± 1 SD"
+      },
+      "Single hop LSI": {
+        "dir": "Higher",
+        "green": 94,
+        "amber": 83,
+        "source": "★★☆ VALD Research Norms · ACLR · Male 16–20 yr · injured avg ± 1 SD"
+      },
+      "Triple hop LSI": {
+        "dir": "Higher",
+        "green": 93,
+        "amber": 85,
+        "source": "★★☆ VALD Research Norms · ACLR · Male 16–20 yr · injured avg ± 1 SD"
+      },
+      "Crossover hop LSI": {
+        "dir": "Higher",
+        "green": 95,
+        "amber": 85,
+        "source": "★★☆ VALD Research Norms · ACLR · Male 16–20 yr · injured avg ± 1 SD"
+      },
+      "Knee extension LSI": {
+        "dir": "Higher",
+        "green": 83,
+        "amber": 67,
+        "source": "★★☆ VALD Research Norms · ACLR · Male 16–20 yr · injured avg ± 1 SD"
+      },
+      "Knee flexion LSI": {
+        "dir": "Higher",
+        "green": 89,
+        "amber": 72,
+        "source": "★★☆ VALD Research Norms · ACLR · Male 16–20 yr · injured avg ± 1 SD"
+      },
+      "SLCMJ — Jump height (injured)": {
+        "dir": "Higher",
+        "green": 13.1,
+        "amber": 9.1,
+        "source": "★★☆ VALD Research Norms · ACLR · Male 20–30 yr · injured avg ± 1 SD"
+      },
+      "SLCMJ — Power/BW (injured)": {
+        "dir": "Higher",
+        "green": 3393.8,
+        "amber": 2715.2,
+        "source": "★★☆ VALD Research Norms · ACLR · Male 20–30 yr · injured avg ± 1 SD"
+      }
+    },
+    "9 Months|Male": {
+      "ACL-RSI": {
+        "dir": "Higher",
+        "green": 74.5,
+        "amber": 58,
+        "source": "★★☆ VALD Research Norms · ACLR · Male 20–30 yr · injured avg ± 1 SD"
+      },
+      "Cincinnati Knee Score": {
+        "dir": "Higher",
+        "green": 89.5,
+        "amber": 80.9,
+        "source": "★★☆ VALD Research Norms · ACLR · Male 20–30 yr · injured avg ± 1 SD"
+      },
+      "IKDC": {
+        "dir": "Higher",
+        "green": 84.9,
+        "amber": 75.2,
+        "source": "★★☆ VALD Research Norms · ACLR · Male 20–30 yr · injured avg ± 1 SD"
+      },
+      "CMJ — Jump height": {
+        "dir": "Higher",
+        "green": 29.7,
+        "amber": 24.3,
+        "source": "★★☆ VALD Research Norms · ACLR · Male 20–30 yr · injured avg ± 1 SD"
+      },
+      "CMJ — Concentric impulse": {
+        "dir": "Higher",
+        "green": 93,
+        "amber": 86,
+        "source": "★★☆ VALD Research Norms · ACLR · Male 20–30 yr · injured avg ± 1 SD"
+      },
+      "CMJ — Eccentric impulse": {
+        "dir": "Higher",
+        "green": 96,
+        "amber": 83,
+        "source": "★★☆ VALD Research Norms · ACLR · Male 20–30 yr · injured avg ± 1 SD"
+      },
+      "Quadriceps LSI": {
+        "dir": "Higher",
+        "green": 88.3,
+        "amber": 77.7,
+        "source": "★★☆ VALD Research Norms · ACLR · Male 20–30 yr · injured avg ± 1 SD"
+      },
+      "Hamstring LSI": {
+        "dir": "Higher",
+        "green": 96.1,
+        "amber": 80,
+        "source": "★★☆ VALD Research Norms · ACLR · Male 20–30 yr · injured avg ± 1 SD"
+      },
+      "SLCMJ — Jump height (injured)": {
+        "dir": "Higher",
+        "green": 12,
+        "amber": 8.7,
+        "source": "★★☆ VALD Research Norms · ACLR · Male 20–30 yr · injured avg ± 1 SD"
+      },
+      "SL Drop Jump 15cm — RSI (injured)": {
+        "dir": "Higher",
+        "green": 0.35,
+        "amber": 0.24,
+        "source": "★★☆ VALD Research Norms · ACLR · Male 20–30 yr · injured avg ± 1 SD"
+      },
+      "SL Drop Jump 15cm — Ground contact time (injured)": {
+        "dir": "Lower",
+        "green": 0.39,
+        "amber": 0.46,
+        "source": "★★☆ VALD Research Norms · ACLR · Male 20–30 yr · injured avg ± 1 SD"
+      }
+    },
+    "12 Months|Female": {
+      "GRS Perceived Function": {
+        "dir": "Higher",
+        "green": 94,
+        "amber": 86,
+        "source": "★★☆ VALD Research Norms · ACLR · Female 16–20 yr · injured avg ± 1 SD"
+      },
+      "IKDC": {
+        "dir": "Higher",
+        "green": 92,
+        "amber": 83.5,
+        "source": "★★☆ VALD Research Norms · ACLR · Female 16–20 yr · injured avg ± 1 SD"
+      },
+      "KOOS — ADL": {
+        "dir": "Higher",
+        "green": 97,
+        "amber": 93,
+        "source": "★★☆ VALD Research Norms · ACLR · Female 16–20 yr · injured avg ± 1 SD"
+      },
+      "KOOS — Pain": {
+        "dir": "Higher",
+        "green": 96,
+        "amber": 91,
+        "source": "★★☆ VALD Research Norms · ACLR · Female 16–20 yr · injured avg ± 1 SD"
+      },
+      "KOOS — QOL": {
+        "dir": "Higher",
+        "green": 79,
+        "amber": 65,
+        "source": "★★☆ VALD Research Norms · ACLR · Female 16–20 yr · injured avg ± 1 SD"
+      },
+      "KOOS — Sport & Rec": {
+        "dir": "Higher",
+        "green": 93,
+        "amber": 84,
+        "source": "★★☆ VALD Research Norms · ACLR · Female 16–20 yr · injured avg ± 1 SD"
+      },
+      "KOOS — Symptoms": {
+        "dir": "Higher",
+        "green": 90,
+        "amber": 83,
+        "source": "★★☆ VALD Research Norms · ACLR · Female 16–20 yr · injured avg ± 1 SD"
+      },
+      "6 m timed hop LSI": {
+        "dir": "Higher",
+        "green": 103,
+        "amber": 98,
+        "source": "★★☆ VALD Research Norms · ACLR · Female 16–20 yr · injured avg ± 1 SD"
+      },
+      "Single hop LSI": {
+        "dir": "Higher",
+        "green": 99,
+        "amber": 90,
+        "source": "★★☆ VALD Research Norms · ACLR · Female 16–20 yr · injured avg ± 1 SD"
+      },
+      "Triple hop LSI": {
+        "dir": "Higher",
+        "green": 87,
+        "amber": 74,
+        "source": "★★☆ VALD Research Norms · ACLR · Female 16–20 yr · injured avg ± 1 SD"
+      },
+      "Crossover hop LSI": {
+        "dir": "Higher",
+        "green": 95,
+        "amber": 85,
+        "source": "★★☆ VALD Research Norms · ACLR · Female 16–20 yr · injured avg ± 1 SD"
+      },
+      "Quadriceps strength index (90° ISO)": {
+        "dir": "Higher",
+        "green": 97,
+        "amber": 86,
+        "source": "★★☆ VALD Research Norms · ACLR · Female 16–20 yr · injured avg ± 1 SD"
+      }
+    },
+    "12 Months|Male": {
+      "CMJ — Concentric impulse": {
+        "dir": "Higher",
+        "green": 180.7,
+        "amber": 131.1,
+        "source": "★★☆ VALD Research Norms · ACLR · Male 20–30 yr · injured avg ± 1 SD"
+      },
+      "CMJ — Concentric peak force": {
+        "dir": "Higher",
+        "green": 749,
+        "amber": 600,
+        "source": "★★☆ VALD Research Norms · ACLR · Male 20–30 yr · injured avg ± 1 SD"
+      },
+      "CMJ — Jump height": {
+        "dir": "Higher",
+        "green": 30.7,
+        "amber": 26.1,
+        "source": "★★☆ VALD Research Norms · ACLR · Male 20–30 yr · injured avg ± 1 SD"
+      },
+      "CMJ — Peak power": {
+        "dir": "Higher",
+        "green": 46.4,
+        "amber": 40.2,
+        "source": "★★☆ VALD Research Norms · ACLR · Male 20–30 yr · injured avg ± 1 SD"
+      },
+      "SL Drop Jump 15cm — Jump height (injured)": {
+        "dir": "Higher",
+        "green": 14,
+        "amber": 12,
+        "source": "★★☆ VALD Research Norms · ACLR · Male 20–30 yr · injured avg ± 1 SD"
+      },
+      "SL Drop Jump 15cm — RSI (injured)": {
+        "dir": "Higher",
+        "green": 0.37,
+        "amber": 0.29,
+        "source": "★★☆ VALD Research Norms · ACLR · Male 20–30 yr · injured avg ± 1 SD"
+      },
+      "SL Drop Jump 15cm — Ground contact time (injured)": {
+        "dir": "Lower",
+        "green": 0.38,
+        "amber": 0.44,
+        "source": "★★☆ VALD Research Norms · ACLR · Male 20–30 yr · injured avg ± 1 SD"
+      }
+    },
+    "2 Years|Female": {
+      "GRS Perceived Function": {
+        "dir": "Higher",
+        "green": 97.5,
+        "amber": 93.5,
+        "source": "★★☆ VALD Research Norms · ACLR · Female 16–20 yr · injured avg ± 1 SD"
+      },
+      "IKDC": {
+        "dir": "Higher",
+        "green": 92.6,
+        "amber": 83.8,
+        "source": "★★☆ VALD Research Norms · ACLR · Female 16–20 yr · injured avg ± 1 SD"
+      },
+      "KOOS — ADL": {
+        "dir": "Higher",
+        "green": 98,
+        "amber": 95,
+        "source": "★★☆ VALD Research Norms · ACLR · Female 16–20 yr · injured avg ± 1 SD"
+      },
+      "KOOS — Pain": {
+        "dir": "Higher",
+        "green": 95.5,
+        "amber": 89.2,
+        "source": "★★☆ VALD Research Norms · ACLR · Female 16–20 yr · injured avg ± 1 SD"
+      },
+      "KOOS — QOL": {
+        "dir": "Higher",
+        "green": 84.1,
+        "amber": 68.1,
+        "source": "★★☆ VALD Research Norms · ACLR · Female 16–20 yr · injured avg ± 1 SD"
+      },
+      "KOOS — Sport & Rec": {
+        "dir": "Higher",
+        "green": 90.6,
+        "amber": 80,
+        "source": "★★☆ VALD Research Norms · ACLR · Female 16–20 yr · injured avg ± 1 SD"
+      },
+      "KOOS — Symptoms": {
+        "dir": "Higher",
+        "green": 92,
+        "amber": 83.5,
+        "source": "★★☆ VALD Research Norms · ACLR · Female 16–20 yr · injured avg ± 1 SD"
+      },
+      "CMJ — Concentric impulse": {
+        "dir": "Higher",
+        "green": 169.7,
+        "amber": 149,
+        "source": "★★☆ VALD Research Norms · ACLR · Female 20–30 yr · injured avg ± 1 SD"
+      },
+      "CMJ — Eccentric impulse": {
+        "dir": "Higher",
+        "green": 108.6,
+        "amber": 100.8,
+        "source": "★★☆ VALD Research Norms · ACLR · Female 20–30 yr · injured avg ± 1 SD"
+      },
+      "CMJ — Peak power": {
+        "dir": "Higher",
+        "green": 40.4,
+        "amber": 35,
+        "source": "★★☆ VALD Research Norms · ACLR · Female 20–30 yr · injured avg ± 1 SD"
+      },
+      "6 m timed hop LSI": {
+        "dir": "Higher",
+        "green": 99,
+        "amber": 93,
+        "source": "★★☆ VALD Research Norms · ACLR · Female 16–20 yr · injured avg ± 1 SD"
+      },
+      "Single hop LSI": {
+        "dir": "Higher",
+        "green": 99,
+        "amber": 90,
+        "source": "★★☆ VALD Research Norms · ACLR · Female 16–20 yr · injured avg ± 1 SD"
+      },
+      "Triple hop LSI": {
+        "dir": "Higher",
+        "green": 100,
+        "amber": 94,
+        "source": "★★☆ VALD Research Norms · ACLR · Female 16–20 yr · injured avg ± 1 SD"
+      },
+      "Crossover hop LSI": {
+        "dir": "Higher",
+        "green": 99,
+        "amber": 92,
+        "source": "★★☆ VALD Research Norms · ACLR · Female 16–20 yr · injured avg ± 1 SD"
+      },
+      "Single-leg hop for distance (injured)": {
+        "dir": "Higher",
+        "green": 139.5,
+        "amber": 124,
+        "source": "★★☆ VALD Research Norms · ACLR · Female 16–20 yr · injured avg ± 1 SD"
+      },
+      "Side hop (injured)": {
+        "dir": "Higher",
+        "green": 49,
+        "amber": 37,
+        "source": "★★☆ VALD Research Norms · ACLR · Female 16–20 yr · injured avg ± 1 SD"
+      },
+      "Knee extension torque — injured": {
+        "dir": "Higher",
+        "green": 200.9,
+        "amber": 145.4,
+        "source": "★★☆ VALD Research Norms · ACLR · Female 20–30 yr · injured avg ± 1 SD"
+      },
+      "Knee flexion torque — injured": {
+        "dir": "Higher",
+        "green": 102.6,
+        "amber": 73.3,
+        "source": "★★☆ VALD Research Norms · ACLR · Female 20–30 yr · injured avg ± 1 SD"
+      },
+      "Quadriceps strength index (90° ISO)": {
+        "dir": "Higher",
+        "green": 102,
+        "amber": 88,
+        "source": "★★☆ VALD Research Norms · ACLR · Female 16–20 yr · injured avg ± 1 SD"
+      },
+      "SJ — P1 concentric impulse": {
+        "dir": "Higher",
+        "green": 160.5,
+        "amber": 124.6,
+        "source": "★★☆ VALD Research Norms · ACLR · Female 20–30 yr · injured avg ± 1 SD"
+      },
+      "SJ — Peak power": {
+        "dir": "Higher",
+        "green": 40.4,
+        "amber": 34.2,
+        "source": "★★☆ VALD Research Norms · ACLR · Female 20–30 yr · injured avg ± 1 SD"
+      },
+      "SEBT anterior reach composite (injured)": {
+        "dir": "Higher",
+        "green": 94,
+        "amber": 90,
+        "source": "★★☆ VALD Research Norms · ACLR · Female 16–20 yr · injured avg ± 1 SD"
+      }
+    },
+    "2 Years|Male": {
+      "CMJ — Concentric impulse": {
+        "dir": "Higher",
+        "green": 213.9,
+        "amber": 192.3,
+        "source": "★★☆ VALD Research Norms · ACLR · Male 20–30 yr · injured avg ± 1 SD"
+      },
+      "CMJ — Eccentric impulse": {
+        "dir": "Higher",
+        "green": 128,
+        "amber": 113.8,
+        "source": "★★☆ VALD Research Norms · ACLR · Male 20–30 yr · injured avg ± 1 SD"
+      },
+      "CMJ — Peak power": {
+        "dir": "Higher",
+        "green": 49.9,
+        "amber": 46,
+        "source": "★★☆ VALD Research Norms · ACLR · Male 20–30 yr · injured avg ± 1 SD"
+      },
+      "SJ — P1 concentric impulse": {
+        "dir": "Higher",
+        "green": 199.6,
+        "amber": 154.4,
+        "source": "★★☆ VALD Research Norms · ACLR · Male 20–30 yr · injured avg ± 1 SD"
+      },
+      "SJ — P2 concentric impulse": {
+        "dir": "Higher",
+        "green": 79.2,
+        "amber": 60.6,
+        "source": "★★☆ VALD Research Norms · ACLR · Male 20–30 yr · injured avg ± 1 SD"
+      }
+    }
+  },
+  "disclaimer": "Aggregated ACLR research norms (VALD Research Normative Data Report). Green = at or ahead of the typical ACLR case at this phase (study average); Amber = within 1 SD behind; Red = >1 SD behind. Norms are split by sex; the age band for each metric is shown in its source tag. Note: 9-month norms are male-only in the source; some isokinetic data at initial assessment combine male and female. Absolute force-plate values come from different studies across phases and are NOT directly comparable phase-to-phase — read each phase on its own. Decision SUPPORT only — not return-to-play clearance. Apply clinical judgement."
+}
