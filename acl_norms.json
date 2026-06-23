@@ -108,7 +108,8 @@
           "name": "Quadriceps LSI",
           "unit": "%",
           "dir": "Higher",
-          "thr": 5
+          "thr": 5,
+          "calc": "LSI"
         },
         {
           "name": "Hamstring LSI",
@@ -378,6 +379,12 @@
         "green": 0.38,
         "amber": 0.33,
         "source": "★★☆ VALD Research Norms · ACLR · Female 20–30 yr · injured avg ± 1 SD"
+      },
+      "Quadriceps LSI": {
+        "dir": "Higher",
+        "green": 60,
+        "amber": 46,
+        "source": "★★★ Schwery et al. 2022 IJSPT · ACLR Q-LSI (isometric 90°, Female) · avg ± 1 SD"
       }
     },
     "3 Months|Male": {
@@ -410,6 +417,12 @@
         "green": 44.2,
         "amber": 38.1,
         "source": "★★☆ VALD Research Norms · ACLR · Male 20–30 yr · injured avg ± 1 SD"
+      },
+      "Quadriceps LSI": {
+        "dir": "Higher",
+        "green": 64,
+        "amber": 49,
+        "source": "★★★ Schwery et al. 2022 IJSPT · ACLR Q-LSI (isometric 90°, Male) · avg ± 1 SD"
       }
     },
     "6 Months|Female": {
@@ -490,6 +503,12 @@
         "green": 81,
         "amber": 64,
         "source": "★★☆ VALD Research Norms · ACLR · Female 16–20 yr · injured avg ± 1 SD"
+      },
+      "Quadriceps LSI": {
+        "dir": "Higher",
+        "green": 75,
+        "amber": 59,
+        "source": "★★★ Schwery et al. 2022 IJSPT · ACLR Q-LSI (isometric 90°, Female) · avg ± 1 SD"
       }
     },
     "6 Months|Male": {
@@ -606,6 +625,12 @@
         "green": 3393.8,
         "amber": 2715.2,
         "source": "★★☆ VALD Research Norms · ACLR · Male 20–30 yr · injured avg ± 1 SD"
+      },
+      "Quadriceps LSI": {
+        "dir": "Higher",
+        "green": 77,
+        "amber": 61,
+        "source": "★★★ Schwery et al. 2022 IJSPT · ACLR Q-LSI (isometric 90°, Male) · avg ± 1 SD"
       }
     },
     "9 Months|Male": {
@@ -647,9 +672,9 @@
       },
       "Quadriceps LSI": {
         "dir": "Higher",
-        "green": 88.3,
-        "amber": 77.7,
-        "source": "★★☆ VALD Research Norms · ACLR · Male 20–30 yr · injured avg ± 1 SD"
+        "green": 87,
+        "amber": 71,
+        "source": "★★★ Schwery et al. 2022 IJSPT · ACLR Q-LSI (isometric 90°, Male) · avg ± 1 SD"
       },
       "Hamstring LSI": {
         "dir": "Higher",
@@ -748,6 +773,12 @@
         "green": 97,
         "amber": 86,
         "source": "★★☆ VALD Research Norms · ACLR · Female 16–20 yr · injured avg ± 1 SD"
+      },
+      "Quadriceps LSI": {
+        "dir": "Higher",
+        "green": 97,
+        "amber": 86,
+        "source": "★★☆ VALD Research Norms · ACLR Quad strength index (90° ISO, Female) · avg ± 1 SD"
       }
     },
     "12 Months|Male": {
@@ -792,6 +823,12 @@
         "green": 0.38,
         "amber": 0.44,
         "source": "★★☆ VALD Research Norms · ACLR · Male 20–30 yr · injured avg ± 1 SD"
+      },
+      "Quadriceps LSI": {
+        "dir": "Higher",
+        "green": 95,
+        "amber": 85,
+        "source": "★☆☆ Literature estimate (JOSPT current concepts; RTS ≥90% gate) · avg ± 1 SD"
       }
     },
     "2 Years|Female": {
@@ -926,6 +963,12 @@
         "green": 94,
         "amber": 90,
         "source": "★★☆ VALD Research Norms · ACLR · Female 16–20 yr · injured avg ± 1 SD"
+      },
+      "Quadriceps LSI": {
+        "dir": "Higher",
+        "green": 102,
+        "amber": 88,
+        "source": "★★☆ VALD Research Norms · ACLR Quad strength index (90° ISO, Female) · avg ± 1 SD"
       }
     },
     "2 Years|Male": {
@@ -958,8 +1001,22 @@
         "green": 79.2,
         "amber": 60.6,
         "source": "★★☆ VALD Research Norms · ACLR · Male 20–30 yr · injured avg ± 1 SD"
+      },
+      "Quadriceps LSI": {
+        "dir": "Higher",
+        "green": 100,
+        "amber": 90,
+        "source": "★☆☆ Literature estimate (JOSPT current concepts; RTS ≥90% gate) · avg ± 1 SD"
+      }
+    },
+    "9 Months|Female": {
+      "Quadriceps LSI": {
+        "dir": "Higher",
+        "green": 84,
+        "amber": 68,
+        "source": "★★★ Schwery et al. 2022 IJSPT · ACLR Q-LSI (isometric 90°, Female) · avg ± 1 SD"
       }
     }
   },
-  "disclaimer": "Aggregated ACLR research norms (VALD Research Normative Data Report). Green = at or ahead of the typical ACLR case at this phase (study average); Amber = within 1 SD behind; Red = >1 SD behind. Norms are split by sex; the age band for each metric is shown in its source tag. Note: 9-month norms are male-only in the source; some isokinetic data at initial assessment combine male and female. Absolute force-plate values come from different studies across phases and are NOT directly comparable phase-to-phase — read each phase on its own. Decision SUPPORT only — not return-to-play clearance. Apply clinical judgement."
+  "disclaimer": "Aggregated ACLR research norms (VALD Research Normative Data Report; quad LSI from Schwery et al. 2022 IJSPT for 3/6/9 mo). Green = at or ahead of the TYPICAL ACLR case at this phase (study average); Amber = within 1 SD behind; Red = >1 SD behind. Quadriceps LSI is auto-calculated as operated ÷ non-operated limb × 100 from the Left/Right values you enter (operated side is taken from 'Injured side'). IMPORTANT: a phase-appropriate (green) early LSI is NOT the same as return-to-sport clearance — the widely used RTS criterion is quadriceps LSI ≥ 90% (with hop symmetry ≥ 90% and criteria met), typically not before 9 months. Norms are split by sex; the age band for each metric is shown in its source tag. 9-month force-plate data are male-only in the VALD source. Absolute force-plate values come from different studies across phases and are NOT directly comparable phase-to-phase. Decision SUPPORT only — not return-to-play clearance. Apply clinical judgement."
 }

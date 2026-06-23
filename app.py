@@ -166,12 +166,37 @@ def acl_page():
         for m in g["metrics"]:
             name = m["name"]
             tgt = "" if name in pnorms else " \u00b7 (no norm this phase)"
-            c0, c1, c2 = st.columns([3, 1.3, 1.3])
-            c0.markdown(f"**{name}** \n<span style='color:#5A6573;font-size:12px'>{m['unit']}{tgt}</span>",
-                        unsafe_allow_html=True)
-            res = c1.text_input("Result", key="ar_" + name, label_visibility="collapsed", placeholder="result")
-            prev = c2.text_input("Previous", key="ap_" + name, label_visibility="collapsed", placeholder="previous")
-            inputs[name] = {"result": parse(res), "previous": parse(prev)}
+            if m.get("calc") == "LSI":
+                # Auto-calculated limb symmetry index: enter Left & Right, compute operated/non-operated.
+                c0, cL, cR, cV = st.columns([2.6, 1.1, 1.1, 1.2])
+                c0.markdown(f"**{name}** \n<span style='color:#5A6573;font-size:12px'>L vs R \u2192 auto LSI{tgt}</span>",
+                            unsafe_allow_html=True)
+                lv = cL.text_input("Left", key="al_" + name, label_visibility="collapsed", placeholder="Left")
+                rv = cR.text_input("Right", key="arr_" + name, label_visibility="collapsed", placeholder="Right")
+                left = parse(lv); right = parse(rv); op = meta.get("injured")
+                lsi = None
+                if left and right and op in ("Left", "Right"):
+                    operated = left if op == "Left" else right
+                    other = right if op == "Left" else left
+                    lsi = round(operated / other * 100, 1) if other else None
+                if lsi is not None:
+                    stt = engine.status(lsi, pnorms.get(name))
+                    col = STATUS_COLOR.get(stt, "#999")
+                    cV.markdown(f"<div style='text-align:center'><span style='background:{col};color:#fff;"
+                                f"border-radius:3px;padding:1px 8px;font-weight:700'>{lsi}%</span></div>",
+                                unsafe_allow_html=True)
+                elif op not in ("Left", "Right"):
+                    cV.caption("set Injured side")
+                else:
+                    cV.caption("enter L & R")
+                inputs[name] = {"result": lsi, "previous": None}
+            else:
+                c0, c1, c2 = st.columns([3, 1.3, 1.3])
+                c0.markdown(f"**{name}** \n<span style='color:#5A6573;font-size:12px'>{m['unit']}{tgt}</span>",
+                            unsafe_allow_html=True)
+                res = c1.text_input("Result", key="ar_" + name, label_visibility="collapsed", placeholder="result")
+                prev = c2.text_input("Previous", key="ap_" + name, label_visibility="collapsed", placeholder="previous")
+                inputs[name] = {"result": parse(res), "previous": parse(prev)}
     groups = engine.build_ham_rows(inputs, key, ACL)
     counts = engine.counts(groups)
     st.divider()
