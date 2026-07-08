@@ -382,8 +382,27 @@ if population is None:
 elif not groups:
     st.info("Enter at least one result above to generate a report.")
 else:
+    if hasattr(report_pdf, "radar_options"):
+        _ropts = report_pdf.radar_options(groups)
+        _rlabel = {k: l for k, l in _ropts}
+        _rdefault = [k for k in ["Jump Height", "IMTP Relative Force", "__NORDIC__",
+                                 "Adductor Peak Force", "Abductor Peak Force", "__QUAD__"] if k in _rlabel]
+        if not _rdefault:
+            _rdefault = [k for k, _ in _ropts][:6]
+        st.markdown("**Radar graph** \u2014 pick up to 6 metrics for the overview")
+        _rchosen = st.multiselect("Radar metrics", options=[k for k, _ in _ropts],
+                                  default=_rdefault[:6], max_selections=6,
+                                  format_func=lambda k: _rlabel.get(k, k),
+                                  label_visibility="collapsed", key="radar_pick")
+        _rkeys = [(k, _rlabel[k]) for k in _rchosen][:6]
+    else:
+        _rkeys = None
+        st.caption("Radar metric picker needs the updated report_pdf.py \u2014 replace that file to enable it.")
     if st.button("Generate PDF report", type="primary"):
-        pdf = report_pdf.render_pdf(meta, pop_label, groups, counts, prios)
+        if _rkeys is not None:
+            pdf = report_pdf.render_pdf(meta, pop_label, groups, counts, prios, radar_keys=_rkeys)
+        else:
+            pdf = report_pdf.render_pdf(meta, pop_label, groups, counts, prios)
         fname = (meta.get("name") or "athlete").strip().replace(" ", "_") + "_report.pdf"
         st.download_button("Download PDF", data=pdf, file_name=fname, mime="application/pdf")
         st.success("Report ready — click Download PDF above.")
