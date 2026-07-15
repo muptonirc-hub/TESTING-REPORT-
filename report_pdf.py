@@ -119,8 +119,29 @@ RADAR_KEYS = [("Jump Height", "CMJ jump ht"), ("IMTP Relative Force", "IMTP N/kg
               ("Abductor Peak Force", "Hip ABD"), ("__QUAD__", "Quad ISO")]
 _WORST = {"Green": 1, "Amber": 2, "Red": 3}
 
+# Friendly short axis labels for the radar picker; anything not listed falls back to the metric name.
+SHORT_LABEL = {
+    "Jump Height": "CMJ jump ht", "Peak Power": "Peak power", "CMJ Peak Force": "CMJ peak F",
+    "RSI-modified": "RSI-mod",
+    "IMTP Peak Force": "IMTP peak F", "IMTP Relative Force": "IMTP N/kg", "IMTP RFD 0\u2013200 ms": "IMTP RFD",
+    "Hop RSI (best)": "Hop RSI", "Hop Contact Time": "Hop contact t", "Hop Jump Height": "Hop jump ht",
+    "Nordic Relative Force": "Nordic N/kg",
+    "Adductor Peak Force": "Hip ADD", "Abductor Peak Force": "Hip ABD",
+    "Isometric Peak Force": "Isometric F",
+    "10 m sprint": "10 m sprint", "20 m sprint": "20 m sprint", "30 m sprint": "30 m sprint",
+    "__NORDIC__": "Nordic ecc", "__QUAD__": "Quad ISO",
+}
+
 def _rowmap(groups):
     return {r["name"]: r for gp in groups for r in gp["rows"]}
+
+def _score(value, target, dirn):
+    """Direction-aware radar score. >=1 means at/beyond the norm target (further out on the axis = better)."""
+    if not target:
+        return None
+    if dirn == "Lower":
+        return (target / value) if value else None
+    return value / target
 
 def _avg_spoke(rm, left, right, unit):
     L = rm.get(left); R = rm.get(right)
@@ -133,7 +154,10 @@ def _avg_spoke(rm, left, right, unit):
         return None
     v = sum(_f(x["result"]) for x in present) / len(present)
     worst = max((x["status"] for x in present), key=lambda s: _WORST.get(s, 0))
-    return dict(value=v, target=g, status=worst, unit=unit)
+    sc = _score(v, g, (ref.get("norm") or {}).get("dir", "Higher"))
+    if sc is None:
+        return None
+    return dict(value=v, target=g, status=worst, unit=unit, score=sc)
 
 def _spoke(name, rm):
     if name == "__NORDIC__":
@@ -143,18 +167,43 @@ def _spoke(name, rm):
     r = rm.get(name)
     if not r:
         return None
-    v = _f(r["result"]); g = _f((r.get("norm") or {}).get("green"))
+    v = _f(r["result"]); nm = r.get("norm") or {}; g = _f(nm.get("green"))
     if v is None or not g:
         return None
-    return dict(value=v, target=g, status=r["status"], unit=r["unit"])
+    sc = _score(v, g, nm.get("dir", "Higher"))
+    if sc is None:
+        return None
+    return dict(value=v, target=g, status=r["status"], unit=r["unit"], score=sc)
 
-def radar_svg(groups):
+def radar_options(groups):
+    """Return [(key, label), ...] for every metric that can be plotted on the radar
+    (a numeric result plus a Higher/Lower norm target). Feeds the picker in app.py."""
+    rm = _rowmap(groups)
+    opts = []
+    if _avg_spoke(rm, "Nordic Peak Force \u2014 Left", "Nordic Peak Force \u2014 Right", "N"):
+        opts.append(("__NORDIC__", SHORT_LABEL["__NORDIC__"]))
+    if _avg_spoke(rm, "Quad ISO @ 60\u00b0 \u2014 Left", "Quad ISO @ 60\u00b0 \u2014 Right", "\u00d7 BW"):
+        opts.append(("__QUAD__", SHORT_LABEL["__QUAD__"]))
+    seen = {"Nordic Peak Force \u2014 Left", "Nordic Peak Force \u2014 Right",
+            "Quad ISO @ 60\u00b0 \u2014 Left", "Quad ISO @ 60\u00b0 \u2014 Right"}
+    for gp in groups:
+        for r in gp["rows"]:
+            n = r["name"]
+            if n in seen or ASYM(n):
+                continue
+            nm = r.get("norm") or {}
+            if nm.get("dir") in ("Higher", "Lower") and _f(nm.get("green")) is not None and _f(r["result"]) is not None:
+                opts.append((n, SHORT_LABEL.get(n, n)))
+    return opts
+
+def radar_svg(groups, keys=None):
+    keys = keys or RADAR_KEYS
     rm = _rowmap(groups)
     spokes = []
-    for name, label in RADAR_KEYS:
+    for name, label in keys:
         s = _spoke(name, rm)
         if s:
-            s["label"] = label; s["score"] = s["value"] / s["target"]; spokes.append(s)
+            s["label"] = label; spokes.append(s)
     if len(spokes) < 3:
         return ""
     W, H, cx, cy, Rmax, CAP = 480, 300, 240, 150, 98, 1.5
@@ -186,7 +235,7 @@ def radar_svg(groups):
     svg.append('</svg>')
     return "".join(svg)
 
-def render_pdf(meta, population, groups, counts, prios):
+def render_pdf(meta, population, groups, counts, prios, radar_keys=None):
     icon=_icon_uri()
     icon_html=f'<img class="icon" src="{icon}"/>' if icon else ""
     def chip(st): return f'<span class="chip" style="background:{COL.get(st,"#999")}">{esc(st)}</span>' if st else ""
@@ -262,11 +311,13 @@ def render_pdf(meta, population, groups, counts, prios):
     .radar-note{{font-size:7.5px;color:{MUTE};font-style:italic;margin:2px 2px 0;text-align:center;}}
     .newpage{{break-before:page;page-break-before:always;}}
     """
-    rsvg = radar_svg(groups)
+    _used_radar_keys = radar_keys or RADAR_KEYS
+    rsvg = radar_svg(groups, radar_keys)
+    _quad_note = " Quad ISO @ 60\u00b0 uses a placeholder norm." if any(k == "__QUAD__" for k, _ in _used_radar_keys) else ""
     radar_block = (f'<div class="sec">Athlete profile \u2014 key components</div>'
                    f'<div class="radar-wrap">{rsvg}</div>'
                    f'<div class="radar-note">Each axis = result vs the athlete\u2019s age/sex norm target '
-                   f'(dashed green ring). Dots show status. Quad ISO @ 60\u00b0 uses a placeholder norm.</div>') if rsvg else ""
+                   f'(dashed green ring). Dots show status.{_quad_note}</div>') if rsvg else ""
     doc=f"""<html><head><meta charset="utf-8"><style>{css}</style></head><body>
     <div class="hd">
       <div class="brand">{icon_html}<div class="name">BASE <b>HEALTH</b><span>NOOSA</span></div></div>
