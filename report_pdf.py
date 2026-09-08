@@ -1,6 +1,11 @@
 """Render the premium athlete PDF (returns bytes). Uses weasyprint. BASE Health branded."""
 import html, base64, os, math
-from weasyprint import HTML
+try:
+    from weasyprint import HTML
+    PDF_ENABLED = True
+except Exception:
+    HTML = None
+    PDF_ENABLED = False
 
 BLUE="#2FA8A0";BLUEINK="#1D6E68";DARK="#1B2430";BLACK="#111418";INK="#22262B";MUTE="#6B7280";LINE="#E4E7EA"
 GBAND="#374957"
@@ -236,6 +241,8 @@ def radar_svg(groups, keys=None):
     return "".join(svg)
 
 def render_pdf(meta, population, groups, counts, prios, radar_keys=None):
+    if not PDF_ENABLED:
+        raise RuntimeError("PDF export is temporarily unavailable (WeasyPrint isn't installed on this deployment).")
     icon=_icon_uri()
     icon_html=f'<img class="icon" src="{icon}"/>' if icon else ""
     def chip(st): return f'<span class="chip" style="background:{COL.get(st,"#999")}">{esc(st)}</span>' if st else ""
@@ -345,6 +352,8 @@ def render_pdf(meta, population, groups, counts, prios, radar_keys=None):
 
 
 def render_ham_pdf(meta, phase, groups, counts, disclaimer=""):
+    if not PDF_ENABLED:
+        raise RuntimeError("PDF export is temporarily unavailable (WeasyPrint isn't installed on this deployment).")
     icon = _icon_uri()
     icon_html = f'<img class="icon" src="{icon}"/>' if icon else ""
     def chip(st): return f'<span class="chip" style="background:{COL.get(st,"#999")}">{esc(st)}</span>' if st else ""
