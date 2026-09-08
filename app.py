@@ -126,10 +126,14 @@ def hamstring_page():
         st.info("Enter at least one injured-limb result to generate the rehab report.")
     else:
         if st.button("Generate rehab PDF", type="primary", key="h_pdf"):
-            pdf = report_pdf.render_ham_pdf(meta, phase, groups, counts, HAM.get("disclaimer", ""))
-            fname = (meta.get("name") or "athlete").strip().replace(" ", "_") + "_hamstring.pdf"
-            st.download_button("Download PDF", data=pdf, file_name=fname, mime="application/pdf", key="h_dl")
-            st.success("Report ready — click Download PDF above.")
+            try:
+                pdf = report_pdf.render_ham_pdf(meta, phase, groups, counts, HAM.get("disclaimer", ""))
+            except Exception as e:
+                st.error(f"PDF export is temporarily unavailable: {e}")
+            else:
+                fname = (meta.get("name") or "athlete").strip().replace(" ", "_") + "_hamstring.pdf"
+                st.download_button("Download PDF", data=pdf, file_name=fname, mime="application/pdf", key="h_dl")
+                st.success("Report ready — click Download PDF above.")
 
 def acl_page():
     show_logo(64)
@@ -217,10 +221,14 @@ def acl_page():
         st.info("Enter at least one result to generate the ACL rehab report.")
     else:
         if st.button("Generate ACL PDF", type="primary", key="a_pdf"):
-            pdf = report_pdf.render_acl_pdf(meta, phase, sex, groups, counts, ACL.get("disclaimer", ""))
-            fname = (meta.get("name") or "athlete").strip().replace(" ", "_") + "_acl.pdf"
-            st.download_button("Download PDF", data=pdf, file_name=fname, mime="application/pdf", key="a_dl")
-            st.success("Report ready — click Download PDF above.")
+            try:
+                pdf = report_pdf.render_acl_pdf(meta, phase, sex, groups, counts, ACL.get("disclaimer", ""))
+            except Exception as e:
+                st.error(f"PDF export is temporarily unavailable: {e}")
+            else:
+                fname = (meta.get("name") or "athlete").strip().replace(" ", "_") + "_acl.pdf"
+                st.download_button("Download PDF", data=pdf, file_name=fname, mime="application/pdf", key="a_dl")
+                st.success("Report ready — click Download PDF above.")
 
 if mode == "Hamstring rehab":
     hamstring_page()
@@ -399,10 +407,14 @@ else:
         _rkeys = None
         st.caption("Radar metric picker needs the updated report_pdf.py \u2014 replace that file to enable it.")
     if st.button("Generate PDF report", type="primary"):
-        if _rkeys is not None:
-            pdf = report_pdf.render_pdf(meta, pop_label, groups, counts, prios, radar_keys=_rkeys)
+        try:
+            if _rkeys is not None:
+                pdf = report_pdf.render_pdf(meta, pop_label, groups, counts, prios, radar_keys=_rkeys)
+            else:
+                pdf = report_pdf.render_pdf(meta, pop_label, groups, counts, prios)
+        except Exception as e:
+            st.error(f"PDF export is temporarily unavailable: {e}")
         else:
-            pdf = report_pdf.render_pdf(meta, pop_label, groups, counts, prios)
-        fname = (meta.get("name") or "athlete").strip().replace(" ", "_") + "_report.pdf"
-        st.download_button("Download PDF", data=pdf, file_name=fname, mime="application/pdf")
-        st.success("Report ready — click Download PDF above.")
+            fname = (meta.get("name") or "athlete").strip().replace(" ", "_") + "_report.pdf"
+            st.download_button("Download PDF", data=pdf, file_name=fname, mime="application/pdf")
+            st.success("Report ready — click Download PDF above.")
