@@ -14,7 +14,9 @@
     entry: $('entry'), summary: $('summary'), dock: $('dock'), sheet: $('sheet'), pages: $('pages'),
     sheetTitle: $('sheetTitle'), share: $('sharePdf'), save: $('savePdf'), back: $('sheetBack'),
     toast: $('toast'), clearAll: $('clearAll'), clearDialog: $('clearDialog'), clearList: $('clearList'),
-    clearCancel: $('clearCancel'), clearConfirm: $('clearConfirm')
+    clearCancel: $('clearCancel'), clearConfirm: $('clearConfirm'),
+    aiDialog: $('aiDialog'), aiKey: $('aiKey'), aiSave: $('aiSave'), aiCancel: $('aiCancel'), aiRemove: $('aiRemove'),
+    aiKeyState: $('aiKeyState'), aiErr: $('aiErr'), aiLead: $('aiLead')
   };
 
   // ------------------------------------------------------------------ small helpers
@@ -42,12 +44,15 @@
   }
 
   // ------------------------------------------------------------------ state
+  var TOOLS = ['screen', 'str', 'ham', 'acl'];
+  var TOOL_NAMES = { screen: 'Screening', str: 'LL Strength', ham: 'Hamstring rehab', acl: 'ACL rehab' };
+  function freshInterp() { return { text: '', ai: false, basis: '' }; }
   function freshTool(tool, keep) {
     keep = keep || {};
-    if (tool === 'screen') return { meta: { name: '', date: todayIso(), sex: '', age: '', sport: '', tester: keep.tester || '', mass: '', notes: '' }, pop: 'general', values: {}, radar: null, collapsed: {}, importLog: null };
-    if (tool === 'ham') return { meta: { name: '', date: todayIso(), injured: '', clinician: keep.clinician || '', doi: '', weeks: '', sport: '', notes: '' }, phase: null, values: {}, collapsed: {} };
-    if (tool === 'str') return { meta: { name: '', date: todayIso(), mass: '', sport: '', tester: keep.tester || '', notes: '' }, values: {}, collapsed: {} };
-    return { meta: { name: '', date: todayIso(), injured: '', surgeon: keep.surgeon || '', graft: '', dos: '', months: '', sport: '', notes: '' }, phase: null, sex: null, values: {}, collapsed: {} };
+    if (tool === 'screen') return { meta: { name: '', date: todayIso(), sex: '', age: '', sport: '', tester: keep.tester || '', mass: '', notes: '' }, pop: 'general', values: {}, radar: null, collapsed: {}, importLog: null, interp: freshInterp() };
+    if (tool === 'ham') return { meta: { name: '', date: todayIso(), injured: '', clinician: keep.clinician || '', doi: '', weeks: '', sport: '', notes: '' }, phase: null, values: {}, collapsed: {}, interp: freshInterp() };
+    if (tool === 'str') return { meta: { name: '', date: todayIso(), mass: '', sport: '', tester: keep.tester || '', notes: '' }, values: {}, collapsed: {}, interp: freshInterp() };
+    return { meta: { name: '', date: todayIso(), injured: '', surgeon: keep.surgeon || '', graft: '', dos: '', months: '', sport: '', notes: '' }, phase: null, sex: null, values: {}, collapsed: {}, interp: freshInterp() };
   }
   function loadDraft() {
     try {
@@ -71,7 +76,12 @@
     var pops = E.sportPopulations(DATA.screen);
     if (state.screen.pop !== 'general' && pops.indexOf(state.screen.pop) < 0) state.screen.pop = 'general';
     if (!state.str) state.str = freshTool('str');
-    if (['screen', 'str', 'ham', 'acl'].indexOf(state.tool) < 0) state.tool = 'screen';
+    TOOLS.forEach(function (t) {                     // drafts saved before the interpretation box existed
+      var it = state[t].interp;
+      if (!it || typeof it !== 'object') state[t].interp = freshInterp();
+      else { it.text = String(it.text || ''); it.ai = !!it.ai; it.basis = String(it.basis || ''); }
+    });
+    if (TOOLS.indexOf(state.tool) < 0) state.tool = 'screen';
   }
   function val(tool, name) {
     var v = state[tool].values;
@@ -276,9 +286,11 @@
   function render() {
     var t = state.tool;
     document.querySelectorAll('.tools button').forEach(function (b) { b.setAttribute('aria-selected', String(b.dataset.tool === t)); });
-    els.entry.innerHTML = '<div class="pagehead"><h1>' + esc(HEAD[t][0]) + '</h1><p>' + esc(HEAD[t][1]) + '</p></div>' + athleteCard() + (t === 'str' ? strengthGroupHtml() : groupsHtml(t));
+    els.entry.innerHTML = '<div class="pagehead"><h1>' + esc(HEAD[t][0]) + '</h1><p>' + esc(HEAD[t][1]) + '</p></div>' + athleteCard() +
+      (t === 'str' ? strengthGroupHtml() : groupsHtml(t)) + interpCardHtml();
     if (t === 'screen' && state.screen.importLog) showImportLog(state.screen.importLog);
     refresh();
+    fitInterp();
   }
 
   // ------------------------------------------------------------------ live updates
@@ -339,7 +351,7 @@
 
   function refresh() {
     var t = state.tool, c = compute();
-    if (t === 'str') { refreshStrength(c); renderSummary(c); saveDraft(); return; }
+    if (t === 'str') { refreshStrength(c); renderSummary(c); renderInterpState(c); saveDraft(); return; }
     var S = DATA[t];
     // context note under the athlete card
     var note = $('ctxNote');
@@ -400,6 +412,7 @@
       cnt.textContent = entered ? entered + ' of ' + g.metrics.length + ' entered' : g.metrics.length + ' metrics';
     });
     renderSummary(c);
+    renderInterpState(c);
     saveDraft();
   }
 
@@ -473,7 +486,7 @@
       if (c.radarPicked.length < 3) html += '<p class="fine">The radar needs at least 3 metrics; with fewer it is left off the report.</p>';
     }
     var why = blocker(c);
-    html += '</div><div class="sum-foot"><button type="button" class="primary make" data-action="report"' + (why ? ' disabled' : '') + '>Create PDF report</button>' +
+    html += '</div><div class="sum-foot">' + interpFlagHtml(t, c) + '<button type="button" class="primary make" data-action="report"' + (why ? ' disabled' : '') + '>Create PDF report</button>' +
       '<p class="fine">' + esc(why || 'Opens a preview you can share by AirDrop, Mail or Messages, or save to Files.') + '</p></div></div>';
     els.summary.innerHTML = html;
     els.dock.innerHTML = '<div class="dt"><a href="#summary" class="g" aria-label="' + labels[0] + '">' + c.counts.Green + '</a><a href="#summary" class="a" aria-label="' + labels[1] + '">' + c.counts.Amber + '</a><a href="#summary" class="r" aria-label="' + labels[2] + '">' + c.counts.Red + '</a></div>' +
@@ -483,6 +496,7 @@
   // ------------------------------------------------------------------ input handling
   function onInput(e) {
     var el = e.target, t = state.tool;
+    if (el.id === 'interpText') { onInterpInput(el); return; }
     if (el.dataset.meta) {
       state[t].meta[el.dataset.meta] = el.value;
       refresh();
@@ -522,6 +536,14 @@
       g.classList.toggle('collapsed', c);
       b.setAttribute('aria-expanded', String(!c));
       saveDraft();
+    } else if (b.dataset.action === 'ai-draft') {
+      draftInterp();
+    } else if (b.dataset.action === 'ai-settings') {
+      openAiSettings(false);
+    } else if (b.dataset.action === 'ai-undo') {
+      undoInterp();
+    } else if (b.dataset.action === 'goto-interp') {
+      gotoInterp();
     } else if (b.dataset.action === 'demo') {
       fillExample();
     } else if (b.dataset.action === 'report') {
@@ -624,12 +646,13 @@
   function buildReport() {
     var t = state.tool, c = compute(), m = state[t].meta;
     if (blocker(c)) return null;
+    var it = state[t].interp, interp = blank(it.text) ? null : { text: String(it.text).trim(), ai: !!it.ai };
     if (t === 'str') {
       return {
         file: fileName('_strength.pdf'),
         rep: window.BHReport.strength({
           meta: { name: m.name, date: E.displayIso(m.date), mass: m.mass, sport: m.sport, tester: m.tester, notes: m.notes },
-          tests: c.tests, counts: c.counts, prios: c.prios, amberPct: DATA.str.amber_pct
+          tests: c.tests, counts: c.counts, prios: c.prios, amberPct: DATA.str.amber_pct, interp: interp
         })
       };
     }
@@ -641,7 +664,7 @@
         rep: window.BHReport.screening({
           meta: { name: m.name, date: E.displayIso(m.date), sport: m.sport, tester: m.tester, age: m.age, sex: m.sex, mass: m.mass, notes: m.notes },
           popLabel: c.pop.label, groups: c.groups, counts: c.counts, prios: c.prios,
-          radarKeys: c.radarPicked.map(function (k) { return [k, labels[k]]; })
+          radarKeys: c.radarPicked.map(function (k) { return [k, labels[k]]; }), interp: interp
         })
       };
     }
@@ -650,7 +673,7 @@
       return {
         file: fileName('_hamstring.pdf'),
         rep: window.BHReport.rehab({
-          kind: 'ham', phase: state.ham.phase, groups: c.groups, counts: c.counts, disclaimer: DATA.ham.disclaimer || '',
+          kind: 'ham', phase: state.ham.phase, groups: c.groups, counts: c.counts, disclaimer: DATA.ham.disclaimer || '', interp: interp,
           meta: { name: m.name, date: E.displayIso(m.date), injured: m.injured, clinician: m.clinician, weeks: blank(m.weeks) ? auto(m.doi, 7) : m.weeks, sport: m.sport, notes: m.notes }
         })
       };
@@ -658,7 +681,7 @@
     return {
       file: fileName('_acl.pdf'),
       rep: window.BHReport.rehab({
-        kind: 'acl', phase: state.acl.phase, sex: state.acl.sex, groups: c.groups, counts: c.counts, disclaimer: DATA.acl.disclaimer || '',
+        kind: 'acl', phase: state.acl.phase, sex: state.acl.sex, groups: c.groups, counts: c.counts, disclaimer: DATA.acl.disclaimer || '', interp: interp,
         meta: { name: m.name, date: E.displayIso(m.date), injured: m.injured, graft: m.graft, surgeon: m.surgeon, months: blank(m.months) ? auto(m.dos, 30.4375) : m.months, sport: m.sport, notes: m.notes }
       })
     };
@@ -723,8 +746,6 @@
   // ------------------------------------------------------------------ clear all data
   // One button wipes every section (names, results, notes, tester details), the saved draft and
   // the last report built, after a check that lists what will go.
-  var TOOLS = ['screen', 'str', 'ham', 'acl'];
-  var TOOL_NAMES = { screen: 'Screening', str: 'LL Strength', ham: 'Hamstring rehab', acl: 'ACL rehab' };
   function toolContent(t) {
     var s = state[t], n = 0, details = false;
     Object.keys(s.values || {}).forEach(function (k) {
@@ -732,6 +753,7 @@
       if (['result', 'previous', 'side', 'left', 'right'].some(function (f) { return !blank(v[f]); })) n++;
     });
     Object.keys(s.meta).forEach(function (k) { if (k !== 'date' && !blank(s.meta[k])) details = true; });
+    if (s.interp && !blank(s.interp.text)) details = true;
     return { results: n, any: n > 0 || details || !!s.importLog, name: String(s.meta.name || '').trim() };
   }
   function setBackgroundInert(on) {
@@ -741,7 +763,42 @@
       if (on) el.setAttribute('inert', ''); else el.removeAttribute('inert');
     });
   }
-  var lastFocus = null;
+  // one pop-up at a time: focus stays inside it, Escape or a tap outside closes it
+  var openModalEl = null, modalReturn = null;
+  function modalFocusables(el) {
+    return Array.prototype.filter.call(el.querySelectorAll('button, input, textarea, select, a[href]'), function (x) {
+      return !x.disabled && !x.hidden && x.getClientRects().length > 0;
+    });
+  }
+  function openModal(el, focusEl) {
+    if (openModalEl) closeModal(false);
+    modalReturn = document.activeElement;
+    openModalEl = el;
+    els.toast.hidden = true;
+    el.hidden = false;
+    setBackgroundInert(true);
+    document.documentElement.style.overflow = 'hidden';
+    var f = focusEl || modalFocusables(el)[0];
+    if (f) f.focus();
+  }
+  function closeModal(restoreFocus) {
+    if (!openModalEl) return;
+    openModalEl.hidden = true;
+    openModalEl = null;
+    setBackgroundInert(false);
+    document.documentElement.style.overflow = '';
+    if (restoreFocus !== false && modalReturn && modalReturn.focus) modalReturn.focus();
+  }
+  function onModalKey(e) {
+    if (e.key === 'Escape') { e.preventDefault(); closeModal(); return; }
+    if (e.key !== 'Tab') return;
+    var f = modalFocusables(openModalEl);
+    if (!f.length) return;
+    var first = f[0], last = f[f.length - 1];
+    if (!openModalEl.contains(document.activeElement)) { e.preventDefault(); first.focus(); }
+    else if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+  }
   function openClearDialog() {
     var any = false;
     els.clearList.innerHTML = TOOLS.map(function (t) {
@@ -752,23 +809,14 @@
       return '<li' + (c.any ? ' class="has-data"' : '') + '><span class="cl-t">' + TOOL_NAMES[t] + '</span><span class="cl-d">' + esc(d) + '</span></li>';
     }).join('');
     if (!any) { toast('Nothing to clear — every section is already empty'); return; }
-    lastFocus = document.activeElement;
-    els.toast.hidden = true;
-    els.clearDialog.hidden = false;
-    setBackgroundInert(true);
-    document.documentElement.style.overflow = 'hidden';
-    els.clearCancel.focus();
-  }
-  function closeClearDialog(restoreFocus) {
-    if (els.clearDialog.hidden) return;
-    els.clearDialog.hidden = true;
-    setBackgroundInert(false);
-    document.documentElement.style.overflow = '';
-    if (restoreFocus !== false && lastFocus && lastFocus.focus) lastFocus.focus();
+    openModal(els.clearDialog, els.clearCancel);
   }
   function clearAllData() {
     TOOLS.forEach(function (t) { state[t] = freshTool(t); });
     tidyState();
+    // an AI draft still on its way belongs to the athlete just cleared: drop it when it arrives
+    aiGen++;
+    aiBusy = null; interpMsg = { tool: null, kind: '', text: '' }; interpUndo = null;
     // drop the last report built (it holds the athlete's details) and its preview
     current = { file: null, blob: null, title: '' };
     els.pages.innerHTML = '';
@@ -776,18 +824,310 @@
     // overwrite the saved draft straight away, so closing the app now can't bring the old data back
     clearTimeout(saveTimer);
     try { localStorage.setItem(STORE, JSON.stringify(state)); } catch (e) { /* storage unavailable */ }
-    closeClearDialog(false);
+    closeModal(false);
     render();
     window.scrollTo(0, 0);
     els.clearAll.focus();
     toast('All data cleared — ready for the next athlete');
   }
-  function onDialogKey(e) {
-    if (e.key !== 'Tab') return;
-    var first = els.clearCancel, last = els.clearConfirm;
-    if (!els.clearDialog.contains(document.activeElement)) { e.preventDefault(); first.focus(); }
-    else if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
-    else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+
+  // ------------------------------------------------------------------ AI interpretation
+  // A short plain-English summary for the athlete and coach, drafted by Claude on request and
+  // always editable. Claude is called straight from the device with the clinic's own API key.
+  // What is sent: the results, targets and statuses plus basic context (age, sex, mass, sport,
+  // rehab phase, time since injury). Never the athlete's name, notes, tester/clinician/surgeon or dates.
+  var AI_KEY_STORE = 'bh-athlete-report-ai-key';
+  var SPARKLE = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="currentColor"><path d="M10 2.5l1.8 5.2 5.2 1.8-5.2 1.8L10 16.5l-1.8-5.2L3 9.5l5.2-1.8zM18.5 13l.95 2.55 2.55.95-2.55.95-.95 2.55-.95-2.55L15 16.5l2.55-.95z"/></svg>';
+  var aiBusy = null, aiGen = 0, aiThenDraft = false;
+  var interpMsg = { tool: null, kind: '', text: '' };
+  var interpUndo = null;
+
+  function aiKey() { try { return localStorage.getItem(AI_KEY_STORE) || ''; } catch (e) { return ''; } }
+  function hashStr(s) {                              // FNV-1a, to notice when results change after drafting
+    var h = 0x811c9dc5;
+    for (var i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; }
+    return ('0000000' + h.toString(16)).slice(-8);
+  }
+  var STATUS_WORD = { Green: 'Green', Amber: 'Amber', Red: 'Red', 'n/a': 'no target available' };
+  var CHANGE_WORDS = { gain: 'real improvement', drop: 'real decline', noise: 'within normal test variation, not a real change', shift: 'meaningful change' };
+  function changeWords(r) {
+    if (!r.change) return '';
+    // '▲ real gain   +1.3 (+4%)' -> '+1.3, +4%'
+    var delta = String(r.change).replace(/^[^\d+\-−]*/, '').replace(/\s+/g, ' ').trim().replace(/\s*\(([^)]*)\)$/, ', $1');
+    return 'vs previous test: ' + (CHANGE_WORDS[r.change_kind] || 'changed') + (delta ? ' (' + delta + ')' : '');
+  }
+  function rowLine(r, targetWord) {
+    var v = E.fmt(r.result) + (r.unit ? ' ' + r.unit : '') + (r.side ? ' (' + (r.side === 'L' ? 'left' : 'right') + ' side higher)' : '');
+    var scored = r.target && r.target !== 'n/a';
+    var parts = [r.name + ': ' + v, scored ? targetWord + ' ' + r.target : 'no ' + targetWord + ' available'];
+    if (scored) parts.push(STATUS_WORD[r.status] || r.status || 'not scored');
+    var ch = changeWords(r);
+    if (ch) parts.push(ch);
+    return '- ' + parts.join(' | ');
+  }
+  function groupLines(groups, targetWord) {
+    var out = [];
+    groups.forEach(function (g) {
+      out.push(clean1(g.title));
+      g.rows.forEach(function (r) { out.push(rowLine(r, targetWord)); });
+    });
+    return out;
+  }
+  function clean1(s) { return String(s == null ? '' : s).replace(/\s+/g, ' ').trim(); }
+  function joinBits(bits) { return bits.filter(function (b) { return b && !/:\s*$/.test(b); }).join(' · '); }
+  function sinceText(t) {
+    var m = state[t].meta;
+    if (t === 'ham') {
+      if (!blank(m.weeks)) return clean1(m.weeks);
+      var d = daysBetween(m.doi, m.date); return d !== null && d >= 0 ? String(Math.floor(d / 7)) : '';
+    }
+    if (!blank(m.months)) return clean1(m.months);
+    var d2 = daysBetween(m.dos, m.date); return d2 !== null && d2 >= 0 ? String(Math.floor(d2 / 30.4375)) : '';
+  }
+  function interpPayload(t, c) {
+    var m = state[t].meta, L = [];
+    var totals = 'Totals: ' + c.counts.Green + ' Green, ' + c.counts.Amber + ' Amber, ' + c.counts.Red + ' Red.';
+    if (t === 'screen') {
+      L.push('Report: athlete performance and readiness screen (VALD force plate and related tests).');
+      L.push('Compared against: ' + clean1(c.pop.label) + '.');
+      var who = joinBits([clean1(m.sex), blank(m.age) ? '' : clean1(m.age) + ' years', blank(m.mass) ? '' : clean1(m.mass) + ' kg', blank(m.sport) ? '' : 'sport: ' + clean1(m.sport)]);
+      if (who) L.push('Athlete: ' + who + '.');
+      L.push('Status key: Green = meets the target; Amber = close to the target; Red = well short of the target.');
+      L.push(totals);
+      L.push('Results (metric: result | target | status | change since the previous test, if given):');
+      L = L.concat(groupLines(c.groups, 'target'));
+    } else if (t === 'str') {
+      var pct = DATA.str.amber_pct == null ? 5 : DATA.str.amber_pct;
+      L.push('Report: lower-limb strength and capacity battery. Each leg is scored against a target relative to body weight (BW). RM = repetition maximum.');
+      var who2 = joinBits([blank(m.mass) ? '' : 'body mass ' + clean1(m.mass) + ' kg', blank(m.sport) ? '' : 'sport: ' + clean1(m.sport)]);
+      if (who2) L.push('Athlete: ' + who2 + '.');
+      L.push('Status key: Green = at or above target; Amber = up to ' + pct + '% below target; Red = more than ' + pct + '% below target. For the hip ratio the target is a band, and Amber is within ' + pct + '% outside it.');
+      L.push(totals.replace('Totals:', 'Totals (each leg counted separately):'));
+      L.push('Results (test: left leg | right leg | target | difference between legs):');
+      c.tests.forEach(function (tt) {
+        var sides = ['L', 'R'].map(function (k) {
+          var cell = tt.sides[k], label = k === 'L' ? 'Left' : 'Right';
+          if (!cell || cell.value === null) return label + ' ' + (cell && cell.needsMass ? 'not scored (needs body mass)' : 'not tested');
+          var raw = tt.input === 'calc' ? 'adduction ' + E.fmt(cell.parts[0]) + ' N ÷ abduction ' + E.fmt(cell.parts[1]) + ' N'
+            : E.fmt(cell.input) + ' ' + (tt.input === 'reps' ? 'reps' : tt.input);
+          return label + ' ' + cell.text + (cell.text.indexOf(raw) === 0 ? '' : ' (' + raw + ')') + ' ' + (STATUS_WORD[cell.status] || cell.status);
+        });
+        var diff = E.diffText(tt.diff);
+        L.push('- ' + tt.name + (tt.detail ? ' (' + tt.detail + ')' : '') + ': ' + sides.join(' | ') + ' | target ' + tt.target + (diff ? ' | ' + diff : ''));
+      });
+    } else {
+      var S = DATA[t], acl = t === 'acl';
+      L.push(acl ? 'Report: ACL reconstruction rehab. Results are compared with ACLR research norms for ' + clean1(state.acl.sex).toLowerCase() + ' patients at this rehab phase.'
+        : 'Report: hamstring strain rehab. Injured-limb results are compared with research norms for the typical case at this rehab phase.');
+      if (S.disclaimer) L.push('About the norms: ' + clean1(S.disclaimer));
+      var since = sinceText(t);
+      var ctx = joinBits(['rehab phase: ' + clean1(state[t].phase), blank(m.injured) ? '' : 'injured side: ' + clean1(m.injured).toLowerCase(),
+        since ? (acl ? 'months since surgery: ' : 'weeks since injury: ') + since : '', acl && !blank(m.graft) ? 'graft: ' + clean1(m.graft) : '',
+        blank(m.sport) ? '' : 'sport: ' + clean1(m.sport)]);
+      L.push('Context: ' + ctx + '.');
+      L.push('Status key: Green = at or ahead of the typical case at this phase; Amber = within 1 SD behind; Red = more than 1 SD behind.');
+      L.push(totals);
+      L.push('Results (metric: result | phase target | status | change since the previous test, if given):');
+      L = L.concat(groupLines(c.groups, 'phase target'));
+    }
+    return L.join('\n');
+  }
+  function interpBasis(t, c) { return hashStr(interpPayload(t, c)); }
+
+  function interpCardHtml() {
+    var it = state[state.tool].interp;
+    return '<section class="card interp" id="interpCard" aria-labelledby="interpTitle">' +
+      '<div class="card-head"><h2 id="interpTitle">Interpretation</h2><button type="button" class="quiet" data-action="ai-settings">AI settings</button></div>' +
+      '<p class="interp-help">Optional. A short plain-English summary for the athlete and coach, printed near the top of the report. Draft it with AI, then check and edit it.</p>' +
+      '<div class="interp-bar"><button type="button" class="ghost ai-draft" data-action="ai-draft">' + SPARKLE + '<span data-label>Draft with AI</span></button>' +
+      '<span class="interp-status" id="interpStatus" role="status" aria-live="polite"></span></div>' +
+      '<textarea id="interpText" rows="5" autocapitalize="sentences" placeholder="Tap Draft with AI, or type your own summary." aria-labelledby="interpTitle">' + esc(it.text) + '</textarea>' +
+      '<p class="fine interp-privacy">Claude only sees the results and basic context such as age, sex, sport or rehab phase. Never the athlete’s name, notes or dates.</p>' +
+      '</section>';
+  }
+  function fitInterp() {                             // grow the box to show the whole text
+    var ta = $('interpText');
+    if (!ta) return;
+    ta.style.height = 'auto';
+    ta.style.height = Math.max(136, ta.scrollHeight + 2) + 'px';
+  }
+  function isStale(t, c) {
+    var it = state[t].interp;
+    return !!(it.ai && !blank(it.text) && it.basis && c && it.basis !== interpBasis(t, c));
+  }
+  function renderInterpState(c) {
+    var card = $('interpCard');
+    if (!card) return;
+    var t = state.tool, it = state[t].interp, st = $('interpStatus'), btn = card.querySelector('[data-action="ai-draft"]'), ta = $('interpText');
+    var busy = aiBusy === t;
+    // a "can't draft yet" message goes away once the reason has gone
+    if (interpMsg.tool === t && ((interpMsg.blocker && c && !blocker(c)) || (interpMsg.offline && navigator.onLine !== false))) {
+      interpMsg = { tool: null, kind: '', text: '' };
+    }
+    btn.disabled = !!aiBusy;
+    btn.classList.toggle('busy', busy);
+    btn.querySelector('[data-label]').textContent = busy ? 'Drafting…' : (blank(it.text) ? 'Draft with AI' : 'Redraft with AI');
+    ta.readOnly = busy;
+    var kind = '', html = '';
+    if (busy) { kind = 'busy'; html = 'Claude is writing the interpretation…'; }
+    else if (interpMsg.tool === t && interpMsg.kind === 'error') { kind = 'error'; html = esc(interpMsg.text); }
+    else if (isStale(t, c)) { kind = 'stale'; html = 'Results have changed since this was drafted. Redraft or edit it.'; }
+    else if (interpMsg.tool === t && interpMsg.kind === 'done') { kind = 'done'; html = 'Drafted by Claude. Check it before creating the report.'; }
+    if (!busy && interpUndo && interpUndo.tool === t) html += (html ? ' ' : '') + '<button type="button" class="quiet undo" data-action="ai-undo">Undo</button>';
+    st.className = 'interp-status' + (kind ? ' ' + kind : '');
+    st.innerHTML = html;
+  }
+  function interpFlagHtml(t, c) {
+    var it = state[t].interp;
+    if (blank(it.text)) return '<button type="button" class="quiet interp-flag" data-action="goto-interp">' + SPARKLE + 'Add an AI interpretation</button>';
+    if (isStale(t, c)) return '<button type="button" class="quiet interp-flag stale" data-action="goto-interp">Interpretation may be out of date</button>';
+    return '<button type="button" class="quiet interp-flag ok" data-action="goto-interp">✓ Interpretation included</button>';
+  }
+  function gotoInterp() {
+    var card = $('interpCard');
+    if (!card) return;
+    card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    var target = blank(state[state.tool].interp.text) ? card.querySelector('[data-action="ai-draft"]') : $('interpText');
+    setTimeout(function () { try { target.focus({ preventScroll: true }); } catch (e) { target.focus(); } }, 350);
+  }
+  function onInterpInput(el) {
+    var it = state[state.tool].interp;
+    it.text = el.value;
+    fitInterp();
+    if (blank(el.value)) { it.ai = false; it.basis = ''; }
+    interpUndo = null;
+    if (interpMsg.tool === state.tool && interpMsg.kind === 'error') interpMsg = { tool: null, kind: '', text: '' };
+    refresh();
+  }
+  function undoInterp() {
+    if (!interpUndo || interpUndo.tool !== state.tool) return;
+    state[state.tool].interp = { text: interpUndo.text, ai: interpUndo.ai, basis: interpUndo.basis };
+    interpUndo = null;
+    interpMsg = { tool: null, kind: '', text: '' };
+    var ta = $('interpText');
+    if (ta) ta.value = state[state.tool].interp.text;
+    fitInterp();
+    refresh();
+  }
+  function tidyAiText(s) {
+    s = String(s).replace(/\r\n?/g, '\n');
+    s = s.replace(/[\uD800-\uDFFF]/g, '').replace(/[\uFE0F\u200D]/g, '');   // emoji
+    s = s.replace(/\*\*|__|`/g, '').replace(/^[ \t]{0,3}#{1,6}[ \t]*/gm, '').replace(/^[ \t]*[-*•][ \t]+/gm, '');
+    s = s.replace(/^\s*interpretation\s*[:\-–]\s*/i, '');
+    s = s.replace(/[ \t]+/g, ' ').replace(/ *\n */g, '\n').replace(/\n{3,}/g, '\n\n').trim();
+    return s;
+  }
+  function aiErrorText(status, j) {
+    var e = (j && j.error) || {}, msg = clean1(e.message), type = e.type || '';
+    var code = e.details && e.details.error_code;
+    if (status === 401 || type === 'authentication_error') return 'Claude didn’t accept the API key. Check it in AI settings.';
+    if (status === 403 || type === 'permission_error') return 'This API key isn’t allowed to use Claude. Check it in the Claude Console.';
+    if (/credit balance/i.test(msg)) return 'The Claude API account is out of credit. Add credit in the Claude Console (Settings › Billing).';
+    if (code === 'enforced_spend_limit_reached' || /usage limits?/i.test(msg)) return 'The Claude API spend limit has been reached. It can be raised in the Claude Console (Settings › Billing).';
+    if (status === 429 || type === 'rate_limit_error') return 'Too many requests just now. Wait a moment and try again.';
+    if (status === 529 || status >= 500 || type === 'overloaded_error' || type === 'api_error') return 'Claude is busy right now. Try again in a moment.';
+    if (status === 404 || type === 'not_found_error') return 'The AI model named in interpretation.json wasn’t found' + (msg ? ' (' + msg + ')' : '') + '.';
+    return 'Claude couldn’t draft this' + (msg ? ': ' + msg : ' (error ' + status + ')') + '.';
+  }
+  function callClaude(key, payload) {
+    var cfg = DATA.ai;
+    var body = {
+      model: cfg.model, max_tokens: cfg.max_tokens || 2000, system: [].concat(cfg.system || []).join('\n'),
+      messages: [{ role: 'user', content: (cfg.request || 'Write the interpretation for these test results.') + '\n\n' + payload }]
+    };
+    if (cfg.effort) body.output_config = { effort: cfg.effort };
+    var ctrl = window.AbortController ? new AbortController() : null;
+    var timer = setTimeout(function () { if (ctrl) ctrl.abort(); }, (cfg.timeout_s || 60) * 1000);
+    return fetch(cfg.endpoint || 'https://api.anthropic.com/v1/messages', {
+      method: 'POST', cache: 'no-store', signal: ctrl ? ctrl.signal : undefined,
+      headers: {
+        'content-type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      },
+      body: JSON.stringify(body)
+    }).then(function (res) {
+      return res.text().then(function (raw) {
+        var j = null;
+        try { j = JSON.parse(raw); } catch (e) { /* not JSON */ }
+        if (!res.ok) throw new Error(aiErrorText(res.status, j));
+        var text = ((j && j.content) || []).filter(function (b) { return b && b.type === 'text'; })
+          .map(function (b) { return b.text; }).join('\n');
+        text = tidyAiText(text);
+        if (!text) throw new Error(j && j.stop_reason === 'refusal' ? 'Claude didn’t write an interpretation for these results. Try again, or write your own.' : 'Claude sent back an empty answer. Try again.');
+        return text;
+      });
+    }, function (err) {
+      throw new Error(err && err.name === 'AbortError' ? 'Claude took too long to answer. Try again.' : 'Couldn’t reach Claude. Check the internet connection and try again.');
+    }).then(function (v) { clearTimeout(timer); return v; }, function (e) { clearTimeout(timer); throw e; });
+  }
+  function draftInterp() {
+    if (aiBusy) return;
+    var t = state.tool, c = compute(), why = blocker(c);
+    interpMsg = { tool: null, kind: '', text: '' };
+    function fail(msg, extra) { interpMsg = Object.assign({ tool: t, kind: 'error', text: msg }, extra || {}); renderInterpState(c); }
+    if (why) return fail(why, { blocker: true });
+    if (!DATA.ai || !DATA.ai.model) return fail('The AI settings file (interpretation.json) didn’t load. Reopen the app while online.');
+    var key = aiKey();
+    if (!key) { openAiSettings(true); return; }
+    if (navigator.onLine === false) return fail('No internet connection. Connect to draft with AI, or type your own interpretation.', { offline: true });
+    var payload = interpPayload(t, c), basis = hashStr(payload), gen = aiGen;
+    aiBusy = t; interpUndo = null;
+    renderInterpState(c);
+    callClaude(key, payload).then(function (text) {
+      if (gen !== aiGen) return;                     // cleared while waiting
+      var it = state[t].interp;
+      if (!blank(it.text)) interpUndo = { tool: t, text: it.text, ai: it.ai, basis: it.basis };
+      state[t].interp = { text: text, ai: true, basis: basis };
+      interpMsg = { tool: t, kind: 'done', text: '' };
+    }, function (err) {
+      if (gen !== aiGen) return;
+      interpMsg = { tool: t, kind: 'error', text: err.message };
+    }).then(function () {
+      if (gen !== aiGen) return;
+      aiBusy = null;
+      if (state.tool === t) {
+        var ta = $('interpText');
+        if (ta) ta.value = state[t].interp.text;
+        fitInterp();
+      }
+      refresh();
+    });
+  }
+  function openAiSettings(thenDraft) {
+    aiThenDraft = !!thenDraft;
+    var k = aiKey();
+    els.aiKey.value = '';
+    els.aiErr.hidden = true;
+    els.aiRemove.hidden = !k;
+    els.aiKeyState.textContent = k ? 'A key ending in ' + k.slice(-4) + ' is saved on this device. Paste a new one to replace it.'
+      : 'The key is saved only on this device and is only sent to Anthropic when you tap Draft with AI.';
+    els.aiLead.textContent = thenDraft ? 'To draft interpretations, the app needs a Claude API key. You only need to do this once on each device.'
+      : 'Drafting uses Claude through the clinic’s own Claude API key.';
+    openModal(els.aiDialog, els.aiKey);
+  }
+  function saveAiKey() {
+    var v = els.aiKey.value.replace(/\s+/g, '');
+    if (!v) {
+      if (aiKey()) { closeModal(); return; }
+      els.aiErr.textContent = 'Paste the API key first.'; els.aiErr.hidden = false; els.aiKey.focus(); return;
+    }
+    if (!/^sk-ant-[A-Za-z0-9_\-]{16,}$/.test(v)) {
+      els.aiErr.textContent = 'That doesn’t look like a Claude API key. They start with sk-ant-.'; els.aiErr.hidden = false; els.aiKey.focus(); return;
+    }
+    try { localStorage.setItem(AI_KEY_STORE, v); } catch (e) {
+      els.aiErr.textContent = 'This device wouldn’t save the key (storage is blocked).'; els.aiErr.hidden = false; return;
+    }
+    els.aiKey.value = '';
+    var then = aiThenDraft;
+    closeModal();
+    toast('API key saved on this device');
+    if (then) draftInterp();
+  }
+  function removeAiKey() {
+    try { localStorage.removeItem(AI_KEY_STORE); } catch (e) { /* storage unavailable */ }
+    els.aiRemove.hidden = true;
+    els.aiKeyState.textContent = 'Key removed. The key is saved only on this device and is only sent to Anthropic when you tap Draft with AI.';
+    els.aiKey.focus();
   }
 
   // ------------------------------------------------------------------ boot
@@ -798,8 +1138,10 @@
     });
   }
   function start() {
-    Promise.all([fetchJson('norms.json'), fetchJson('hamstring_norms.json'), fetchJson('acl_norms.json'), fetchJson('strength_norms.json')]).then(function (r) {
-      DATA.screen = r[0]; DATA.ham = r[1]; DATA.acl = r[2]; DATA.str = r[3];
+    // the AI settings are optional: the app works without them (the Draft button explains)
+    var ai = fetchJson('interpretation.json').catch(function () { return null; });
+    Promise.all([fetchJson('norms.json'), fetchJson('hamstring_norms.json'), fetchJson('acl_norms.json'), fetchJson('strength_norms.json'), ai]).then(function (r) {
+      DATA.screen = r[0]; DATA.ham = r[1]; DATA.acl = r[2]; DATA.str = r[3]; DATA.ai = r[4];
       state = loadDraft() || { v: 1, tool: 'screen', screen: freshTool('screen'), str: freshTool('str'), ham: freshTool('ham'), acl: freshTool('acl') };
       tidyState();
       els.entry.addEventListener('input', onInput);
@@ -813,17 +1155,20 @@
         if (b) switchTool(b.dataset.tool);
       });
       els.clearAll.addEventListener('click', openClearDialog);
-      els.clearCancel.addEventListener('click', function () { closeClearDialog(); });
+      els.clearCancel.addEventListener('click', function () { closeModal(); });
       els.clearConfirm.addEventListener('click', clearAllData);
-      els.clearDialog.addEventListener('click', function (e) { if (e.target === els.clearDialog) closeClearDialog(); });
+      els.aiSave.addEventListener('click', saveAiKey);
+      els.aiCancel.addEventListener('click', function () { closeModal(); });
+      els.aiRemove.addEventListener('click', removeAiKey);
+      els.aiKey.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); saveAiKey(); } });
+      [els.clearDialog, els.aiDialog].forEach(function (d) {
+        d.addEventListener('click', function (e) { if (e.target === d) closeModal(); });
+      });
       els.back.addEventListener('click', closeReport);
       els.save.addEventListener('click', savePdf);
       els.share.addEventListener('click', sharePdf);
       document.addEventListener('keydown', function (e) {
-        if (!els.clearDialog.hidden) {
-          if (e.key === 'Escape') { e.preventDefault(); closeClearDialog(); } else onDialogKey(e);
-          return;
-        }
+        if (openModalEl) { onModalKey(e); return; }
         if (e.key === 'Escape' && !els.sheet.hidden) closeReport();
       });
       render();

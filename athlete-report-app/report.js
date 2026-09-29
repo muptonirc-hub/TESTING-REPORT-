@@ -1,5 +1,6 @@
 /* BASE Health Athlete Report: the branded PDF, built on the device.
-   Recreates the WeasyPrint designs from report_pdf.py (screening, hamstring, ACL) as a list of
+   Recreates the WeasyPrint designs from report_pdf.py (screening, hamstring, ACL), plus the strength
+   battery and the optional interpretation box, as a list of
    vector drawing commands, which are then written two ways from the same layout:
      toPdf()  -> a real PDF file (jsPDF, embedded fonts, selectable text)
      toSvg()  -> SVG pages for the on-screen preview
@@ -420,7 +421,8 @@
   }
 
   // grouped result rows (Full results / rehab body)
-  function results(doc, groups, cols, tgtPrefix) {
+  function results(doc, groups, cols, tgtPrefix, tailH) {
+    tailH = tailH || 0;                             // the footer: never leave it alone on a new page
     var c1 = px(cols[0]), c2 = px(cols[1]), c4 = px(cols[2]), gap = px(8), pad = px(6);
     var c3 = CW - 2 * pad - c1 - c2 - c4 - 3 * gap;
     function rowLayout(r) {
@@ -446,10 +448,10 @@
       var h4 = lineH(9) + px(2) + (chg.length ? px(2) + chg.length * lineH(8.5) : 0);
       return { lines: lines, chg: chg, h: Math.max(h1, lineH(13), h3, h4) + px(10) + px(1), h1: h1, h4: h4 };
     }
-    groups.forEach(function (gp) {
-      var bandH = lineH(9.5) + px(6);
+    groups.forEach(function (gp, gi) {
+      var bandH = lineH(9.5) + px(6), lastGroup = gi === groups.length - 1;
       var first = rowLayout(gp.rows[0]);
-      doc.ensure(px(7) + bandH + first.h);
+      doc.ensure(px(7) + bandH + first.h + (lastGroup && gp.rows.length === 1 ? tailH : 0));
       doc.y += px(7);
       var top = doc.y;
       doc.rect(ML, top, CW, bandH, { r: px(3), fill: C.GBAND });
@@ -459,7 +461,7 @@
       doc.y = top + bandH;
       gp.rows.forEach(function (r, idx) {
         var L = idx === 0 ? first : rowLayout(r);
-        doc.ensure(L.h);
+        doc.ensure(L.h + (lastGroup && idx === gp.rows.length - 1 ? tailH : 0));
         var rtop = doc.y, mid = rtop + px(5) + (L.h - px(11)) / 2;
         var x1 = ML + pad;
         var nTop = mid - L.h1 / 2;
@@ -485,6 +487,51 @@
     });
   }
 
+  // The clinician's interpretation (optionally drafted with AI): a tinted box with a teal edge.
+  // Keeps paragraph breaks and splits across pages if it has to.
+  function interpretation(doc, it) {
+    var raw = String((it && it.text) || '').replace(/\r\n?/g, '\n').trim();
+    if (!raw) return;
+    var size = 10, LH = 1.45, lh = lineH(size, LH), bar = px(3), padX = px(10), padY = px(7), paraGap = px(5);
+    var maxW = CW - bar - 2 * padX;
+    var lines = [];
+    raw.split(/\n\s*\n|\n/).forEach(function (para) {
+      if (!clean(para).trim()) return;
+      wrap(para, 'regular', fs(size), maxW).forEach(function (l, i) { lines.push({ s: l, gap: i === 0 && lines.length ? paraGap : 0 }); });
+    });
+    if (!lines.length) return;
+    var note = it.ai ? 'Drafted with AI assistance and reviewed by the clinician.' : '';
+    var noteH = note ? px(4) + lineH(7.5) : 0;
+    section(doc, 'Interpretation', { keep: 2 * padY + Math.min(3, lines.length) * lh });
+    var i = 0;
+    while (i < lines.length) {
+      var avail = PAGE_H - MB - doc.y - 2 * padY, n = 0, h = 0;
+      while (i + n < lines.length && h + lines[i + n].gap + lh <= avail + 0.01) { h += lines[i + n].gap + lh; n++; }
+      if (!n) {
+        if (doc.y > MT + 0.5) { doc.newPage(); continue; }
+        n = 1; h = lh;                                 // a single line always goes somewhere
+      }
+      var top = doc.y, boxH = h + 2 * padY;
+      doc.rect(ML, top, CW, boxH, { r: [0, px(3), px(3), 0], fill: '#F1F7F6' });
+      doc.rect(ML, top, bar, boxH, { fill: C.BLUE });
+      var y = top + padY;
+      for (var k = 0; k < n; k++) {
+        if (k) y += lines[i + k].gap;
+        doc.text(lines[i + k].s, ML + bar + padX, baseline(y, size, LH), { style: 'regular', size: fs(size), color: C.INK });
+        y += lh;
+      }
+      doc.y = top + boxH;
+      i += n;
+      if (i < lines.length) doc.newPage();
+    }
+    if (note) {
+      doc.ensure(noteH);
+      doc.text(note, ML + CW, baseline(doc.y + px(4), 7.5), { style: 'italic', size: fs(7.5), color: C.MUTE, align: 'right' });
+      doc.y += noteH;
+    }
+  }
+
+  function footerH(text) { return px(12) + px(2 + 6) + wrap(text, 'italic', fs(8), CW).length * lineH(8); }
   function footer(doc, text) {
     var lines = wrap(text, 'italic', fs(8), CW);
     var h = px(12) + px(2 + 6) + lines.length * lineH(8);
@@ -504,6 +551,7 @@
     meta(doc, [['Athlete', m.name], ['Date', m.date], ['Sport', m.sport], ['Tester', m.tester], ['Age', m.age],
       ['Sex', m.sex], ['Mass', clean(m.mass).trim() ? clean(m.mass).trim() + ' kg' : ''], ['Notes', m.notes]]);
     band(doc, 'Compared against', d.popLabel || '—', [['Green: ' + d.counts.Green, C.G], ['Amber: ' + d.counts.Amber, C.A], ['Red: ' + d.counts.Red, C.R]]);
+    interpretation(doc, d.interp);
     var cards = E.scorecard(d.groups);
     if (cards.length) { section(doc, 'Overview by area', { keep: px(40) }); scorecard(doc, cards); }
     var keys = d.radarKeys && d.radarKeys.length ? d.radarKeys : null;
@@ -514,10 +562,11 @@
     priorities(doc, d.prios);
     asymmetry(doc, d.groups);
     section(doc, 'Full results', { keep: px(60) });
-    results(doc, d.groups, [150, 52, 120], 'target');
-    footer(doc, 'Confidence shown in grey (★★★ strong · ★★☆ moderate · ★☆☆ weak). ' +
+    var foot = 'Confidence shown in grey (★★★ strong · ★★☆ moderate · ★☆☆ weak). ' +
       'Norms are population- and protocol-dependent; targets reflect the selected reference population only. ' +
-      'This report organises and displays testing data and is not medical advice.');
+      'This report organises and displays testing data and is not medical advice.';
+    results(doc, d.groups, [150, 52, 120], 'target', footerH(foot));
+    footer(doc, foot);
     return finish(doc, 'Athlete Performance & Readiness Report', m.name);
   }
 
@@ -534,14 +583,16 @@
     }
     band(doc, 'Rehab phase', acl ? d.phase + ' · ' + d.sex : d.phase,
       [['On/ahead: ' + d.counts.Green, C.G], ['Within 1 SD: ' + d.counts.Amber, C.A], ['>1 SD behind: ' + d.counts.Red, C.R]]);
-    results(doc, d.groups, acl ? [210, 56, 118] : [188, 56, 118], 'phase target');
+    interpretation(doc, d.interp);
+    results(doc, d.groups, acl ? [210, 56, 118] : [188, 56, 118], 'phase target', footerH(d.disclaimer || ''));
     footer(doc, d.disclaimer || '');
     return finish(doc, acl ? 'ACL Rehab & Return-to-Play' : 'Hamstring Rehab & Return-to-Play', m.name);
   }
 
 
   // ------------------------------------------------------------------ strength battery: left vs right table
-  function strengthTable(doc, tests) {
+  function strengthTable(doc, tests, tailH) {
+    tailH = tailH || 0;
     var pad = px(6), gap = px(10);
     var c1 = px(200), c2 = px(190), c3 = px(190);
     var c4 = CW - 2 * pad - c1 - c2 - c3 - 3 * gap;
@@ -564,13 +615,13 @@
     doc.ensure(px(7) + bandH + headH + cellH + px(11));
     doc.y += px(7);
     head();
-    tests.forEach(function (t) {
+    tests.forEach(function (t, ti) {
       var nameLines = wrap(t.name, 'bold', fs(10), c1);
       var sub = 'target ' + t.target + (t.rawTarget ? ' = ' + E.fmt(t.rawTarget.value) + ' ' + t.rawTarget.unit : '') + (t.detail ? ' · ' + t.detail : '');
       var subLines = wrap(sub, 'regular', fs(8), c1);
       var h1 = nameLines.length * lineH(10) + px(2) + subLines.length * lineH(8);
       var h = Math.max(h1, cellH) + px(10) + px(1);
-      if (!doc.fits(h)) { doc.newPage(); head(); }
+      if (!doc.fits(h + (ti === tests.length - 1 ? tailH : 0))) { doc.newPage(); head(); }
       var top = doc.y, inner = top + px(5);
       nameLines.forEach(function (l, i) {
         doc.text(l, x1, baseline(inner + i * lineH(10), 10), { style: 'bold', size: fs(10), color: C.INK });
@@ -608,17 +659,19 @@
     meta(doc, [['Athlete', m.name], ['Date', m.date], ['Mass', clean(m.mass).trim() ? clean(m.mass).trim() + ' kg' : ''],
       ['Sport', m.sport], ['Tester', m.tester], ['Notes', m.notes]]);
     band(doc, 'Scored against', 'BASE Health strength targets', [['Green: ' + c.Green, C.G], ['Amber: ' + c.Amber, C.A], ['Red: ' + c.Red, C.R]]);
+    interpretation(doc, d.interp);
     section(doc, 'Below target — worst first', { keep: px(22) });
     priorities(doc, d.prios.map(function (r) {
       return { status: r.status, name: r.name, detail: '= ' + r.text + ' · needs ' + r.target };
     }), '✓ Nothing below target — every tested result is on target.');
     section(doc, 'Results — left vs right', { keep: px(90) });
-    strengthTable(doc, d.tests.filter(function (t) { return t.any || t.sides.L.needsMass || t.sides.R.needsMass; }));
     var pct = d.amberPct == null ? 5 : d.amberPct;
-    footer(doc, 'Green = at or above target · Amber = within ' + pct + '% of target · Red = further away. ' +
+    var foot = 'Green = at or above target · Amber = within ' + pct + '% of target · Red = further away. ' +
       'Loads are divided by body mass; forces are converted to N/kg (N ÷ kg) or × body weight (N ÷ (kg × 9.81)). ' +
       'Hip ratio = adduction ÷ abduction. L/R diff = gap between legs as a % of the stronger leg. ' +
-      'BW = body weight · RM = repetition maximum. This report organises and displays testing data and is not medical advice.');
+      'BW = body weight · RM = repetition maximum. This report organises and displays testing data and is not medical advice.';
+    strengthTable(doc, d.tests.filter(function (t) { return t.any || t.sides.L.needsMass || t.sides.R.needsMass; }), footerH(foot));
+    footer(doc, foot);
     return finish(doc, 'Lower-Limb Strength & Capacity', m.name);
   }
 

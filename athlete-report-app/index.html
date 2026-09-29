@@ -337,6 +337,43 @@ button { cursor: pointer; }
 .clear-list li.has-data .cl-d { color: var(--fg); }
 .modal-actions { display: flex; gap: 10px; margin-top: 18px; }
 .modal-actions button { flex: 1; }
+.modal-card .modal-fine + .modal-fine, .modal-card p + .modal-fine { margin-top: 6px; }
+.modal-card a { color: var(--teal-ink); font-weight: 600; }
+.ai-steps { margin: 12px 0 14px; padding-left: 22px; color: var(--fg); font-size: 14.5px; }
+.ai-steps li { margin: 4px 0; }
+.modal-card .f input { font-size: 16px; }
+.ai-err { margin: 8px 0 0 !important; color: var(--red-ink) !important; font-size: 13.5px !important; font-weight: 600; }
+#aiKeyState { margin-top: 8px; }
+.ai-remove { margin-top: 4px; padding-inline: 0; color: var(--red-ink); min-height: 36px; }
+
+/* ---------- interpretation card */
+.interp .card-head { margin-bottom: 4px; }
+.interp .card-head .quiet { min-height: 36px; font-size: 14px; }
+.interp-help { margin: 0 0 12px; color: var(--muted); font-size: 13.5px; max-width: 70ch; }
+.interp-bar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
+.ai-draft svg { color: var(--teal); flex: none; }
+.ai-draft[disabled] { opacity: .6; cursor: default; }
+.ai-draft.busy { opacity: 1; }
+.ai-draft.busy svg { animation: ai-pulse 1s ease-in-out infinite alternate; }
+@keyframes ai-pulse { from { opacity: .35; transform: scale(.85); } to { opacity: 1; transform: scale(1.1); } }
+.interp-status { font-size: 13.5px; color: var(--muted); min-width: 0; }
+.interp-status.error { color: var(--red-ink); font-weight: 600; }
+.interp-status.stale { color: var(--amber-ink); font-weight: 600; }
+.interp-status.done { color: var(--green-ink); }
+.interp-status .undo { min-height: 32px; padding: 0 6px; font-size: 13.5px; vertical-align: baseline; }
+.interp textarea {
+  display: block; width: 100%; min-height: 136px; padding: 12px 14px; resize: vertical; overflow-y: auto;
+  border: 1px solid var(--line); border-radius: 10px; background: var(--field); color: var(--fg);
+  font: 16px/1.5 var(--font);
+}
+.interp textarea:focus { border-color: var(--teal); outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--teal) 25%, transparent); background: var(--surface); }
+.interp textarea[readonly] { opacity: .6; }
+.interp textarea::placeholder { color: color-mix(in srgb, var(--muted) 70%, transparent); }
+.interp-privacy { margin: 8px 2px 0; }
+.interp-flag { width: 100%; min-height: 36px; margin: 0 0 10px; font-size: 14px; gap: 6px; }
+.interp-flag svg { width: 16px; height: 16px; }
+.interp-flag.ok { color: var(--green-ink); }
+.interp-flag.stale { color: var(--amber-ink); }
 .boot { padding: 60px 20px; text-align: center; color: var(--muted); }
 .error-card { border-color: var(--red); }
 .error-card h2 { color: var(--red-ink); }
@@ -441,12 +478,34 @@ button { cursor: pointer; }
   </div>
 </div>
 
+<div class="modal" id="aiDialog" role="dialog" aria-modal="true" aria-labelledby="aiTitle" aria-describedby="aiLead" hidden>
+  <div class="modal-card">
+    <h2 id="aiTitle">AI interpretation</h2>
+    <p id="aiLead">Drafting uses Claude through the clinic’s own Claude API key.</p>
+    <p class="modal-fine">The key is separate from a Claude subscription and is paid per use, roughly 1–2 cents per report.</p>
+    <ol class="ai-steps">
+      <li>Sign in to the Claude Console at <a href="https://platform.claude.com" target="_blank" rel="noopener">platform.claude.com</a>.</li>
+      <li>Under <b>Settings › Billing</b>, buy some credit and set a monthly spend limit.</li>
+      <li>Under <b>Settings › API keys</b>, create a key, copy it and paste it here.</li>
+    </ol>
+    <label class="f" for="aiKey"><span>Claude API key</span>
+      <input id="aiKey" type="password" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="done" placeholder="sk-ant-…"></label>
+    <p class="ai-err" id="aiErr" role="alert" hidden></p>
+    <p class="modal-fine" id="aiKeyState">The key is saved only on this device and is only sent to Anthropic when you tap Draft with AI.</p>
+    <button class="quiet ai-remove" id="aiRemove" type="button" hidden>Remove saved key</button>
+    <div class="modal-actions">
+      <button class="ghost" id="aiCancel" type="button">Cancel</button>
+      <button class="primary" id="aiSave" type="button">Save key</button>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast" role="status" hidden></div>
 
-<script src="engine.js?v=4" defer></script>
-<script src="report-fonts.js?v=4" defer></script>
-<script src="jspdf.umd.min.js?v=4" defer></script>
-<script src="report.js?v=4" defer></script>
-<script src="app.js?v=4" defer></script>
+<script src="engine.js?v=5" defer></script>
+<script src="report-fonts.js?v=5" defer></script>
+<script src="jspdf.umd.min.js?v=5" defer></script>
+<script src="report.js?v=5" defer></script>
+<script src="app.js?v=5" defer></script>
 </body>
 </html>
