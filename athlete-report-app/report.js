@@ -531,6 +531,70 @@
     }
   }
 
+  // Progress across the client's saved sessions: one column per test date (this test last), one row per
+  // metric measured more than once, and the change from the first of those sessions to this one.
+  function progressTable(doc, p) {
+    if (!p || !p.rows || !p.rows.length) return;
+    var pad = px(6), gap = px(6), nameW = px(150), chgW = px(78);
+    var n = p.dates.length, colW = (CW - 2 * pad - nameW - chgW - (n + 1) * gap) / n;
+    var bandH = lineH(9.5) + px(6), headH = px(4) + lineH(7.5) + px(3);
+    var x0 = ML + pad, xc = x0 + nameW + gap, xChg = ML + CW - pad;
+    function head() {
+      var top = doc.y;
+      doc.rect(ML, top, CW, bandH, { r: px(3), fill: C.GBAND });
+      var bl = baseline(top + px(3), 9.5);
+      doc.rect(ML + px(8), bl - px(7), px(7), px(7), { r: px(2), fill: C.BLUE });
+      doc.text(String(p.dates[0]).toUpperCase() + ' → ' + String(p.dates[n - 1]).toUpperCase() + ' · ' + p.sessions + ' SESSIONS', ML + px(8 + 7 + 7), bl, { style: 'bold', size: fs(9.5), color: C.WHITE, cs: px(0.4) });
+      var hy = baseline(top + bandH + px(4), 7.5), o = { style: 'bold', size: fs(7.5), color: C.MUTE, cs: px(0.5) };
+      doc.text('METRIC', x0, hy, o);
+      p.dates.forEach(function (d, i) {
+        doc.text(String(d).toUpperCase(), xc + i * (colW + gap) + colW, hy, Object.assign({ align: 'right' }, i === n - 1 ? { color: C.BLACK } : o, { style: 'bold', size: fs(7.5), cs: px(0.5) }));
+      });
+      doc.text('SINCE FIRST', xChg, hy, Object.assign({ align: 'right' }, o));
+      doc.y = top + bandH + headH;
+    }
+    section(doc, 'Progress over time', { keep: px(7) + bandH + headH + lineH(10) + px(12) });
+    doc.y += px(7);
+    head();
+    p.rows.forEach(function (r) {
+      var nl = wrap(r.name, 'bold', fs(9), nameW), unitW = r.unit ? width(r.unit, 'regular', fs(8)) : 0;
+      var lastW = width(nl[nl.length - 1], 'bold', fs(9));
+      var unitOwnLine = r.unit && lastW + px(5) + unitW > nameW;
+      var lines = nl.length + (unitOwnLine ? 1 : 0);
+      var h = Math.max(lines * lineH(9), lineH(10)) + px(9);
+      if (!doc.fits(h)) { doc.newPage(); head(); }
+      var top = doc.y, mid = top + h / 2, nTop = mid - lines * lineH(9) / 2;
+      nl.forEach(function (l, i) {
+        doc.text(l, x0, baseline(nTop + i * lineH(9), 9), { style: 'bold', size: fs(9), color: C.INK });
+      });
+      if (r.unit) {
+        doc.text(r.unit, unitOwnLine ? x0 : x0 + lastW + px(5), baseline(nTop + (unitOwnLine ? nl.length : nl.length - 1) * lineH(9), 9), { style: 'regular', size: fs(8), color: C.MUTE });
+      }
+      r.values.forEach(function (v, i) {
+        var last = i === n - 1;
+        doc.text(v === null || v === undefined ? '—' : E.fmt(v), xc + i * (colW + gap) + colW, baseline(mid - lineH(10) / 2, 10),
+          { style: last ? 'bold' : 'regular', size: fs(10), color: v === null || v === undefined ? C.NA : (last ? C.BLACK : C.INK), align: 'right' });
+      });
+      var delta = (r.first === null || r.last === null) ? null : r.last - r.first;
+      if (delta !== null) {
+        var txt = (Math.abs(delta) < 10 ? E.pySigned(delta, 2).replace(/0+$/, '').replace(/\.$/, '') : E.pySigned(delta, 0)) +
+          (r.first ? ' (' + E.pySigned(delta / r.first * 100, 0) + '%)' : '');
+        var good = r.dir === 'Higher' ? delta > 0 : (r.dir === 'Lower' ? delta < 0 : null);
+        var col = delta === 0 || good === null ? C.MUTE : (good ? C.G : C.R);
+        doc.text(txt, xChg, baseline(mid - lineH(9) / 2, 9), { style: 'bold', size: fs(9), color: col, align: 'right' });
+      }
+      doc.line(ML, top + h - px(0.5), ML + CW, top + h - px(0.5), { stroke: C.LINE, lw: px(1) });
+      doc.y = top + h;
+    });
+    doc.y += px(4);
+    var note = wrap('Values from this client’s saved sessions on this device, up to the last 5 tests. Only metrics measured more than once are listed.', 'italic', fs(7.5), CW - px(4));
+    note.forEach(function (l) {
+      doc.ensure(lineH(7.5));
+      doc.text(l, ML + px(2), baseline(doc.y, 7.5), { style: 'italic', size: fs(7.5), color: C.MUTE });
+      doc.y += lineH(7.5);
+    });
+  }
+
   function footerH(text) { return px(12) + px(2 + 6) + wrap(text, 'italic', fs(8), CW).length * lineH(8); }
   function footer(doc, text) {
     var lines = wrap(text, 'italic', fs(8), CW);
@@ -565,7 +629,8 @@
     var foot = 'Confidence shown in grey (★★★ strong · ★★☆ moderate · ★☆☆ weak). ' +
       'Norms are population- and protocol-dependent; targets reflect the selected reference population only. ' +
       'This report organises and displays testing data and is not medical advice.';
-    results(doc, d.groups, [150, 52, 120], 'target', footerH(foot));
+    results(doc, d.groups, [150, 52, 120], 'target', d.progress ? 0 : footerH(foot));
+    progressTable(doc, d.progress);
     footer(doc, foot);
     return finish(doc, 'Athlete Performance & Readiness Report', m.name);
   }
@@ -584,7 +649,8 @@
     band(doc, 'Rehab phase', acl ? d.phase + ' · ' + d.sex : d.phase,
       [['On/ahead: ' + d.counts.Green, C.G], ['Within 1 SD: ' + d.counts.Amber, C.A], ['>1 SD behind: ' + d.counts.Red, C.R]]);
     interpretation(doc, d.interp);
-    results(doc, d.groups, acl ? [210, 56, 118] : [188, 56, 118], 'phase target', footerH(d.disclaimer || ''));
+    results(doc, d.groups, acl ? [210, 56, 118] : [188, 56, 118], 'phase target', d.progress ? 0 : footerH(d.disclaimer || ''));
+    progressTable(doc, d.progress);
     footer(doc, d.disclaimer || '');
     return finish(doc, acl ? 'ACL Rehab & Return-to-Play' : 'Hamstring Rehab & Return-to-Play', m.name);
   }
@@ -598,7 +664,7 @@
     var c4 = CW - 2 * pad - c1 - c2 - c3 - 3 * gap;
     var x1 = ML + pad, x2 = x1 + c1 + gap, x3 = x2 + c2 + gap, x4 = x3 + c3 + gap;
     var bandH = lineH(9.5) + px(6), headH = px(4) + lineH(7.5) + px(3);
-    var cellH = lineH(11) + px(4) + px(9) + px(4) + lineH(7.5);
+    var cellH = lineH(11) + px(4) + px(9) + px(4) + lineH(7.5), chgH = px(1) + lineH(7.5);
     function head() {
       var top = doc.y;
       doc.rect(ML, top, CW, bandH, { r: px(3), fill: C.GBAND });
@@ -620,7 +686,8 @@
       var sub = 'target ' + t.target + (t.rawTarget ? ' = ' + E.fmt(t.rawTarget.value) + ' ' + t.rawTarget.unit : '') + (t.detail ? ' · ' + t.detail : '');
       var subLines = wrap(sub, 'regular', fs(8), c1);
       var h1 = nameLines.length * lineH(10) + px(2) + subLines.length * lineH(8);
-      var h = Math.max(h1, cellH) + px(10) + px(1);
+      var hasChg = ['L', 'R'].some(function (k) { return t.sides[k] && t.sides[k].change; });
+      var h = Math.max(h1, cellH + (hasChg ? chgH : 0)) + px(10) + px(1);
       if (!doc.fits(h + (ti === tests.length - 1 ? tailH : 0))) { doc.newPage(); head(); }
       var top = doc.y, inner = top + px(5);
       nameLines.forEach(function (l, i) {
@@ -644,6 +711,11 @@
         if (t.input === 'calc') raw = 'ADD ' + E.fmt(cell.parts[0]) + ' N ÷ ABD ' + E.fmt(cell.parts[1]) + ' N';
         else raw = E.fmt(cell.input) + ' ' + (t.input === 'reps' ? 'reps' : t.input) + (cell.also != null ? ' · ' + E.fmt(cell.also) + ' × BW' : '');
         doc.text(raw, x, baseline(my + px(9) + px(4), 7.5), { style: 'regular', size: fs(7.5), color: C.MUTE });
+        if (cell.change) {
+          var kcol = cell.change_kind === 'gain' ? C.G : (cell.change_kind === 'drop' ? C.R : C.MUTE);
+          var ctext = clean(cell.change).replace(/\s+/g, ' ') + (cell.prev ? ' · was ' + cell.prev.text : '');
+          doc.text(wrap(ctext, 'bold', fs(7.5), w)[0], x, baseline(my + px(9) + px(4) + lineH(7.5) + px(1), 7.5), { style: 'bold', size: fs(7.5), color: kcol });
+        }
       });
       var mid = inner + (h - px(11)) / 2;
       var dt = E.diffText(t.diff);
@@ -670,7 +742,8 @@
       'Loads are divided by body mass; forces are converted to N/kg (N ÷ kg) or × body weight (N ÷ (kg × 9.81)). ' +
       'Hip ratio = adduction ÷ abduction. L/R diff = gap between legs as a % of the stronger leg. ' +
       'BW = body weight · RM = repetition maximum. This report organises and displays testing data and is not medical advice.';
-    strengthTable(doc, d.tests.filter(function (t) { return t.any || t.sides.L.needsMass || t.sides.R.needsMass; }), footerH(foot));
+    strengthTable(doc, d.tests.filter(function (t) { return t.any || t.sides.L.needsMass || t.sides.R.needsMass; }), d.progress ? 0 : footerH(foot));
+    progressTable(doc, d.progress);
     footer(doc, foot);
     return finish(doc, 'Lower-Limb Strength & Capacity', m.name);
   }

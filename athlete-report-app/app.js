@@ -1,7 +1,8 @@
 /* BASE Health Athlete Report: screen logic.
    Four tools (screening, LL strength, hamstring rehab, ACL rehab). Everything runs on the device: results are
    scored as they are typed, the PDF is built locally, and a draft is kept in this browser only until
-   "Clear all data" wipes it. */
+   "Clear all data" wipes it. Creating a PDF also saves the session to the client's record on this device,
+   so the next test can load their previous results and the report can show progress. */
 (function () {
   'use strict';
   var E = window.BHEngine;
@@ -16,7 +17,9 @@
     toast: $('toast'), clearAll: $('clearAll'), clearDialog: $('clearDialog'), clearList: $('clearList'),
     clearCancel: $('clearCancel'), clearConfirm: $('clearConfirm'),
     aiDialog: $('aiDialog'), aiKey: $('aiKey'), aiSave: $('aiSave'), aiCancel: $('aiCancel'), aiRemove: $('aiRemove'),
-    aiKeyState: $('aiKeyState'), aiErr: $('aiErr'), aiLead: $('aiLead')
+    aiKeyState: $('aiKeyState'), aiErr: $('aiErr'), aiLead: $('aiLead'),
+    clientsBtn: $('clientsBtn'), clientsDialog: $('clientsDialog'), clientsList: $('clientsList'), clientsSummary: $('clientsSummary'),
+    clientsBackup: $('clientsBackup'), clientsRestore: $('clientsRestore'), clientsClose: $('clientsClose')
   };
 
   // ------------------------------------------------------------------ small helpers
@@ -80,6 +83,7 @@
       var it = state[t].interp;
       if (!it || typeof it !== 'object') state[t].interp = freshInterp();
       else { it.text = String(it.text || ''); it.ai = !!it.ai; it.basis = String(it.basis || ''); }
+      if (state[t].hist && typeof state[t].hist !== 'object') state[t].hist = null;
     });
     if (TOOLS.indexOf(state.tool) < 0) state.tool = 'screen';
   }
@@ -124,7 +128,7 @@
     S.groups.forEach(function (g) {
       g.metrics.forEach(function (m) {
         var v = s.values[m.name] || {};
-        if (m.calc === 'LSI') inputs[m.name] = { result: E.lsi(E.parseInput(v.left), E.parseInput(v.right), s.meta.injured), previous: null };
+        if (m.calc === 'LSI') inputs[m.name] = { result: E.lsi(E.parseInput(v.left), E.parseInput(v.right), s.meta.injured), previous: E.parseInput(v.previous) };
         else inputs[m.name] = { result: E.parseInput(v.result), previous: E.parseInput(v.previous) };
       });
     });
@@ -157,12 +161,15 @@
     o = o || {};
     var v = state[tool].meta[key] || '';
     var id = tool + '-' + key;
-    return '<label class="f' + (o.cls ? ' ' + o.cls : '') + '" for="' + id + '"><span>' + esc(label) + '</span>' +
+    var html = '<label class="f' + (o.cls ? ' ' + o.cls : '') + '" for="' + id + '"><span>' + esc(label) + '</span>' +
       '<input id="' + id + '" data-meta="' + key + '" value="' + esc(v) + '"' +
       (o.type ? ' type="' + o.type + '"' : ' type="text"') +
       (o.mode ? ' inputmode="' + o.mode + '"' : '') +
       (o.placeholder ? ' placeholder="' + esc(o.placeholder) + '"' : '') +
       (o.words ? ' autocapitalize="words"' : '') + ' autocomplete="off" spellcheck="false" enterkeyhint="next"></label>';
+    // the name field offers saved clients as you type
+    if (key === 'name') html = '<div class="f' + (o.cls ? ' ' + o.cls : '') + ' name-wrap">' + html.replace(' ' + o.cls, '') + '<div class="suggest" id="' + id + '-sugg" hidden></div></div>';
+    return html;
   }
   function seg(tool, key, label, options) {
     var cur = state[tool].meta[key] || '';
@@ -213,7 +220,7 @@
       out += '<div class="f wide"><span id="acl-sex-l">Norm set</span><div class="seg" role="group" aria-labelledby="acl-sex-l">' +
         DATA.acl.sexes.map(function (x) { return '<button type="button" data-choice-seg="sex" data-value="' + esc(x) + '" aria-pressed="' + (s.sex === x) + '">' + esc(x) + '</button>'; }).join('') + '</div></div>';
     }
-    out += '</div><p class="note" id="ctxNote" hidden></p>';
+    out += '</div><div class="client-bar" id="clientBar" hidden></div><p class="note" id="ctxNote" hidden></p>';
     if (t === 'screen') out += '<div class="import-log" id="importLog" hidden></div>';
     return out + '</section>';
   }
@@ -226,7 +233,7 @@
     if (m.calc === 'LSI') hint = '<span class="m-unit">enter left & right · LSI = injured ÷ other side</span>';
     var html = '<div class="metric' + (asym ? ' has-side' : '') + '" data-metric="' + nm + '" data-status="">' +
       '<div class="m-label"><div class="m-name">' + nm + '</div><div class="m-hint">' + hint +
-      '<span class="m-target"></span><span class="m-calc"></span></div><div class="m-meter"></div></div>';
+      '<span class="m-target"></span><span class="m-calc"></span><span class="m-prevnote"></span></div><div class="m-meter"></div></div>';
     function input(fieldName, cls, ph, label) {
       return '<input class="' + cls + '" id="' + id + '-' + fieldName + '" data-field="' + fieldName + '" value="' + esc(v[fieldName]) + '" type="text" inputmode="decimal" enterkeyhint="next" autocomplete="off" placeholder="' + ph + '" aria-label="' + nm + ' ' + label + '">';
     }
@@ -263,7 +270,7 @@
     var how = t.input === 'calc' ? 'adduction \u00f7 abduction, each leg' : ((t.detail ? t.detail + ' \u00b7 ' : '') + INPUT_WORD[t.input]);
     var html = '<div class="metric lr" data-metric="' + esc(t.id) + '" data-status="">' +
       '<div class="m-label"><div class="m-name">' + nm + '</div><div class="m-hint"><span class="m-unit">' + esc(how) + '</span>' +
-      '<span class="m-target"></span></div></div>';
+      '<span class="m-target"></span><span class="m-prevnote"></span></div></div>';
     if (t.input === 'calc') {
       html += '<div class="m-auto" data-auto>Worked out from the hip adduction and abduction results</div>';
     } else {
@@ -327,13 +334,19 @@
       if (res) {
         ['L', 'R'].forEach(function (k) {
           var cell = res.sides[k];
-          if (cell.value !== null) html += '<div class="lr-line"><span class="lr-sd">' + k + '</span><span class="lr-v">' + esc(cell.text) + '</span>' + chip(cell.status) + '</div>';
-          else if (cell.needsMass) html += '<div class="lr-line lr-wait"><span class="lr-sd">' + k + '</span>needs body mass</div>';
+          if (cell.value !== null) {
+            html += '<div class="lr-line"><span class="lr-sd">' + k + '</span><span class="lr-v">' + esc(cell.text) + '</span>' + chip(cell.status) + '</div>';
+            if (cell.change) html += '<div class="lr-chg m-change ' + cell.change_kind + '">' + esc(cell.change.replace(/\s+/g, ' ')) + '</div>';
+          } else if (cell.needsMass) html += '<div class="lr-line lr-wait"><span class="lr-sd">' + k + '</span>needs body mass</div>';
         });
         var d = E.diffText(res.diff);
         if (d) html += '<div class="lr-diff">' + esc(d) + '</div>';
         if (res.any) tested++;
       }
+      var pv = state.str.values[id] || {}, pn = el.querySelector('.m-prevnote');
+      if (pn) pn.textContent = (!blank(pv.prevLeft) || !blank(pv.prevRight)) && def.input !== 'calc'
+        ? 'prev ' + [['L', pv.prevLeft], ['R', pv.prevRight]].filter(function (x) { return !blank(x[1]); }).map(function (x) { return x[0] + ' ' + E.fmt(E.parseInput(x[1])); }).join(' · ') + ' ' + (def.input === 'reps' ? 'reps' : def.input) + (pv.prevDate ? ' (' + E.displayIso(pv.prevDate) + ')' : '')
+        : '';
       if (def.input === 'calc') {
         el.querySelector('[data-auto]').innerHTML = res && res.any
           ? 'ADD \u00f7 ABD \u2002' + ['L', 'R'].map(function (k) { return k + ' <b>' + (res.sides[k].value === null ? '\u2013' : esc(E.fmt(res.sides[k].value))) + '</b>'; }).join(' \u00b7 ')
@@ -351,6 +364,7 @@
 
   function refresh() {
     var t = state.tool, c = compute();
+    refreshClientBar(c);
     if (t === 'str') { refreshStrength(c); renderSummary(c); renderInterpState(c); saveDraft(); return; }
     var S = DATA[t];
     // context note under the athlete card
@@ -394,6 +408,10 @@
         if (m.calc === 'LSI' && typed && !row) {
           calc.textContent = (state.acl.meta.injured ? 'enter both sides' : 'set the injured side');
         }
+        var pn = el.querySelector('.m-prevnote');
+        if (pn) pn.textContent = v.prevDate && !blank(v.previous)
+          ? (m.calc === 'LSI' || m.calc === 'DSI' ? 'prev ' + E.fmt(E.parseInput(v.previous)) + (m.calc === 'LSI' ? '%' : '') + ' ' : 'prev ') + '(' + E.displayIso(v.prevDate) + ')'
+          : '';
         if (row) {
           entered++;
           el.dataset.status = row.status || '';
@@ -487,7 +505,8 @@
     }
     var why = blocker(c);
     html += '</div><div class="sum-foot">' + interpFlagHtml(t, c) + '<button type="button" class="primary make" data-action="report"' + (why ? ' disabled' : '') + '>Create PDF report</button>' +
-      '<p class="fine">' + esc(why || 'Opens a preview you can share by AirDrop, Mail or Messages, or save to Files.') + '</p></div></div>';
+      '<p class="fine">' + esc(why || 'Opens a preview you can share by AirDrop, Mail or Messages, or save to Files.') + '</p>' +
+      '<p class="fine client-line">' + esc(clientLine(t)) + '</p></div></div>';
     els.summary.innerHTML = html;
     els.dock.innerHTML = '<div class="dt"><a href="#summary" class="g" aria-label="' + labels[0] + '">' + c.counts.Green + '</a><a href="#summary" class="a" aria-label="' + labels[1] + '">' + c.counts.Amber + '</a><a href="#summary" class="r" aria-label="' + labels[2] + '">' + c.counts.Red + '</a></div>' +
       '<button type="button" class="primary" data-action="report"' + (why ? ' disabled' : '') + '>Create report</button>';
@@ -500,6 +519,7 @@
     if (el.dataset.meta) {
       state[t].meta[el.dataset.meta] = el.value;
       refresh();
+      if (el.dataset.meta === 'name') suggestClients(t, el.value);
     } else if (el.dataset.field) {
       var row = el.closest('.metric');
       val(t, row.dataset.metric)[el.dataset.field] = el.value;
@@ -536,6 +556,10 @@
       g.classList.toggle('collapsed', c);
       b.setAttribute('aria-expanded', String(!c));
       saveDraft();
+    } else if (b.dataset.client !== undefined && b.closest('.suggest')) {
+      pickClient(b.dataset.client);
+    } else if (b.dataset.action === 'load-history' || b.dataset.action === 'reload-history') {
+      loadHistory(t, b.dataset.client || E.nameKey(state[t].meta.name));
     } else if (b.dataset.action === 'ai-draft') {
       draftInterp();
     } else if (b.dataset.action === 'ai-settings') {
@@ -647,12 +671,13 @@
     var t = state.tool, c = compute(), m = state[t].meta;
     if (blocker(c)) return null;
     var it = state[t].interp, interp = blank(it.text) ? null : { text: String(it.text).trim(), ai: !!it.ai };
+    var progress = progressData(t, c);
     if (t === 'str') {
       return {
         file: fileName('_strength.pdf'),
         rep: window.BHReport.strength({
           meta: { name: m.name, date: E.displayIso(m.date), mass: m.mass, sport: m.sport, tester: m.tester, notes: m.notes },
-          tests: c.tests, counts: c.counts, prios: c.prios, amberPct: DATA.str.amber_pct, interp: interp
+          tests: c.tests, counts: c.counts, prios: c.prios, amberPct: DATA.str.amber_pct, interp: interp, progress: progress
         })
       };
     }
@@ -664,7 +689,7 @@
         rep: window.BHReport.screening({
           meta: { name: m.name, date: E.displayIso(m.date), sport: m.sport, tester: m.tester, age: m.age, sex: m.sex, mass: m.mass, notes: m.notes },
           popLabel: c.pop.label, groups: c.groups, counts: c.counts, prios: c.prios,
-          radarKeys: c.radarPicked.map(function (k) { return [k, labels[k]]; }), interp: interp
+          radarKeys: c.radarPicked.map(function (k) { return [k, labels[k]]; }), interp: interp, progress: progress
         })
       };
     }
@@ -673,7 +698,7 @@
       return {
         file: fileName('_hamstring.pdf'),
         rep: window.BHReport.rehab({
-          kind: 'ham', phase: state.ham.phase, groups: c.groups, counts: c.counts, disclaimer: DATA.ham.disclaimer || '', interp: interp,
+          kind: 'ham', phase: state.ham.phase, groups: c.groups, counts: c.counts, disclaimer: DATA.ham.disclaimer || '', interp: interp, progress: progress,
           meta: { name: m.name, date: E.displayIso(m.date), injured: m.injured, clinician: m.clinician, weeks: blank(m.weeks) ? auto(m.doi, 7) : m.weeks, sport: m.sport, notes: m.notes }
         })
       };
@@ -681,7 +706,7 @@
     return {
       file: fileName('_acl.pdf'),
       rep: window.BHReport.rehab({
-        kind: 'acl', phase: state.acl.phase, sex: state.acl.sex, groups: c.groups, counts: c.counts, disclaimer: DATA.acl.disclaimer || '', interp: interp,
+        kind: 'acl', phase: state.acl.phase, sex: state.acl.sex, groups: c.groups, counts: c.counts, disclaimer: DATA.acl.disclaimer || '', interp: interp, progress: progress,
         meta: { name: m.name, date: E.displayIso(m.date), injured: m.injured, graft: m.graft, surgeon: m.surgeon, months: blank(m.months) ? auto(m.dos, 30.4375) : m.months, sport: m.sport, notes: m.notes }
       })
     };
@@ -692,12 +717,17 @@
   function openReport() {
     var built = buildReport();
     if (!built) return;
+    var saved = saveSession(state.tool, compute());
+    if (saved) {
+      if (!saved.ok) toast('The session couldn’t be saved to the client record (storage is full or blocked).');
+      else toast(saved.replaced ? 'Updated ' + saved.name + '’s record for this date' : 'Saved to ' + saved.name + '’s record (' + saved.count + (saved.count === 1 ? ' session)' : ' sessions)'));
+      refresh();
+    }
     current = { file: null, blob: null, title: built.rep.title };
     els.sheetTitle.innerHTML = esc(built.rep.title) + '<small>' + esc(built.file) + '</small>';
     els.pages.innerHTML = '<p class="sheet-msg">Building the report…</p>';
     els.share.disabled = true; els.save.disabled = true;
     els.sheet.hidden = false;
-    els.toast.hidden = true;
     document.documentElement.style.overflow = 'hidden';
     ensureFonts().then(function () {
       var pdf = window.BHReport.toPdf(built.rep);
@@ -721,13 +751,16 @@
     els.sheet.hidden = true;
     document.documentElement.style.overflow = '';
   }
-  function savePdf() {
-    if (!current.blob) return;
-    var url = URL.createObjectURL(current.blob);
+  function downloadBlob(blob, name) {
+    var url = URL.createObjectURL(blob);
     var a = document.createElement('a');
-    a.href = url; a.download = current.file.name; a.rel = 'noopener';
+    a.href = url; a.download = name; a.rel = 'noopener';
     document.body.appendChild(a); a.click(); a.remove();
     setTimeout(function () { URL.revokeObjectURL(url); }, 60000);
+  }
+  function savePdf() {
+    if (!current.blob) return;
+    downloadBlob(current.blob, current.file.name);
   }
   function sharePdf() {
     if (!current.file) return;
@@ -910,7 +943,8 @@
           if (!cell || cell.value === null) return label + ' ' + (cell && cell.needsMass ? 'not scored (needs body mass)' : 'not tested');
           var raw = tt.input === 'calc' ? 'adduction ' + E.fmt(cell.parts[0]) + ' N ÷ abduction ' + E.fmt(cell.parts[1]) + ' N'
             : E.fmt(cell.input) + ' ' + (tt.input === 'reps' ? 'reps' : tt.input);
-          return label + ' ' + cell.text + (cell.text.indexOf(raw) === 0 ? '' : ' (' + raw + ')') + ' ' + (STATUS_WORD[cell.status] || cell.status);
+          var cw = cell.change ? ', ' + changeWords({ change: cell.change, change_kind: cell.change_kind }) : '';
+          return label + ' ' + cell.text + (cell.text.indexOf(raw) === 0 ? '' : ' (' + raw + ')') + ' ' + (STATUS_WORD[cell.status] || cell.status) + cw;
         });
         var diff = E.diffText(tt.diff);
         L.push('- ' + tt.name + (tt.detail ? ' (' + tt.detail + ')' : '') + ': ' + sides.join(' | ') + ' | target ' + tt.target + (diff ? ' | ' + diff : ''));
@@ -1130,6 +1164,259 @@
     els.aiKey.focus();
   }
 
+  // ------------------------------------------------------------------ client records
+  // Each PDF created saves that session under the client's name, on this device only. Next time the
+  // name is typed, the saved client is offered; loading fills the Previous results per metric from the
+  // most recent earlier session where that metric was tested, and the report gets a Progress table.
+  var HIST = 'bh-athlete-report-clients-v1';
+  var clients = { v: 1, clients: {} };
+  var SCORE_UNITS = { xBW: '× BW', xBWf: '× BW', pctBW: '% BW', Nkg: 'N/kg', reps: 'reps', ratio: '' };
+  var PREFILL = { screen: ['sex', 'age', 'sport', 'tester'], str: ['sport', 'tester'], ham: ['injured', 'doi', 'clinician', 'sport'], acl: ['injured', 'dos', 'graft', 'surgeon', 'sport'] };
+  function loadClients() {
+    try {
+      var c = JSON.parse(localStorage.getItem(HIST));
+      if (c && c.v === 1 && c.clients && typeof c.clients === 'object') return c;
+    } catch (e) { /* none saved */ }
+    return { v: 1, clients: {} };
+  }
+  function saveClients() {
+    try { localStorage.setItem(HIST, JSON.stringify(clients)); } catch (e) { return false; }
+    try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(function () {}); } catch (e2) { /* optional */ }
+    return true;
+  }
+  function clientFor(name) { var k = E.nameKey(name); return k ? clients.clients[k] || null : null; }
+  function currentResults(t, c) {
+    var out = {};
+    if (t === 'str') {
+      c.tests.forEach(function (tt) {
+        ['L', 'R'].forEach(function (k) { var cell = tt.sides[k]; if (cell && cell.value !== null) out[tt.id + '|' + k] = cell.value; });
+      });
+    } else {
+      E.flatten(c.groups).forEach(function (r) { var n = E.num(r.result); if (n !== null) out[r.name] = n; });
+    }
+    return out;
+  }
+  function compactValues(t) {
+    var src = state[t].values, out = {};
+    Object.keys(src).forEach(function (k) {
+      var v = src[k] || {}, o = {};
+      ['result', 'previous', 'side', 'left', 'right'].forEach(function (f) { if (!blank(v[f])) o[f] = String(v[f]).trim(); });
+      if (Object.keys(o).length) out[k] = o;
+    });
+    return out;
+  }
+  function saveSession(t, c) {
+    var m = state[t].meta, name = String(m.name || '').trim(), key = E.nameKey(name);
+    if (!key) return null;
+    var date = m.date || todayIso(), meta = {};
+    Object.keys(m).forEach(function (k) { if (k !== 'name' && !blank(m[k])) meta[k] = String(m[k]).trim(); });
+    if (t === 'screen') meta.pop = state.screen.pop;
+    if (t === 'ham' || t === 'acl') meta.phase = state[t].phase;
+    if (t === 'acl') meta.normSex = state.acl.sex;
+    var sess = { tool: t, date: date, savedAt: new Date().toISOString(), meta: meta, values: compactValues(t), results: currentResults(t, c),
+      mass: E.parseInput(m.mass), interp: blank(state[t].interp.text) ? '' : String(state[t].interp.text).trim() };
+    var cl = clients.clients[key] || (clients.clients[key] = { name: name, sessions: [] });
+    cl.name = name;
+    var replaced = false;
+    cl.sessions = cl.sessions.filter(function (x) { if (x.tool === t && x.date === date) { replaced = true; return false; } return true; });
+    cl.sessions.push(sess);
+    cl.sessions = E.sortSessions(cl.sessions);
+    return { ok: saveClients(), name: name, replaced: replaced, count: cl.sessions.length };
+  }
+  function earlierCount(cl, t, date) {
+    return cl ? cl.sessions.filter(function (x) { return x.tool === t && x.date < date; }).length : 0;
+  }
+  // fill Previous results (and unchanging details) from the client's record
+  function loadHistory(t, key) {
+    var cl = clients.clients[key];
+    if (!cl) return;
+    var s = state[t], m = s.meta, date = m.date || todayIso();
+    m.name = cl.name;
+    var all = E.sortSessions(cl.sessions);
+    for (var j = all.length - 1; j >= 0; j--) {          // the comparison set used last time for this tool
+      var ms = all[j].meta || {};
+      if (all[j].tool !== t) continue;
+      if (t === 'acl' && ms.normSex && DATA.acl.sexes.indexOf(ms.normSex) >= 0) s.sex = ms.normSex;
+      if (t === 'screen' && ms.pop) s.pop = ms.pop;
+      break;
+    }
+    PREFILL[t].forEach(function (f) {
+      if (!blank(m[f])) return;
+      for (var i = all.length - 1; i >= 0; i--) {
+        var v = all[i].meta && all[i].meta[f];
+        if (!blank(v)) { m[f] = v; break; }
+      }
+    });
+    var n = 0, dates = {};
+    if (t === 'str') {
+      DATA.str.tests.forEach(function (tt) {
+        if (tt.input === 'calc') return;
+        var v = val('str', tt.id), got = false;
+        v.prevLeft = ''; v.prevRight = ''; v.prevMass = ''; v.prevDate = '';
+        [['left', 'L', 'prevLeft'], ['right', 'R', 'prevRight']].forEach(function (sd) {
+          var p = E.previousFor(cl.sessions, 'str', tt.id + '|' + sd[1], date);
+          var raw = p && p.session.values && p.session.values[tt.id];
+          if (!p || !raw || blank(raw[sd[0]])) return;
+          v[sd[2]] = raw[sd[0]]; v.prevMass = p.mass == null ? '' : String(p.mass); v.prevDate = p.date;
+          got = true; dates[p.date] = 1;
+        });
+        if (got) n++;
+      });
+    } else {
+      DATA[t].groups.forEach(function (g) {
+        g.metrics.forEach(function (mm) {
+          var v = val(t, mm.name), p = E.previousFor(cl.sessions, t, mm.name, date);
+          if (!p) { v.prevDate = ''; return; }
+          var raw = p.session.values && p.session.values[mm.name];
+          v.previous = raw && !blank(raw.result) ? raw.result : String(p.value);
+          v.prevDate = p.date; n++; dates[p.date] = 1;
+        });
+      });
+    }
+    s.hist = { key: key, name: cl.name, n: n, dates: Object.keys(dates).sort(), date: date };
+    hideSuggest();
+    render();
+    toast(n ? 'Loaded ' + cl.name + ': previous results for ' + n + (n === 1 ? ' test' : ' tests') : cl.name + ': no earlier ' + TOOL_NAMES[t] + ' results; details filled in');
+  }
+  function pickClient(key) { loadHistory(state.tool, key); }
+  function suggestClients(t, typed) {
+    var box = $(t + '-name-sugg');
+    if (!box) return;
+    var k = E.nameKey(typed), list = [];
+    if (k) Object.keys(clients.clients).forEach(function (key) { if (key !== k && key.indexOf(k) >= 0) list.push(key); });
+    list.sort(function (a, b) { return clients.clients[a].name.localeCompare(clients.clients[b].name); });
+    list = list.slice(0, 6);
+    if (!list.length) { hideSuggest(); return; }
+    box.innerHTML = list.map(function (key) {
+      var cl = clients.clients[key], last = cl.sessions.length ? cl.sessions[cl.sessions.length - 1].date : '';
+      return '<button type="button" data-client="' + esc(key) + '"><b>' + esc(cl.name) + '</b><span>' + cl.sessions.length + (cl.sessions.length === 1 ? ' session' : ' sessions') +
+        (last ? ' · last ' + esc(E.displayIso(last)) : '') + '</span></button>';
+    }).join('');
+    box.hidden = false;
+  }
+  function hideSuggest() {
+    els.entry.querySelectorAll('.suggest').forEach(function (b) { b.hidden = true; b.innerHTML = ''; });
+  }
+  function refreshClientBar(c) {
+    var t = state.tool, s = state[t], bar = $('clientBar');
+    if (!bar) return;
+    var key = E.nameKey(s.meta.name), cl = key ? clients.clients[key] : null, date = s.meta.date || todayIso();
+    var h = s.hist;
+    if (cl && h && h.key === key) {
+      bar.hidden = false; bar.className = 'client-bar loaded';
+      bar.innerHTML = '<b>' + esc(cl.name) + '</b>' + (h.n
+        ? ' — previous results loaded from ' + esc(h.dates.map(E.displayIso).join(', ')) + ' (' + h.n + (h.n === 1 ? ' test' : ' tests') + ')'
+        : ' — no earlier ' + TOOL_NAMES[t] + ' sessions; details filled in') +
+        (h.date !== date ? ' <button type="button" class="quiet" data-action="reload-history">Reload for this date</button>' : '');
+    } else if (cl) {
+      var earlier = earlierCount(cl, t, date), total = cl.sessions.length;
+      bar.hidden = false; bar.className = 'client-bar';
+      bar.innerHTML = '<b>' + esc(cl.name) + '</b> has ' + total + (total === 1 ? ' saved session' : ' saved sessions') +
+        (earlier ? ', ' + earlier + ' earlier ' + TOOL_NAMES[t] + '. ' : ', none earlier for ' + TOOL_NAMES[t] + '. ') +
+        '<button type="button" class="quiet" data-action="load-history" data-client="' + esc(key) + '">' + (earlier ? 'Load previous results' : 'Fill in details') + '</button>';
+    } else { bar.hidden = true; bar.innerHTML = ''; }
+  }
+  function clientLine(t) {
+    var name = String(state[t].meta.name || '').trim(), cl = clientFor(name);
+    if (!name) return 'Add a name to save this session to a client record.';
+    var date = state[t].meta.date || todayIso();
+    if (!cl) return 'Creating the PDF starts a client record for ' + name + ' on this device.';
+    var same = cl.sessions.some(function (x) { return x.tool === t && x.date === date; }), earlier = earlierCount(cl, t, date);
+    return 'Creating the PDF ' + (same ? 'updates' : 'saves to') + ' ' + cl.name + '’s record' + (earlier ? ' (' + earlier + ' earlier ' + TOOL_NAMES[t] + (earlier === 1 ? ' session)' : ' sessions)') : '') + '.';
+  }
+  function progressData(t, c) {
+    var m = state[t].meta, cl = clientFor(m.name);
+    if (!cl) return null;
+    var p = E.progress(cl.sessions, t, { date: m.date || todayIso(), results: currentResults(t, c) }, 5);
+    if (!p.rows.length) return null;
+    var label = {}, unit = {}, dir = {};
+    if (t === 'str') {
+      DATA.str.tests.forEach(function (tt) {
+        ['L', 'R'].forEach(function (k) { var id = tt.id + '|' + k; label[id] = tt.name + ' — ' + (k === 'L' ? 'Left' : 'Right'); unit[id] = SCORE_UNITS[tt.score] || ''; dir[id] = tt.dir || 'Higher'; });
+      });
+    } else {
+      DATA[t].groups.forEach(function (g) { g.metrics.forEach(function (mm) { label[mm.name] = mm.name; unit[mm.name] = mm.unit || ''; dir[mm.name] = mm.dir || ''; }); });
+    }
+    return {
+      dates: p.dates.map(E.displayIso), sessions: p.sessions,
+      rows: p.rows.map(function (r) { return { name: label[r.metric] || r.metric, unit: unit[r.metric] || '', dir: dir[r.metric] || '', values: r.values, first: r.first, last: r.last }; })
+    };
+  }
+  // the Clients list: see, delete, back up and restore
+  function openClientsDialog() { renderClientsList(); openModal(els.clientsDialog, els.clientsClose); }
+  function renderClientsList() {
+    var keys = Object.keys(clients.clients).sort(function (a, b) { return clients.clients[a].name.localeCompare(clients.clients[b].name); });
+    var total = 0;
+    keys.forEach(function (k) { total += clients.clients[k].sessions.length; });
+    els.clientsSummary.textContent = keys.length ? keys.length + (keys.length === 1 ? ' client, ' : ' clients, ') + total + (total === 1 ? ' session' : ' sessions') + ', saved on this device.'
+      : 'No saved clients yet. A record starts the first time a PDF is created with the client’s name filled in.';
+    els.clientsList.innerHTML = keys.length ? '<ul class="client-list">' + keys.map(function (k) {
+      var cl = clients.clients[k], by = {};
+      cl.sessions.forEach(function (x) { by[x.tool] = (by[x.tool] || 0) + 1; });
+      var last = cl.sessions.length ? cl.sessions[cl.sessions.length - 1].date : '';
+      var parts = TOOLS.filter(function (t) { return by[t]; }).map(function (t) { return by[t] + ' ' + TOOL_NAMES[t]; });
+      return '<li><div class="cl-main"><b>' + esc(cl.name) + '</b><span>' + esc(parts.join(' · ') || 'no sessions') + (last ? ' · last ' + esc(E.displayIso(last)) : '') + '</span></div>' +
+        '<button type="button" class="quiet cl-del" data-action="delete-client" data-key="' + esc(k) + '">Delete</button></li>';
+    }).join('') + '</ul>' : '';
+  }
+  var delTimer = null;
+  function onClientsClick(e) {
+    var b = e.target.closest('button[data-action="delete-client"]');
+    if (!b) return;
+    var key = b.dataset.key;
+    if (!b.classList.contains('armed')) {
+      els.clientsList.querySelectorAll('.cl-del.armed').forEach(function (x) { x.classList.remove('armed'); x.textContent = 'Delete'; });
+      b.classList.add('armed'); b.textContent = 'Tap again to delete';
+      clearTimeout(delTimer);
+      delTimer = setTimeout(function () { b.classList.remove('armed'); b.textContent = 'Delete'; }, 4000);
+      return;
+    }
+    clearTimeout(delTimer);
+    var name = clients.clients[key] ? clients.clients[key].name : key;
+    delete clients.clients[key];
+    saveClients();
+    renderClientsList();
+    refresh();
+    toast('Deleted ' + name + '’s record');
+  }
+  function backupClients() {
+    var name = 'BASE_Health_client_records_' + todayIso() + '.json';
+    var blob = new Blob([JSON.stringify(clients, null, 1)], { type: 'application/json' });
+    var file = new File([blob], name, { type: 'application/json' });
+    if (canShare(file)) {
+      navigator.share({ files: [file], title: 'BASE Health client records' }).catch(function (err) { if (err && err.name !== 'AbortError') downloadBlob(blob, name); });
+    } else downloadBlob(blob, name);
+  }
+  function restoreClients(fileList) {
+    var f = fileList && fileList[0];
+    if (!f) return;
+    f.text().then(function (text) {
+      var data = JSON.parse(text);
+      if (!data || data.v !== 1 || !data.clients || typeof data.clients !== 'object') throw new Error('that isn’t a BASE Health client backup');
+      var added = 0, updated = 0, fresh = 0;
+      Object.keys(data.clients).forEach(function (k) {
+        var src = data.clients[k];
+        if (!src || !Array.isArray(src.sessions)) return;
+        var key = E.nameKey(src.name || k);
+        if (!key) return;
+        var cl = clients.clients[key];
+        if (!cl) { cl = clients.clients[key] = { name: String(src.name || k), sessions: [] }; fresh++; }
+        src.sessions.forEach(function (x) {
+          if (!x || !x.tool || !x.date) return;
+          var i = -1;
+          cl.sessions.forEach(function (y, j) { if (y.tool === x.tool && y.date === x.date) i = j; });
+          if (i < 0) { cl.sessions.push(x); added++; }
+          else if ((x.savedAt || '') > (cl.sessions[i].savedAt || '')) { cl.sessions[i] = x; updated++; }
+        });
+        cl.sessions = E.sortSessions(cl.sessions);
+      });
+      if (!saveClients()) throw new Error('this device wouldn’t save the records');
+      renderClientsList();
+      refresh();
+      toast('Restored: ' + added + (added === 1 ? ' session added' : ' sessions added') + (updated ? ', ' + updated + ' updated' : '') + (fresh ? ', ' + fresh + (fresh === 1 ? ' new client' : ' new clients') : ''));
+    }).catch(function (err) { toast('Couldn’t restore: ' + (err && err.message ? err.message : 'unreadable file')); });
+  }
+
   // ------------------------------------------------------------------ boot
   function fetchJson(url) {
     return fetch(url).then(function (r) {
@@ -1142,6 +1429,7 @@
     var ai = fetchJson('interpretation.json').catch(function () { return null; });
     Promise.all([fetchJson('norms.json'), fetchJson('hamstring_norms.json'), fetchJson('acl_norms.json'), fetchJson('strength_norms.json'), ai]).then(function (r) {
       DATA.screen = r[0]; DATA.ham = r[1]; DATA.acl = r[2]; DATA.str = r[3]; DATA.ai = r[4];
+      clients = loadClients();
       state = loadDraft() || { v: 1, tool: 'screen', screen: freshTool('screen'), str: freshTool('str'), ham: freshTool('ham'), acl: freshTool('acl') };
       tidyState();
       els.entry.addEventListener('input', onInput);
@@ -1161,8 +1449,18 @@
       els.aiCancel.addEventListener('click', function () { closeModal(); });
       els.aiRemove.addEventListener('click', removeAiKey);
       els.aiKey.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); saveAiKey(); } });
-      [els.clearDialog, els.aiDialog].forEach(function (d) {
+      els.clientsBtn.addEventListener('click', openClientsDialog);
+      els.clientsClose.addEventListener('click', function () { closeModal(); });
+      els.clientsBackup.addEventListener('click', backupClients);
+      els.clientsRestore.addEventListener('change', function () { restoreClients(els.clientsRestore.files); els.clientsRestore.value = ''; });
+      els.clientsList.addEventListener('click', onClientsClick);
+      [els.clearDialog, els.aiDialog, els.clientsDialog].forEach(function (d) {
         d.addEventListener('click', function (e) { if (e.target === d) closeModal(); });
+      });
+      // tapping a suggested client must not blur the name box before the tap lands
+      els.entry.addEventListener('pointerdown', function (e) { if (e.target.closest('.suggest')) e.preventDefault(); });
+      els.entry.addEventListener('focusout', function (e) {
+        if (e.target.dataset && e.target.dataset.meta === 'name') setTimeout(function () { hideSuggest(); }, 200);
       });
       els.back.addEventListener('click', closeReport);
       els.save.addEventListener('click', savePdf);

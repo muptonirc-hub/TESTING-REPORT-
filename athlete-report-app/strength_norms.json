@@ -2,7 +2,8 @@
   "title": "Lower-Limb Strength & Capacity",
   "source": "BASE Health lower-limb strength & capacity battery (testing sheet)",
   "amber_pct": 10,
-  "rule": "Green = at or above target. Amber = within 10% of target. Red = more than 10% away.",
+  "noise_pct": 5,
+  "rule": "Green = at or above target. Amber = within 10% of target. Red = more than 10% away. A change of less than 5% since the last test counts as within normal test variation.",
   "input_units": {
     "kg": "load in kg",
     "N": "force in N",

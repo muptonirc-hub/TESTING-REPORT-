@@ -102,8 +102,9 @@ button { cursor: pointer; }
 }
 .tools button[aria-selected="true"] { background: #fff; color: #1B2430; box-shadow: 0 1px 3px rgba(0, 0, 0, .25); }
 .appbar .ghost { border: 1px solid rgba(255, 255, 255, .25); background: transparent; color: #fff; }
-.appbar .clear-btn { padding-inline: 14px; }
-.appbar .clear-btn svg { flex: none; opacity: .85; }
+.appbar .clear-btn, .appbar .clients-btn { padding-inline: 14px; }
+.appbar .clear-btn svg, .appbar .clients-btn svg { flex: none; opacity: .85; }
+
 
 /* ---------- buttons */
 .ghost, .primary, .quiet {
@@ -346,6 +347,37 @@ button { cursor: pointer; }
 #aiKeyState { margin-top: 8px; }
 .ai-remove { margin-top: 4px; padding-inline: 0; color: var(--red-ink); min-height: 36px; }
 
+/* ---------- client records */
+.name-wrap { position: relative; }
+.suggest {
+  position: absolute; left: 0; right: 0; top: calc(100% + 4px); z-index: 30;
+  background: var(--surface); border: 1px solid var(--line-strong); border-radius: 12px; box-shadow: var(--shadow);
+  padding: 4px; display: flex; flex-direction: column;
+}
+.suggest button { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; width: 100%; min-height: 44px; padding: 8px 12px; border: 0; border-radius: 9px; background: transparent; text-align: left; }
+.suggest button:hover, .suggest button:focus-visible { background: var(--field); }
+.suggest b { font-weight: 650; font-size: 15px; }
+.suggest span { color: var(--muted); font-size: 12.5px; white-space: nowrap; }
+.client-bar { margin-top: 12px; padding: 10px 14px; border-radius: 10px; background: var(--field); border: 1px solid var(--line); font-size: 14px; color: var(--fg); display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; }
+.client-bar.loaded { background: var(--green-soft); border-color: color-mix(in srgb, var(--green) 35%, transparent); color: var(--green-ink); }
+.client-bar .quiet { min-height: 36px; padding-inline: 8px; font-size: 14px; }
+.client-bar.loaded .quiet { color: var(--green-ink); }
+.m-prevnote { color: var(--muted); }
+.lr-chg { font-size: 12px; font-weight: 600; text-align: right; color: var(--muted); margin-top: -2px; }
+.lr-chg.gain { color: var(--green-ink); } .lr-chg.drop { color: var(--red-ink); }
+.client-line { margin-top: 4px; }
+.clients-card { max-width: 520px; }
+.client-list { list-style: none; margin: 12px 0 4px; padding: 0; border: 1px solid var(--line); border-radius: 12px; background: var(--field); max-height: 40vh; overflow-y: auto; }
+.client-list li { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 14px; }
+.client-list li + li { border-top: 1px solid var(--line); }
+.client-list .cl-main { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.client-list b { font-weight: 650; font-size: 15px; }
+.client-list span { color: var(--muted); font-size: 12.5px; }
+.client-list .cl-del { min-height: 36px; padding-inline: 8px; color: var(--red-ink); flex: none; white-space: nowrap; }
+.client-list .cl-del.armed { background: var(--red); color: #fff; border-radius: 9px; }
+.clients-actions { flex-wrap: wrap; }
+.clients-actions .file-btn { display: inline-flex; }
+
 /* ---------- interpretation card */
 .interp .card-head { margin-bottom: 4px; }
 .interp .card-head .quiet { min-height: 36px; font-size: 14px; }
@@ -389,7 +421,7 @@ button { cursor: pointer; }
 @media (max-width: 1100px) {
   .tools { margin-left: 0; order: 3; width: 100%; }
   .tools button { flex: 1; padding-inline: 8px; }
-  .appbar .ghost { margin-left: auto; }
+  .appbar .clients-btn { margin-left: auto; }
 }
 @media (max-width: 760px) {
   .fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -409,6 +441,8 @@ button { cursor: pointer; }
   .cols { display: none; }
   .tab-extra { display: none; }
   .clear-btn .cb-extra { display: none; }
+  .clients-btn .cb-label { display: none; }
+  .appbar .clients-btn { padding-inline: 12px; }
   .tools button { padding-inline: 4px; }
   .metric.lr { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-areas: "label label" "left right" "out out"; }
   .metric.lr .m-out { align-items: stretch; }
@@ -418,7 +452,7 @@ button { cursor: pointer; }
   .pagehead h1 { font-size: 22px; }
   .dock .dt a { padding: 0 8px; }
 }
-@media (max-width: 374px) {
+@media (max-width: 430px) {
   .clear-btn .cb-label { display: none; }
   .appbar .clear-btn { padding-inline: 12px; }
 }
@@ -440,6 +474,10 @@ button { cursor: pointer; }
     <button role="tab" id="tab-ham" data-tool="ham" aria-selected="false">Hamstring<span class="tab-extra"> rehab</span></button>
     <button role="tab" id="tab-acl" data-tool="acl" aria-selected="false">ACL<span class="tab-extra"> rehab</span></button>
   </nav>
+  <button class="ghost clients-btn" id="clientsBtn" type="button" aria-haspopup="dialog" aria-label="Clients">
+    <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0M16 4.5a3.5 3.5 0 0 1 0 7M21.5 20a6.5 6.5 0 0 0-5-6.3"/></svg>
+    <span class="cb-label">Clients</span>
+  </button>
   <button class="ghost clear-btn" id="clearAll" type="button" aria-haspopup="dialog" aria-label="Clear all data">
     <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/></svg>
     <span class="cb-label">Clear all<span class="cb-extra"> data</span></span>
@@ -468,7 +506,7 @@ button { cursor: pointer; }
 <div class="modal" id="clearDialog" role="alertdialog" aria-modal="true" aria-labelledby="clearTitle" aria-describedby="clearIntro" hidden>
   <div class="modal-card">
     <h2 id="clearTitle">Clear all data?</h2>
-    <p id="clearIntro">This deletes everything entered on this device in all four sections, including names, notes and tester details.</p>
+    <p id="clearIntro">This clears everything entered in all four sections, including names, notes and tester details. Saved client records are kept; manage those under Clients.</p>
     <ul class="clear-list" id="clearList"></ul>
     <p class="modal-fine">Save or share any reports you need first. This can’t be undone.</p>
     <div class="modal-actions">
@@ -500,12 +538,26 @@ button { cursor: pointer; }
   </div>
 </div>
 
+<div class="modal" id="clientsDialog" role="dialog" aria-modal="true" aria-labelledby="clientsTitle" aria-describedby="clientsSummary" hidden>
+  <div class="modal-card clients-card">
+    <h2 id="clientsTitle">Clients</h2>
+    <p id="clientsSummary"></p>
+    <div id="clientsList"></div>
+    <p class="modal-fine">Records live only on this device. Back them up to a file now and then, and use Restore to bring them onto another iPad or after reinstalling. Restoring adds to what’s here; it doesn’t remove anything.</p>
+    <div class="modal-actions clients-actions">
+      <button class="ghost" id="clientsBackup" type="button">Back up…</button>
+      <label class="ghost file-btn" for="clientsRestore">Restore…<input id="clientsRestore" type="file" accept=".json,application/json"></label>
+      <button class="primary" id="clientsClose" type="button">Done</button>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast" role="status" hidden></div>
 
-<script src="engine.js?v=5" defer></script>
-<script src="report-fonts.js?v=5" defer></script>
-<script src="jspdf.umd.min.js?v=5" defer></script>
-<script src="report.js?v=5" defer></script>
-<script src="app.js?v=5" defer></script>
+<script src="engine.js?v=6" defer></script>
+<script src="report-fonts.js?v=6" defer></script>
+<script src="jspdf.umd.min.js?v=6" defer></script>
+<script src="report.js?v=6" defer></script>
+<script src="app.js?v=6" defer></script>
 </body>
 </html>

@@ -433,16 +433,20 @@
     return fmt(v) + (SCORE_UNIT[score] ? ' ' + SCORE_UNIT[score] : '');
   }
 
-  // values: {testId: {left, right}} as typed. Returns the tests with results, one row per scored leg,
-  // traffic-light counts and the flagged legs (Red first, then Amber).
+  // values: {testId: {left, right, prevLeft, prevRight, prevMass, prevDate}} as typed / loaded from the client's
+  // record. Returns the tests with results, one row per scored leg, traffic-light counts and the flagged legs
+  // (Red first, then Amber). A previous result gives a change flag: within noise_pct % is "within noise".
   function buildStrength(values, set, mass) {
     var m = num(mass);
     if (m !== null && m <= 0) m = null;
     var pct = set.amber_pct == null ? 5 : set.amber_pct;
-    var raw = {};
+    var noisePct = set.noise_pct == null ? 5 : set.noise_pct;
+    var raw = {}, prev = {};
     set.tests.forEach(function (t) {
       var v = values[t.id] || {};
       raw[t.id] = { L: parseInput(v.left), R: parseInput(v.right) };
+      var pm = num(v.prevMass);
+      prev[t.id] = { L: parseInput(v.prevLeft), R: parseInput(v.prevRight), mass: pm && pm > 0 ? pm : m, date: v.prevDate || '' };
     });
     var tests = [], rows = [];
     set.tests.forEach(function (t) {
@@ -460,6 +464,17 @@
         }
         cell.status = cell.value === null ? '' : status(cell.value, norm);
         cell.text = formatScore(cell.value, t.score);
+        // change since the last time this leg was tested (scores compared, each with its own body mass)
+        cell.prev = null; cell.change = ''; cell.change_kind = '';
+        var pv = t.input === 'calc' ? null : prev[t.id][k];
+        if (pv !== null && cell.value !== null) {
+          var pscore = strengthScore(t.score, pv, prev[t.id].mass);
+          if (pscore !== null) {
+            var ch = change(cell.value, pscore, t.dir === 'Band' ? 'Band' : 'Higher', Math.abs(pscore) * noisePct / 100);
+            cell.prev = { input: pv, value: pscore, text: formatScore(pscore, t.score), date: prev[t.id].date };
+            cell.change = ch[0]; cell.change_kind = ch[1];
+          }
+        }
         sides[k] = cell;
         if (cell.needsMass) waiting = true;
         if (cell.value !== null) {
@@ -474,7 +489,7 @@
       }
       if (any || waiting) {
         tests.push({ id: t.id, name: t.name, detail: t.detail || '', target: t.target_text, score: t.score, input: t.input,
-          norm: norm, sides: sides, diff: diff, rawTarget: strengthRawTarget(t, m), any: any });
+          norm: norm, sides: sides, diff: diff, rawTarget: strengthRawTarget(t, m), any: any, unit: SCORE_UNIT[t.score] || '' });
       }
     });
     var c = { Green: 0, Amber: 0, Red: 0 };
@@ -490,6 +505,49 @@
     var p = pyFixed(d.pct, 0);
     if (!d.lower || p === '0') return 'even';
     return (d.lower === 'L' ? 'Left' : 'Right') + ' ' + p + '% lower';
+  }
+
+  // ---------------------------------------------------------------- client records (history)
+  // A session is { tool, date (Y-m-d), meta, values, results: {metric: number}, mass }.
+  // Names match after trimming, collapsing spaces, lower-casing and dropping accents.
+  function nameKey(name) {
+    var s = String(name == null ? '' : name);
+    if (s.normalize) s = s.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    return s.toLowerCase().replace(/\s+/g, ' ').trim();
+  }
+  function sortSessions(list) {
+    return list.slice().sort(function (a, b) { return a.date < b.date ? -1 : (a.date > b.date ? 1 : ((a.savedAt || '') < (b.savedAt || '') ? -1 : 1)); });
+  }
+  // The most recent earlier session (same tool, dated before `beforeDate`) where the metric was tested.
+  function previousFor(sessions, tool, metric, beforeDate) {
+    var best = null;
+    sessions.forEach(function (s) {
+      if (s.tool !== tool || !s.date || (beforeDate && s.date >= beforeDate)) return;
+      var r = s.results && s.results[metric];
+      if (r === null || r === undefined) return;
+      if (!best || s.date > best.date) best = { value: r, date: s.date, mass: s.mass == null ? null : s.mass, session: s };
+    });
+    return best;
+  }
+  // Progress across sessions: columns are session dates (up to `max`, newest last, the current session included),
+  // rows are metrics measured in at least two of them. `current` = { date, results }.
+  function progress(sessions, tool, current, max) {
+    max = max || 5;
+    var list = sessions.filter(function (s) { return s.tool === tool && s.date && s.results && s.date !== current.date; });
+    list = sortSessions(list).concat([{ date: current.date, results: current.results, current: true }]);
+    if (list.length > max) list = list.slice(list.length - max);
+    var order = [], seen = {};
+    list.forEach(function (s) { Object.keys(s.results).forEach(function (k) { if (!seen[k]) { seen[k] = 1; order.push(k); } }); });
+    var rows = [];
+    order.forEach(function (metric) {
+      var vals = list.map(function (s) { var v = s.results[metric]; return v === null || v === undefined ? null : v; });
+      var n = vals.filter(function (v) { return v !== null; }).length;
+      if (n < 2) return;
+      var first = null, last = null;
+      vals.forEach(function (v) { if (v !== null) { if (first === null) first = v; last = v; } });
+      rows.push({ metric: metric, values: vals, first: first, last: last });
+    });
+    return { dates: list.map(function (s) { return s.date; }), rows: rows, sessions: list.length };
   }
 
   // ---------------------------------------------------------------- dates
@@ -683,6 +741,7 @@
     buildStrength: buildStrength, strengthNorm: strengthNorm, strengthScore: strengthScore,
     strengthRawTarget: strengthRawTarget, formatScore: formatScore, diffText: diffText,
     displayIso: displayIso, parseDate: parseDate, isoOf: isoOf, displayDate: displayDate,
+    nameKey: nameKey, sortSessions: sortSessions, previousFor: previousFor, progress: progress,
     parseCsv: parseCsv, parseValdFiles: parseValdFiles, normCol: normCol
   };
 });
