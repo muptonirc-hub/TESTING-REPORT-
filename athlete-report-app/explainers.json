@@ -1,0 +1,381 @@
+{
+  "about": "Plain-English explainers for every metric (the exact metric name, or the LL Strength test id). 'what' is for athletes and coaches (20 words at most) and shows when a metric name is tapped and under each Top priority on the PDF; 'how' is an optional protocol reminder for the clinician, shown on the screen only. Edit the wording here; the app picks it up the next time it opens online.",
+  "metrics": {
+    "Jump Height": {
+      "what": "How high you jump from standing after a quick dip: a simple measure of lower-body power.",
+      "how": "CMJ on ForceDecks, hands on hips; best of 3; jump height by impulse-momentum."
+    },
+    "Peak Power": {
+      "what": "The most power your legs produce during the jump, relative to body weight.",
+      "how": "From the CMJ trials: Peak Power / BM (W/kg)."
+    },
+    "CMJ Peak Force": {
+      "what": "The highest force you push into the ground while driving up out of the jump.",
+      "how": "CMJ concentric peak force (N); also used for DSI."
+    },
+    "RSI-modified": {
+      "what": "How quickly you turn a dip into a jump: jump height divided by the time taken to leave the ground.",
+      "how": "From the CMJ trials: jump height ÷ time to take-off."
+    },
+    "Concentric Asymmetry": {
+      "what": "The difference between your left and right legs while pushing up out of the jump.",
+      "how": "CMJ concentric peak force asymmetry (%); tick the higher side."
+    },
+    "Landing Asymmetry": {
+      "what": "The difference between your left and right legs when absorbing the landing.",
+      "how": "CMJ landing force asymmetry (%); tick the higher side."
+    },
+    "IMTP Peak Force": {
+      "what": "Your maximum whole-body pulling strength against a fixed bar.",
+      "how": "Isometric mid-thigh pull on ForceDecks; best of 2–3 maximal pulls of 3–5 s."
+    },
+    "IMTP Relative Force": {
+      "what": "Maximum pulling strength relative to body weight, so athletes of different sizes can be compared.",
+      "how": "IMTP peak vertical force ÷ body mass (N/kg)."
+    },
+    "IMTP RFD 0–200 ms": {
+      "what": "How fast you build force in the first fifth of a second of a maximal pull.",
+      "how": "Rate of force development 0–200 ms from the IMTP trials."
+    },
+    "Hop RSI (best)": {
+      "what": "How springy you are over quick repeated hops: jump height compared with time on the ground.",
+      "how": "Repeated hop test (e.g. 10/5) on ForceDecks; best RSI."
+    },
+    "Hop Contact Time": {
+      "what": "How long your feet stay on the ground between quick hops. Shorter is better.",
+      "how": "Ground contact time from the repeated hop test (s)."
+    },
+    "Hop Jump Height": {
+      "what": "How high you get off the ground during the quick repeated hops.",
+      "how": "Jump height from the repeated hop test (cm)."
+    },
+    "Reactive Asymmetry": {
+      "what": "The difference between your left and right legs during the quick repeated hops.",
+      "how": "Repeated hop test asymmetry (%); tick the higher side."
+    },
+    "Nordic Peak Force — Left": {
+      "what": "Left hamstring strength while lowering your body forward under control in a Nordic curl.",
+      "how": "NordBord; slow Nordic lowers; best peak force, left leg."
+    },
+    "Nordic Peak Force — Right": {
+      "what": "Right hamstring strength while lowering your body forward under control in a Nordic curl.",
+      "how": "NordBord; slow Nordic lowers; best peak force, right leg."
+    },
+    "Nordic L/R Imbalance": {
+      "what": "The difference in hamstring strength between your legs on the Nordic test.",
+      "how": "NordBord imbalance (%); tick the stronger side."
+    },
+    "Nordic Relative Force": {
+      "what": "Nordic hamstring strength relative to body weight.",
+      "how": "Nordic peak force ÷ body mass (N/kg)."
+    },
+    "Adductor Peak Force": {
+      "what": "How strongly you squeeze your knees together: inner-thigh (groin) strength.",
+      "how": "ForceFrame adduction squeeze in the clinic's standard position; best rep."
+    },
+    "Abductor Peak Force": {
+      "what": "How strongly you push your knees apart: outer-hip strength.",
+      "how": "ForceFrame abduction, same position as the adductor test; best rep."
+    },
+    "Adduction Asymmetry": {
+      "what": "The difference in groin squeeze strength between your left and right sides.",
+      "how": "ForceFrame adduction asymmetry (%); tick the stronger side."
+    },
+    "Add : Abd Ratio": {
+      "what": "The balance between groin and outer-hip strength (inner ÷ outer).",
+      "how": "Adductor ÷ abductor peak force from the same ForceFrame session."
+    },
+    "DSI (CMJ ÷ IMTP)": {
+      "what": "Jump force compared with maximum strength, which helps show whether strength or explosiveness needs more work.",
+      "how": "Worked out by the app: CMJ peak force ÷ IMTP peak force."
+    },
+    "Isometric Peak Force": {
+      "what": "The most force produced in a held (static) strength test on the DynaMo.",
+      "how": "DynaMo isometric test; note the muscle group and position in Notes."
+    },
+    "Quad ISO @ 60° — Left": {
+      "what": "Left thigh (quadriceps) strength pushing the knee straight, with the knee bent to 60 degrees.",
+      "how": "DynaMo isometric knee extension at 60° flexion; enter force in N."
+    },
+    "Quad ISO @ 60° — Right": {
+      "what": "Right thigh (quadriceps) strength pushing the knee straight, with the knee bent to 60 degrees.",
+      "how": "DynaMo isometric knee extension at 60° flexion; enter force in N."
+    },
+    "10 m sprint": {
+      "what": "Time to sprint 10 metres from a standing start: acceleration. Shorter is better.",
+      "how": "SmartSpeed gates; standing start; best of 2–3."
+    },
+    "20 m sprint": {
+      "what": "Time to sprint 20 metres: acceleration building towards top speed. Shorter is better.",
+      "how": "SmartSpeed gates; same start as the 10 m; best of 2–3."
+    },
+    "30 m sprint": {
+      "what": "Time to sprint 30 metres: acceleration and speed. Shorter is better.",
+      "how": "SmartSpeed gates; best of 2–3."
+    },
+    "5-10-5 (pro-agility)": {
+      "what": "Change-of-direction speed: sprint 5 metres, turn, 10 metres, turn, then 5 metres.",
+      "how": "Pro-agility shuttle timed with SmartSpeed; best of 2."
+    },
+    "AKET deficit vs uninjured": {
+      "what": "How much less the injured leg's knee straightens than the other leg's, with the hip bent. Smaller is better.",
+      "how": "Active knee extension test, hip at 90°; degrees short of the uninjured side."
+    },
+    "PKET deficit vs uninjured": {
+      "what": "Hamstring flexibility gap when the knee is straightened for you, compared with the other leg. Smaller is better.",
+      "how": "Passive knee extension test, hip at 90°; degrees short of the uninjured side."
+    },
+    "SLR % of uninjured side": {
+      "what": "How high the injured leg lifts while kept straight, as a percentage of the other leg.",
+      "how": "Passive straight-leg raise; injured ÷ uninjured angle × 100."
+    },
+    "MHFAKE % of uninjured side": {
+      "what": "Hamstring flexibility with the hip fully bent, as a percentage of the other leg.",
+      "how": "Maximal hip flexion active knee extension; injured ÷ uninjured × 100."
+    },
+    "HHD 90° knee-flex force — injured": {
+      "what": "Injured-leg hamstring strength pulling the heel down, with the knee bent to 90 degrees.",
+      "how": "Hand-held dynamometer, knee at 90° flexion; best of 3 (N)."
+    },
+    "HHD 90° knee-flex % of uninjured": {
+      "what": "Injured-leg hamstring strength at 90 degrees of knee bend, as a percentage of the other leg.",
+      "how": "HHD at 90° knee flexion; injured ÷ uninjured × 100."
+    },
+    "HHD 15° knee-flex force — injured": {
+      "what": "Injured-leg hamstring strength with the knee almost straight (15 degrees of bend).",
+      "how": "Hand-held dynamometer, knee at 15° flexion; best of 3 (N)."
+    },
+    "HHD 45° force — injured": {
+      "what": "Injured-leg hamstring strength with the knee bent to 45 degrees.",
+      "how": "Hand-held dynamometer, knee at 45° flexion; best of 3 (N)."
+    },
+    "Nordic peak force — injured": {
+      "what": "Injured-leg hamstring strength while lowering your body forward under control in a Nordic curl.",
+      "how": "NordBord; slow Nordic lowers; best peak force, injured side."
+    },
+    "Nordic peak-force imbalance": {
+      "what": "The difference in Nordic hamstring strength between your legs, in newtons. Smaller is better.",
+      "how": "NordBord left–right difference in peak force (N)."
+    },
+    "Knee-flexor ECC peak torque @60°/s — injured": {
+      "what": "Injured-leg hamstring strength while the muscle lengthens under load on an isokinetic machine.",
+      "how": "Isokinetic eccentric knee flexion at 60°/s; peak torque (Nm)."
+    },
+    "Knee-flexor CONC peak torque @60°/s diff %": {
+      "what": "How much weaker the injured hamstring is than the other leg when bending the knee. Smaller is better.",
+      "how": "Isokinetic concentric knee flexion at 60°/s; % difference between sides."
+    },
+    "5 m sprint time": {
+      "what": "Time to sprint 5 metres: first-step acceleration. Shorter is better.",
+      "how": "SmartSpeed gates; standing start; best of 2–3."
+    },
+    "10 m sprint time": {
+      "what": "Time to sprint 10 metres: acceleration. Shorter is better.",
+      "how": "SmartSpeed gates; standing start; best of 2–3."
+    },
+    "HaOS score": {
+      "what": "A questionnaire score (0–100) of how the hamstring feels and works in daily life and sport.",
+      "how": "Hamstring Outcome Score, completed by the athlete."
+    },
+    "Pain on palpation — length": {
+      "what": "Length of the tender area along the hamstring when it is pressed. Smaller is better.",
+      "how": "Palpate along the muscle; measure the tender length (cm)."
+    },
+    "IKDC": {
+      "what": "A questionnaire score (0–100) of knee symptoms, function and sport. Higher is better.",
+      "how": "IKDC Subjective Knee Form, completed by the patient."
+    },
+    "KOOS — ADL": {
+      "what": "Questionnaire score (0–100) for how easily you manage daily activities with your knee.",
+      "how": "KOOS Activities of Daily Living subscale."
+    },
+    "KOOS — Pain": {
+      "what": "Questionnaire score (0–100) for knee pain; a higher score means less pain.",
+      "how": "KOOS Pain subscale."
+    },
+    "KOOS — QOL": {
+      "what": "Questionnaire score (0–100) for how much your knee affects your quality of life.",
+      "how": "KOOS Quality of Life subscale."
+    },
+    "KOOS — Sport & Rec": {
+      "what": "Questionnaire score (0–100) for sport and recreation tasks such as running, jumping and twisting.",
+      "how": "KOOS Sport and Recreation subscale."
+    },
+    "KOOS — Symptoms": {
+      "what": "Questionnaire score (0–100) for knee swelling, stiffness and other symptoms; higher means fewer symptoms.",
+      "how": "KOOS Symptoms subscale."
+    },
+    "ACL-RSI": {
+      "what": "A questionnaire score (0–100) of confidence and emotional readiness to return to sport.",
+      "how": "ACL Return to Sport after Injury scale, completed by the patient."
+    },
+    "Cincinnati Knee Score": {
+      "what": "A knee questionnaire score (0–100) covering symptoms and function in daily life and sport.",
+      "how": "Cincinnati Knee Rating System."
+    },
+    "GRS Perceived Function": {
+      "what": "How normal your knee feels overall, rated from 0 to 100.",
+      "how": "Global Rating Scale of perceived function (100 = pre-injury level)."
+    },
+    "Pedi-IKDC": {
+      "what": "The children's version of the IKDC knee questionnaire (0–100).",
+      "how": "Pedi-IKDC, for younger patients."
+    },
+    "Knee extension torque — injured": {
+      "what": "Thigh (quadriceps) strength of the operated leg, straightening the knee on a strength machine.",
+      "how": "Isokinetic or isometric knee extension; peak torque (Nm), injured side."
+    },
+    "Knee flexion torque — injured": {
+      "what": "Hamstring strength of the operated leg, bending the knee on a strength machine.",
+      "how": "Isokinetic or isometric knee flexion; peak torque (Nm), injured side."
+    },
+    "Knee extension LSI": {
+      "what": "Operated-leg thigh (quadriceps) strength as a percentage of the other leg.",
+      "how": "Injured ÷ uninjured knee extension torque × 100."
+    },
+    "Knee flexion LSI": {
+      "what": "Operated-leg hamstring strength as a percentage of the other leg.",
+      "how": "Injured ÷ uninjured knee flexion torque × 100."
+    },
+    "Quadriceps LSI": {
+      "what": "Operated-leg thigh (quadriceps) strength as a percentage of the other leg.",
+      "how": "Enter left and right from the same test; the app works out injured ÷ other side × 100."
+    },
+    "Hamstring LSI": {
+      "what": "Operated-leg hamstring strength as a percentage of the other leg.",
+      "how": "Injured ÷ uninjured hamstring force or torque × 100."
+    },
+    "Quadriceps strength index (90° ISO)": {
+      "what": "Operated-leg thigh strength with the knee bent to 90 degrees, as a percentage of the other leg.",
+      "how": "Isometric knee extension at 90°; injured ÷ uninjured × 100."
+    },
+    "CMJ — Jump height": {
+      "what": "How high you jump from standing on both legs after a quick dip.",
+      "how": "CMJ on ForceDecks, hands on hips; best of 3."
+    },
+    "CMJ — Peak power": {
+      "what": "The most power produced during the jump, relative to body weight.",
+      "how": "CMJ Peak Power / BM (W/kg)."
+    },
+    "CMJ — Concentric impulse": {
+      "what": "The total push into the ground while driving up out of the jump.",
+      "how": "CMJ concentric impulse from ForceDecks (Ns)."
+    },
+    "CMJ — Concentric peak force": {
+      "what": "The highest force produced while driving up out of the jump.",
+      "how": "CMJ concentric peak force from ForceDecks (N)."
+    },
+    "CMJ — Eccentric impulse": {
+      "what": "How much braking force you build while dipping down before the jump.",
+      "how": "CMJ eccentric (braking) impulse from ForceDecks (Ns)."
+    },
+    "CMJ — Take-off impulse": {
+      "what": "How much push you generate to leave the ground, relative to body weight.",
+      "how": "From the CMJ trials, as reported by ForceDecks."
+    },
+    "SJ — P1 concentric impulse": {
+      "what": "The push in the first part of a squat jump, started from a still, bent-knee position.",
+      "how": "Squat jump on ForceDecks (no dip before take-off); phase 1 concentric impulse."
+    },
+    "SJ — P2 concentric impulse": {
+      "what": "The push in the final part of a squat jump, just before take-off.",
+      "how": "Squat jump on ForceDecks; phase 2 concentric impulse."
+    },
+    "SJ — Peak power": {
+      "what": "The most power produced in a squat jump from a still start, relative to body weight.",
+      "how": "Squat jump Peak Power / BM (W/kg)."
+    },
+    "SLCMJ — Jump height (injured)": {
+      "what": "How high you jump off the operated leg alone.",
+      "how": "Single-leg CMJ on ForceDecks, hands on hips; best of 3, injured side."
+    },
+    "SLCMJ — Power/BW (injured)": {
+      "what": "The power the operated leg produces in a single-leg jump.",
+      "how": "Single-leg CMJ peak power, injured side, as reported by ForceDecks."
+    },
+    "SL Drop Jump 15cm — RSI (injured)": {
+      "what": "How springy the operated leg is: jump height compared with time on the ground after a small drop.",
+      "how": "Single-leg drop jump from a 15 cm box on ForceDecks; best RSI, injured side."
+    },
+    "SL Drop Jump 15cm — Jump height (injured)": {
+      "what": "How high the operated leg rebounds after stepping off a 15 cm box.",
+      "how": "Single-leg drop jump from 15 cm; injured side."
+    },
+    "SL Drop Jump 15cm — Ground contact time (injured)": {
+      "what": "How long the operated leg stays on the ground before rebounding. Shorter is better.",
+      "how": "Single-leg drop jump from 15 cm; injured side (s)."
+    },
+    "Single hop LSI": {
+      "what": "How far you hop on the operated leg, as a percentage of the other leg.",
+      "how": "Single hop for distance, best of 3 each leg; injured ÷ uninjured × 100."
+    },
+    "Triple hop LSI": {
+      "what": "Distance covered in three hops on the operated leg, as a percentage of the other leg.",
+      "how": "Triple hop for distance, best of 3 each leg; injured ÷ uninjured × 100."
+    },
+    "Crossover hop LSI": {
+      "what": "Distance covered in three zig-zag hops on the operated leg, as a percentage of the other leg.",
+      "how": "Crossover hop for distance over a 15 cm strip; injured ÷ uninjured × 100."
+    },
+    "6 m timed hop LSI": {
+      "what": "How quickly you hop 6 metres on the operated leg, compared with the other leg.",
+      "how": "6 m timed hop; uninjured time ÷ injured time × 100."
+    },
+    "Single-leg hop for distance (injured)": {
+      "what": "How far you hop forward on the operated leg and land steadily.",
+      "how": "Best of 3 with a controlled landing, injured side (cm)."
+    },
+    "Side hop (injured)": {
+      "what": "How many side-to-side hops over a strip the operated leg can do in 30 seconds.",
+      "how": "Side hop test: hops across two lines 40 cm apart in 30 s; count clean hops."
+    },
+    "SEBT anterior reach composite (injured)": {
+      "what": "How far you can reach forward with one foot while balancing on the operated leg.",
+      "how": "Star Excursion Balance Test, anterior reach as % of leg length."
+    },
+    "split_squat": {
+      "what": "Single-leg strength in a split squat: the heaviest load you can lift 8 times on each leg.",
+      "how": "8RM on each leg; enter the external load in kg."
+    },
+    "sl_seated_calf_vald": {
+      "what": "Seated calf strength: how hard you can push up through the ball of one foot.",
+      "how": "Seated single-leg isometric calf raise on VALD; peak force in N."
+    },
+    "sl_seated_calf_smith": {
+      "what": "Seated calf strength: the heaviest load you can raise on one leg 8 times.",
+      "how": "Smith machine, seated, knee at about 90°; 8RM in kg."
+    },
+    "sl_knee_extension": {
+      "what": "Thigh (quadriceps) strength straightening one knee against a strength gauge.",
+      "how": "Isometric knee extension on the dynamometer; peak force in N."
+    },
+    "sl_bridge": {
+      "what": "Hamstring and glute strength in a one-leg bridge: the heaviest load you can lift 8 times.",
+      "how": "8RM single-leg bridge, knee at 30° flexion; load in kg."
+    },
+    "sl_calf_raise_reps": {
+      "what": "Calf endurance: how many full heel raises you can do on one leg.",
+      "how": "Body weight, full range, steady tempo; stop at fatigue or loss of form."
+    },
+    "sl_calf_raise_loaded": {
+      "what": "Standing calf strength: the heaviest load you can raise on one leg 8 times.",
+      "how": "Standing single-leg calf raise with added load; 8RM in kg."
+    },
+    "prone_hamstring_curl": {
+      "what": "Hamstring strength bending the knee while lying face down.",
+      "how": "Isometric prone knee flexion on the dynamometer; peak force in N."
+    },
+    "hip_abduction": {
+      "what": "Outer-hip strength pushing your leg out to the side.",
+      "how": "Isometric hip abduction on the dynamometer; peak force in N."
+    },
+    "hip_adduction": {
+      "what": "Inner-thigh (groin) strength squeezing your leg in towards the middle.",
+      "how": "Isometric hip adduction, same position as abduction; peak force in N."
+    },
+    "hip_add_abd_ratio": {
+      "what": "The balance between groin and outer-hip strength on each leg.",
+      "how": "Worked out by the app: adduction ÷ abduction."
+    }
+  }
+}

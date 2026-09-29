@@ -41,22 +41,40 @@
     clearTimeout(toast.t);
     toast.t = setTimeout(function () { els.toast.hidden = true; }, 3200);
   }
-  var STATUS_LABEL = { Green: 'Green', Amber: 'Amber', Red: 'Red', 'n/a': 'n/a' };
+  // Status chips say what they mean (On target / Close / Off target, or the rehab wording) and carry a symbol,
+  // so they read without colour: tick, exclamation mark, cross, dash. The words live in engine.js (shared with the PDF).
+  var STATUS_ICON = {
+    Green: '<path d="M2.5 6.4l2.3 2.3 4.7-5.1"/>',
+    Amber: '<path d="M6 2.3v4.5"/><circle cx="6" cy="9.4" r=".5"/>',
+    Red: '<path d="M3.2 3.2l5.6 5.6M8.8 3.2l-5.6 5.6"/>',
+    'n/a': '<path d="M3.2 6h5.6"/>'
+  };
+  function statusIcon(status) {
+    var p = STATUS_ICON[status];
+    return p ? '<svg class="si" viewBox="0 0 12 12" width="12" height="12" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round">' + p + '</svg>' : '';
+  }
+  function wordKind(t) { return t === 'ham' || t === 'acl' ? 'rehab' : 'target'; }
+  function statusWord(status, t) { return E.statusWord(status, wordKind(t || state.tool)); }
   function chip(status, text) {
     var cls = status === 'n/a' ? 'na' : status;
-    return '<span class="chip ' + cls + '">' + esc(text || STATUS_LABEL[status] || status) + '</span>';
+    return '<span class="chip ' + cls + '">' + statusIcon(status) + esc(text || statusWord(status)) + '</span>';
   }
 
   // ------------------------------------------------------------------ state
   var TOOLS = ['screen', 'str', 'ham', 'acl'];
   var TOOL_NAMES = { screen: 'Screening', str: 'LL Strength', ham: 'Hamstring rehab', acl: 'ACL rehab' };
   function freshInterp() { return { text: '', ai: false, basis: '' }; }
+  // For the coach (v8): the clinician's call on training, printed as a band on the report. Never worked out by the
+  // app, never filled in from records and never sent to Claude.
+  var COACH_STATUS = ['Full training', 'Modified', 'Rehab only'];
+  var COACH_LOOK = { 'Full training': 'Green', 'Modified': 'Amber', 'Rehab only': 'Red' };
+  function freshCoach() { return { status: '', mods: '', retest: '' }; }
   function freshTool(tool, keep) {
     keep = keep || {};
-    if (tool === 'screen') return { meta: { name: '', date: todayIso(), sex: '', age: '', sport: '', tester: keep.tester || '', mass: '', notes: '' }, pop: 'general', values: {}, radar: null, collapsed: {}, importLog: null, interp: freshInterp() };
-    if (tool === 'ham') return { meta: { name: '', date: todayIso(), injured: '', clinician: keep.clinician || '', doi: '', weeks: '', sport: '', notes: '' }, phase: null, values: {}, collapsed: {}, interp: freshInterp() };
-    if (tool === 'str') return { meta: { name: '', date: todayIso(), mass: '', sport: '', tester: keep.tester || '', notes: '' }, values: {}, collapsed: {}, interp: freshInterp() };
-    return { meta: { name: '', date: todayIso(), injured: '', surgeon: keep.surgeon || '', graft: '', dos: '', months: '', sport: '', notes: '' }, phase: null, sex: null, values: {}, collapsed: {}, interp: freshInterp() };
+    if (tool === 'screen') return { meta: { name: '', date: todayIso(), sex: '', age: '', sport: '', tester: keep.tester || '', mass: '', notes: '' }, pop: 'general', values: {}, radar: null, collapsed: {}, importLog: null, interp: freshInterp(), coach: freshCoach() };
+    if (tool === 'ham') return { meta: { name: '', date: todayIso(), injured: '', clinician: keep.clinician || '', doi: '', weeks: '', sport: '', notes: '' }, phase: null, values: {}, collapsed: {}, interp: freshInterp(), coach: freshCoach() };
+    if (tool === 'str') return { meta: { name: '', date: todayIso(), mass: '', sport: '', tester: keep.tester || '', notes: '' }, values: {}, collapsed: {}, interp: freshInterp(), coach: freshCoach() };
+    return { meta: { name: '', date: todayIso(), injured: '', surgeon: keep.surgeon || '', graft: '', dos: '', months: '', sport: '', notes: '' }, phase: null, sex: null, values: {}, collapsed: {}, interp: freshInterp(), coach: freshCoach() };
   }
   function loadDraft() {
     try {
@@ -88,6 +106,16 @@
       // boxes filled from scanned notes and not yet checked (kept with the draft so the highlight survives a reload)
       var sc = state[t].scanned;
       if (!sc || typeof sc !== 'object' || Array.isArray(sc)) state[t].scanned = {};
+      // v8: values confirmed with "Looks right" (metric|field -> value~previous), and "Only last time's tests"
+      var ok = state[t].typoOk;
+      if (!ok || typeof ok !== 'object' || Array.isArray(ok)) state[t].typoOk = {};
+      state[t].onlyPrev = state[t].onlyPrev === true;
+      // v8 batch B: the coach band (drafts from v7 and earlier have none)
+      var co = state[t].coach;
+      if (!co || typeof co !== 'object' || Array.isArray(co)) co = state[t].coach = freshCoach();
+      co.status = COACH_STATUS.indexOf(co.status) >= 0 ? co.status : '';
+      co.mods = typeof co.mods === 'string' ? co.mods : '';
+      co.retest = typeof co.retest === 'string' && E.parseDate(co.retest, ['Y-m-d']) ? co.retest : '';
     });
     if (TOOLS.indexOf(state.tool) < 0) state.tool = 'screen';
   }
@@ -191,7 +219,7 @@
     var t = state.tool, s = state[t];
     var out = '<section class="card athlete"><div class="card-head"><h2>Athlete</h2><div class="head-actions">';
     out += '<label class="ghost file-btn scan-btn" id="scanBtn" for="scanFiles">' + CAMERA + '<span data-label>Scan notes</span>' +
-      '<input id="scanFiles" type="file" accept="image/*" multiple aria-label="Scan notes: photo of handwritten results"></label>';
+      '<input id="scanFiles" type="file" accept="image/*" multiple aria-label="Scan notes: photo of handwritten results or a VALD app screenshot"></label>';
     if (t === 'screen') {
       out += '<label class="ghost file-btn" for="valdFiles">Import VALD CSV<input id="valdFiles" type="file" accept=".csv,text/csv" multiple></label>';
     }
@@ -231,18 +259,47 @@
     return out + '</section>';
   }
 
+  // the metric name: a button that opens a plain-English explainer when explainers.json has one (A7)
+  var INFO = '<svg class="m-i" viewBox="0 0 16 16" width="15" height="15" aria-hidden="true" focusable="false"><circle cx="8" cy="8" r="6.7" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 7.3v3.9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="8" cy="4.8" r="1.05" fill="currentColor"/></svg>';
+  var explainOpen = {};                               // which explainers are open (this visit only)
+  function explainer(key) {
+    var x = DATA.explain && DATA.explain.metrics && DATA.explain.metrics[key];
+    return x && typeof x.what === 'string' && x.what.trim() ? x : null;
+  }
+  function nameHtml(tool, key, label, id) {
+    var x = explainer(key);
+    if (!x) return '<div class="m-name">' + esc(label) + '</div>';
+    var open = !!explainOpen[tool + '|' + key];
+    return '<button type="button" class="m-name m-namebtn" data-action="explain" aria-expanded="' + open + '" aria-controls="' + id + '-x" aria-describedby="explainHint">' + esc(label) + INFO + '</button>' +
+      '<div class="m-explain" id="' + id + '-x"' + (open ? '' : ' hidden') + '><p>' + esc(x.what) + '</p>' + (x.how ? '<p class="m-how">' + esc(x.how) + '</p>' : '') + '</div>';
+  }
+  function metricInput(id, nm, v, fieldName, cls, ph, label) {
+    return '<input class="' + cls + '" id="' + id + '-' + fieldName + '" data-field="' + fieldName + '" value="' + esc(v[fieldName]) + '" type="text" inputmode="decimal" enterkeyhint="next" autocomplete="off" placeholder="' + ph + '" aria-label="' + nm + ' ' + label + '">';
+  }
+  // A previous result loaded from the client's records shows as text with a pencil, so Result is the one box to type in.
+  // Tapping the pencil (or a hand-typed previous) gives the normal box.
+  var PENCIL = '<svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16v4z"/><path d="M13.5 6.5l4 4"/></svg>';
+  function fromRecord(v) { return !!(v && v.prevDate && !blank(v.previous) && !v.prevEdit); }
+  function shortDate(iso, ref) {                       // '2026-03-12' -> '12 Mar' ('12 Mar 2025' when the year differs)
+    var d = E.displayIso(iso), a = E.parseDate(iso, ['Y-m-d']), b = E.parseDate(ref || '', ['Y-m-d']);
+    return a && (!b || a.y === b.y) ? d.replace(/ \d{4}$/, '') : d;
+  }
+  function prevHtml(tool, id, nm, v) {
+    if (!fromRecord(v)) return metricInput(id, nm, v, 'previous', 'm-prev', 'Prev.', 'previous result');
+    return '<div class="m-prev m-prevtext" id="' + id + '-previous" data-field="previous"><span class="pv"><span class="vh">Previous result </span><b>' + esc(String(v.previous).trim()) +
+      '</b><span class="pv-d"><span class="vh">, </span>' + esc(shortDate(v.prevDate, state[tool].meta.date)) + '</span></span>' +
+      '<button type="button" class="pv-edit" data-action="prev-edit" aria-label="Edit previous result">' + PENCIL + '</button></div>';
+  }
   function metricRow(tool, m, gi, mi) {
     var v = val(tool, m.name), id = tool + '-' + gi + '-' + mi, nm = esc(m.name);
     var asym = tool === 'screen' && E.isAsym(m.name);
     var hint = '<span class="m-unit">' + esc(m.unit) + '</span>';
     if (m.calc === 'PERKG' || m.calc === 'PERBW') hint = '<span class="m-unit">enter force in N · scored as ' + esc(m.unit) + ' using mass</span>';
     if (m.calc === 'LSI') hint = '<span class="m-unit">enter left & right · LSI = injured ÷ other side</span>';
-    var html = '<div class="metric' + (asym ? ' has-side' : '') + '" data-metric="' + nm + '" data-status="">' +
-      '<div class="m-label"><div class="m-name">' + nm + '</div><div class="m-hint">' + hint +
-      '<span class="m-target"></span><span class="m-calc"></span><span class="m-prevnote"></span></div><div class="m-meter"></div></div>';
-    function input(fieldName, cls, ph, label) {
-      return '<input class="' + cls + '" id="' + id + '-' + fieldName + '" data-field="' + fieldName + '" value="' + esc(v[fieldName]) + '" type="text" inputmode="decimal" enterkeyhint="next" autocomplete="off" placeholder="' + ph + '" aria-label="' + nm + ' ' + label + '">';
-    }
+    var html = '<div class="metric' + (asym ? ' has-side' : '') + '" data-metric="' + nm + '" data-status="" id="' + id + '">' +
+      '<div class="m-label">' + nameHtml(tool, m.name, m.name, id) + '<div class="m-hint">' + hint +
+      '<span class="m-target"></span><span class="m-calc"></span><span class="m-prevnote"></span><span class="m-spark"></span></div><div class="m-meter"></div></div>';
+    function input(fieldName, cls, ph, label) { return metricInput(id, nm, v, fieldName, cls, ph, label); }
     if (m.calc === 'DSI') {
       html += '<div class="m-auto" data-auto>CMJ Peak Force ÷ IMTP Peak Force</div>';
     } else if (m.calc === 'LSI') {
@@ -253,9 +310,9 @@
         html += '<div class="side m-side" role="group" aria-label="' + nm + ' higher side">' +
           ['L', 'R'].map(function (sd) { return '<button type="button" data-side="' + sd + '" aria-pressed="' + (v.side === sd) + '" aria-label="' + (sd === 'L' ? 'Left' : 'Right') + ' higher">' + sd + '</button>'; }).join('') + '</div>';
       }
-      html += input('previous', 'm-prev', 'Prev.', 'previous result');
+      html += prevHtml(tool, id, nm, v);
     }
-    return html + '<div class="m-out" aria-live="off"></div></div>';
+    return html + '<div class="m-out" aria-live="off"></div><div class="m-check" id="' + id + '-check" hidden></div></div>';
   }
 
   function groupsHtml(tool) {
@@ -274,9 +331,9 @@
   function strengthRowHtml(t, i) {
     var v = val('str', t.id), id = 'str-' + i, nm = esc(t.name);
     var how = t.input === 'calc' ? 'adduction \u00f7 abduction, each leg' : ((t.detail ? t.detail + ' \u00b7 ' : '') + INPUT_WORD[t.input]);
-    var html = '<div class="metric lr" data-metric="' + esc(t.id) + '" data-status="">' +
-      '<div class="m-label"><div class="m-name">' + nm + '</div><div class="m-hint"><span class="m-unit">' + esc(how) + '</span>' +
-      '<span class="m-target"></span><span class="m-prevnote"></span></div></div>';
+    var html = '<div class="metric lr" data-metric="' + esc(t.id) + '" data-status="" id="' + id + '">' +
+      '<div class="m-label">' + nameHtml('str', t.id, t.name, id) + '<div class="m-hint"><span class="m-unit">' + esc(how) + '</span>' +
+      '<span class="m-target"></span><span class="m-prevnote"></span><span class="m-spark"></span></div></div>';
     if (t.input === 'calc') {
       html += '<div class="m-auto" data-auto>Worked out from the hip adduction and abduction results</div>';
     } else {
@@ -286,7 +343,7 @@
           (f === 'left' ? 'Left' : 'Right') + ' ' + unit + '" aria-label="' + nm + ', ' + f + ' leg, ' + INPUT_WORD[t.input] + '">';
       });
     }
-    return html + '<div class="m-out" aria-live="off"></div></div>';
+    return html + '<div class="m-out" aria-live="off"></div><div class="m-check" id="' + id + '-check" hidden></div></div>';
   }
   function strengthGroupHtml() {
     var collapsed = !!state.str.collapsed[0];
@@ -300,8 +357,10 @@
     var t = state.tool;
     document.querySelectorAll('.tools button').forEach(function (b) { b.setAttribute('aria-selected', String(b.dataset.tool === t)); });
     els.entry.innerHTML = '<div class="pagehead"><h1>' + esc(HEAD[t][0]) + '</h1><p>' + esc(HEAD[t][1]) + '</p></div>' + athleteCard() +
-      (t === 'str' ? strengthGroupHtml() : groupsHtml(t)) + interpCardHtml();
+      (t === 'str' ? strengthGroupHtml() : groupsHtml(t)) + (t === 'acl' ? rtsCardHtml() : '') + coachCardHtml() + interpCardHtml() +
+      '<span id="explainHint" hidden>Shows what this test measures.</span>';
     if (t === 'screen' && state.screen.importLog) showImportLog(state.screen.importLog);
+    retest.tool = null;                                // work out afresh which rows "Only last time's tests" shows
     refresh();
     fitInterp();
     applyScanMarks();
@@ -309,12 +368,22 @@
   }
 
   // ------------------------------------------------------------------ live updates
-  function meterHtml(result, norm) {
+  // The meter: coloured zones, today's marker and, when there is a previous result, a hollow ring at it (same scale,
+  // clamped to the ends) joined to today's marker by a line coloured by the app's own change call (E.change):
+  // real gain = green, real drop = red, anything else (within noise, or a shift on a band) = grey.
+  function meterHtml(result, norm, prev, kind) {
     var m = E.meter(result, norm);
     if (!m) return '';
     var colour = { Green: 'var(--green)', Amber: 'var(--amber)', Red: 'var(--red)' };
-    return m.segments.map(function (sg) { return '<span style="width:' + sg.width.toFixed(2) + '%;background:' + colour[sg.color] + '"></span>'; }).join('') +
-      '<i style="left:' + m.marker.toFixed(1) + '%"></i>';
+    var html = '<span class="mm-bar">' + m.segments.map(function (sg) { return '<span style="width:' + sg.width.toFixed(2) + '%;background:' + colour[sg.color] + '"></span>'; }).join('') + '</span>';
+    var p = prev == null ? null : E.meterAt(m, prev);
+    if (p !== null) {
+      var a = Math.min(p, m.marker), b = Math.max(p, m.marker), left = p <= m.marker;
+      html += '<span class="mm-trail" style="left:' + a.toFixed(2) + '%;width:' + (b - a).toFixed(2) + '%"></span>' +
+        '<span class="mm-link ' + (kind === 'gain' || kind === 'drop' ? kind : 'same') + '" style="left:calc(' + a.toFixed(2) + '% + ' + (left ? 5 : 0) + 'px);width:max(0px, calc(' + (b - a).toFixed(2) + '% - 5px))"></span>' +
+        '<span class="mm-prev" style="left:' + p.toFixed(2) + '%" title="Previous result"></span>';
+    }
+    return html + '<i style="left:' + m.marker.toFixed(1) + '%"></i>';
   }
 
   function refreshStrength(c) {
@@ -329,9 +398,9 @@
         : 'Add body mass (kg) first: loads and forces are scored relative to it.';
     } else {
       note.className = 'note';
-      note.textContent = 'Green = at or above target, Amber = within ' + pct + '%, Red = further away. Each target also shows what it means for this athlete.';
+      note.textContent = 'On target = at or above the target, Close = within ' + pct + '% of it, Off target = further away. Each target also shows what it means for this athlete.';
     }
-    var tested = 0;
+    var tested = 0, tr = trends('str', c);
     els.entry.querySelectorAll('.metric.lr').forEach(function (el) {
       var id = el.dataset.metric, def = null;
       DATA.str.tests.forEach(function (x) { if (x.id === id) def = x; });
@@ -355,6 +424,10 @@
       if (pn) pn.textContent = (!blank(pv.prevLeft) || !blank(pv.prevRight)) && def.input !== 'calc'
         ? 'prev ' + [['L', pv.prevLeft], ['R', pv.prevRight]].filter(function (x) { return !blank(x[1]); }).map(function (x) { return x[0] + ' ' + E.fmt(E.parseInput(x[1])); }).join(' · ') + ' ' + (def.input === 'reps' ? 'reps' : def.input) + (pv.prevDate ? ' (' + E.displayIso(pv.prevDate) + ')' : '')
         : '';
+      setSpark(el, def.input === 'calc' ? '' : ['L', 'R'].map(function (k) {       // one small line per leg
+        var r = tr[id + '|' + k];
+        return r ? '<span class="sp-leg" aria-hidden="true">' + k + '</span>' + sparkSvg(r, def.dir || 'Higher', (k === 'L' ? 'Left' : 'Right') + ' leg ') : '';
+      }).join(''));
       if (def.input === 'calc') {
         el.querySelector('[data-auto]').innerHTML = res && res.any
           ? 'ADD \u00f7 ABD \u2002' + ['L', 'R'].map(function (k) { return k + ' <b>' + (res.sides[k].value === null ? '\u2013' : esc(E.fmt(res.sides[k].value))) + '</b>'; }).join(' \u00b7 ')
@@ -372,8 +445,9 @@
 
   function refresh() {
     var t = state.tool, c = compute();
+    applyRetest(false);
     refreshClientBar(c);
-    if (t === 'str') { refreshStrength(c); renderSummary(c); renderInterpState(c); saveDraft(); return; }
+    if (t === 'str') { refreshStrength(c); showTypo(typoFlags(t, c)); renderSummary(c); renderInterpState(c); saveDraft(); return; }
     var S = DATA[t];
     // context note under the athlete card
     var note = $('ctxNote');
@@ -393,7 +467,7 @@
       if (auto) note.textContent = auto;
     }
     // metric rows
-    var seen = {};
+    var seen = {}, tr = trends(t, c);
     els.entry.querySelectorAll('.group').forEach(function (gel) {
       var gi = +gel.dataset.group, g = S.groups[gi], entered = 0;
       gel.querySelectorAll('.metric').forEach(function (el, mi) {
@@ -416,16 +490,17 @@
         if (m.calc === 'LSI' && typed && !row) {
           calc.textContent = (state.acl.meta.injured ? 'enter both sides' : 'set the injured side');
         }
+        if (m.calc === 'LSI' && row) calc.textContent = '= ' + E.fmt(row.result) + '%';   // the chip carries the status word
         var pn = el.querySelector('.m-prevnote');
         if (pn) pn.textContent = v.prevDate && !blank(v.previous)
           ? (m.calc === 'LSI' || m.calc === 'DSI' ? 'prev ' + E.fmt(E.parseInput(v.previous)) + (m.calc === 'LSI' ? '%' : '') + ' ' : 'prev ') + '(' + E.displayIso(v.prevDate) + ')'
           : '';
+        setSpark(el, tr[m.name] ? sparkSvg(tr[m.name], m.dir, '') : '');
         if (row) {
           entered++;
           el.dataset.status = row.status || '';
-          var chipText = m.calc === 'LSI' ? E.fmt(row.result) + '%' : row.status;
-          out.innerHTML = chip(row.status, chipText) + (row.change ? '<span class="m-change ' + row.change_kind + '">' + esc(row.change.replace(/\s+/g, ' ')) + '</span>' : '');
-          meter.innerHTML = meterHtml(row.result, row.norm);
+          out.innerHTML = chip(row.status) + (row.change ? '<span class="m-change ' + row.change_kind + '">' + esc(row.change.replace(/\s+/g, ' ')) + '</span>' : '');
+          meter.innerHTML = meterHtml(row.result, row.norm, row.prev, row.change_kind);
           if (!meter.innerHTML) el.dataset.status = '';
         } else {
           el.dataset.status = '';
@@ -437,9 +512,198 @@
       var cnt = gel.querySelector('[data-count]');
       cnt.textContent = entered ? entered + ' of ' + g.metrics.length + ' entered' : g.metrics.length + ' metrics';
     });
+    if (t === 'acl') refreshRts(c);
+    showTypo(typoFlags(t, c));
     renderSummary(c);
     renderInterpState(c);
     saveDraft();
+  }
+
+  // ------------------------------------------------------------------ typo guard
+  // A value outside the metric's usual range ("range" in the norms files, in the unit typed) or more than
+  // E.TYPO_JUMP_PCT % away from the previous result gets an amber outline and a "Check:" line with Looks right.
+  // Nothing is blocked. Looks right is kept in the draft for that exact value (and previous), so any change re-checks.
+  // Values filled by Scan notes are checked the same way.
+  var typoList = [];
+  function typedUnit(u) { return !u || u === 'AU' || u === 'ratio' || u === 'count' ? '' : (u === '%' || u === '°' ? u : ' ' + u); }
+  function typoFlags(t, c) {
+    var s = state[t], ok = s.typoOk || {}, out = [];
+    // row: metric key; fields: the boxes to outline; shown: the value as typed; who: 'Left ' / 'LSI ' / ''
+    // (per leg the jump line names the load typed, since the change line beside it compares × body weight)
+    function add(row, fields, res, shown, unit, token, prevDate, who) {
+      if (!res) return;
+      var key = row + '|' + fields.join('+');
+      if (ok[key] === token) return;
+      out.push({ metric: row, fields: fields, key: key, token: token,
+        text: res.kind === 'range' ? 'Check: ' + who + shown + typedUnit(unit) + ' is outside the usual range'
+          : 'Check: ' + who + (t === 'str' ? shown + typedUnit(unit) + ', ' : '') + E.pySigned(res.pct, 0) + '% vs ' + (prevDate ? shortDate(prevDate, s.meta.date) : 'the previous result') });
+    }
+    function raw(x) { return String(x == null ? '' : x).trim(); }
+    if (t === 'str') {
+      DATA.str.tests.forEach(function (tt) {
+        if (tt.input === 'calc') return;
+        var v = s.values[tt.id] || {};
+        [['left', 'prevLeft', 'Left '], ['right', 'prevRight', 'Right ']].forEach(function (sd) {
+          var cur = E.parseInput(v[sd[0]]);
+          if (cur === null) return;
+          add(tt.id, [sd[0]], E.typoCheck(cur, tt.range, E.parseInput(v[sd[1]]), tt.jump), raw(v[sd[0]]), tt.input,
+            raw(v[sd[0]]) + '~' + raw(v[sd[1]]), v.prevDate, sd[2]);
+        });
+      });
+      return out;
+    }
+    DATA[t].groups.forEach(function (g) {
+      g.metrics.forEach(function (m) {
+        var v = s.values[m.name] || {};
+        if (m.calc === 'DSI') return;                   // worked out, never typed (its two inputs are checked)
+        if (m.calc === 'LSI') {                         // the LSI worked out from left and right
+          var row = c.byName[m.name];
+          if (row) add(m.name, ['left', 'right'], E.typoCheck(row.result, m.range, E.parseInput(v.previous), m.jump), E.fmt(row.result), '%',
+            raw(v.left) + '/' + raw(v.right) + '~' + raw(v.previous), v.prevDate, 'LSI ');
+          return;
+        }
+        var cur = E.parseInput(v.result);
+        if (cur === null) return;
+        var unit = m.calc === 'PERBW' || m.calc === 'PERKG' ? 'N' : m.unit;   // force is typed in N
+        add(m.name, ['result'], E.typoCheck(cur, m.range, E.parseInput(v.previous), m.jump), raw(v.result), unit,
+          raw(v.result) + '~' + raw(v.previous), v.prevDate, '');
+      });
+    });
+    return out;
+  }
+  function showTypo(flags) {
+    typoList = flags;
+    var byRow = {};
+    flags.forEach(function (f) { (byRow[f.metric] = byRow[f.metric] || []).push(f); });
+    els.entry.querySelectorAll('.metric').forEach(function (el) {
+      var list = byRow[el.dataset.metric] || [], box = el.querySelector('.m-check'), want = {};
+      list.forEach(function (f) { f.fields.forEach(function (fd) { want[fd] = true; }); });
+      el.querySelectorAll('input[data-field]').forEach(function (inp) {
+        var on = !!want[inp.dataset.field];
+        inp.classList.toggle('typo', on);
+        if (on && box) inp.setAttribute('aria-describedby', box.id); else inp.removeAttribute('aria-describedby');
+      });
+      if (!box) return;
+      var html = list.map(function (f) {
+        return '<div class="mc-line"><span class="mc-t">' + statusIcon('Amber') + esc(f.text) + '</span>' +
+          '<button type="button" class="quiet mc-ok" data-action="typo-ok" data-key="' + esc(f.key) + '" data-token="' + esc(f.token) + '">Looks right</button></div>';
+      }).join('');
+      if (box._html !== html) { box.innerHTML = html; box._html = html; }
+      box.hidden = !list.length;
+    });
+  }
+  function typoOk(b) {
+    var t = state.tool, row = b.closest('.metric');
+    (state[t].typoOk || (state[t].typoOk = {}))[b.dataset.key] = b.dataset.token;
+    refresh();
+    // keep the place without opening the keyboard: the next check in the row, else the metric name
+    var next = row && (row.querySelector('.mc-ok') || row.querySelector('.m-namebtn'));
+    if (next) { try { next.focus({ preventScroll: true }); } catch (e) { next.focus(); } }
+  }
+  function checkFlagHtml() {
+    var n = typoList.length;
+    return n ? '<button type="button" class="quiet check-flag" data-action="goto-check">' + statusIcon('Amber') + n + (n === 1 ? ' value to check' : ' values to check') + '</button>' : '';
+  }
+  function gotoCheck() {
+    var box = els.entry.querySelector('.metric:not([hidden]) .m-check:not([hidden])');
+    if (!box) return;
+    var row = box.closest('.metric'), g = row.closest('.group');
+    if (g && g.classList.contains('collapsed')) {
+      state[state.tool].collapsed[+g.dataset.group] = false;
+      g.classList.remove('collapsed');
+      g.querySelector('.group-head').setAttribute('aria-expanded', 'true');
+      saveDraft();
+    }
+    row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    var btn = row.querySelector('.mc-ok');
+    if (btn) setTimeout(function () { try { btn.focus({ preventScroll: true }); } catch (e) { btn.focus(); } }, 350);
+  }
+
+  // ------------------------------------------------------------------ retest the same tests
+  // With a returning client's previous results loaded, "Only last time's tests" hides the rows with no previous
+  // result (rows that already have a result stay), and groups left empty. The rows shown are worked out when the
+  // switch is used or the page is drawn, not on every keystroke, so a row never vanishes while it is being typed in.
+  var retest = { tool: null, on: false, keys: null, n: 0, total: 0 };
+  function retestActive(t) {
+    var s = state[t], h = s.hist;
+    return !!(s.onlyPrev && h && h.n && h.key === E.nameKey(s.meta.name));
+  }
+  function retestKeys(t) {
+    var s = state[t], keys = {}, total = 0;
+    function has(v, f) { return !blank(v[f]); }
+    if (t === 'str') {
+      DATA.str.tests.forEach(function (tt) {
+        total++;
+        var v = s.values[tt.id] || {};
+        if (tt.input !== 'calc' && (has(v, 'prevLeft') || has(v, 'prevRight') || has(v, 'left') || has(v, 'right'))) keys[tt.id] = 1;
+      });
+      // the hip ratio comes with the hip tests it is worked out from
+      DATA.str.tests.forEach(function (tt) { if (tt.input === 'calc' && (tt.from || []).some(function (f) { return keys[f]; })) keys[tt.id] = 1; });
+    } else {
+      var val0 = function (n) { return s.values[n] || {}; };
+      DATA[t].groups.forEach(function (g) {
+        g.metrics.forEach(function (m) {
+          total++;
+          var v = val0(m.name);
+          var now = m.calc === 'LSI' ? has(v, 'left') || has(v, 'right')
+            : m.calc === 'DSI' ? has(val0('CMJ Peak Force'), 'result') && has(val0('IMTP Peak Force'), 'result') : has(v, 'result');
+          if (has(v, 'previous') || now) keys[m.name] = 1;
+        });
+      });
+    }
+    return { keys: keys, n: Object.keys(keys).length, total: total };
+  }
+  function applyRetest(force) {
+    var t = state.tool, on = retestActive(t);
+    if (!force && retest.tool === t && retest.on === on) return;
+    var k = on ? retestKeys(t) : null;
+    retest = { tool: t, on: on, keys: k ? k.keys : null, n: k ? k.n : 0, total: k ? k.total : 0 };
+    els.entry.querySelectorAll('.metric').forEach(function (el) { el.hidden = !!(on && !retest.keys[el.dataset.metric]); });
+    els.entry.querySelectorAll('.group').forEach(function (g) { g.hidden = on && !g.querySelector('.metric:not([hidden])'); });
+  }
+  function toggleRetest() {
+    var t = state.tool;
+    state[t].onlyPrev = !state[t].onlyPrev;
+    retest.tool = null;
+    refresh();
+    if (state[t].onlyPrev) {
+      var first = els.entry.querySelector('.group:not(.collapsed):not([hidden]) .metric:not([hidden]) input.m-in');
+      if (first) first.focus();
+    } else {
+      var tb = els.entry.querySelector('[data-action="retest"]');
+      if (tb) tb.focus();
+    }
+  }
+
+  // ------------------------------------------------------------------ keep the screen awake while testing
+  // While the athlete on screen has results entered, ask for a screen wake lock on each tap or keystroke, and again
+  // when the app comes back to the front. Clear all lets it go. Silent: no UI, and any refusal is ignored.
+  var wake = { lock: null, pending: false };
+  function hasResults(t) {
+    var v = state[t].values;
+    return Object.keys(v).some(function (k) { return v[k] && (!blank(v[k].result) || !blank(v[k].left) || !blank(v[k].right)); });
+  }
+  function releaseWake() {
+    var lock = wake.lock;
+    wake.lock = null;
+    if (!lock) return;
+    try { var p = lock.release(); if (p && p.catch) p.catch(function () {}); } catch (e) { /* already released */ }
+  }
+  function keepAwake() {
+    try {
+      var wl = navigator.wakeLock;
+      if (!wl || typeof wl.request !== 'function' || !state) return;
+      if (!hasResults(state.tool)) { releaseWake(); return; }
+      if (wake.lock || wake.pending || document.visibilityState === 'hidden') return;
+      wake.pending = true;
+      Promise.resolve(wl.request('screen')).then(function (lock) {
+        wake.pending = false;
+        if (!lock) return;
+        if (!hasResults(state.tool)) { wake.lock = lock; releaseWake(); return; }
+        wake.lock = lock;
+        if (lock.addEventListener) lock.addEventListener('release', function () { if (wake.lock === lock) wake.lock = null; });
+      }, function () { wake.pending = false; });
+    } catch (e) { wake.pending = false; }
   }
 
   function autoTime(t) {
@@ -455,11 +719,129 @@
     return '';
   }
 
+  // ------------------------------------------------------------------ for the coach
+  // Training status (Full training / Modified / Rehab only; tapping the chosen one again clears it), an optional line
+  // of modifications and the next retest date. Printed as a band at the top of the report when any of them is set.
+  // Kept with the session in the client's record, but never filled in from records and never sent to Claude.
+  function coachCardHtml() {
+    var co = state[state.tool].coach;
+    return '<section class="card coach" id="coachCard" aria-labelledby="coachTitle">' +
+      '<div class="card-head"><h2 id="coachTitle">For the coach</h2></div>' +
+      '<p class="coach-help">Optional. Printed as a band at the top of the report. Your call: the app never works this out.</p>' +
+      '<div class="coach-fields"><div class="f coach-status"><span id="coachStatusL">Training status</span>' +
+      '<div class="seg coach-seg" role="group" aria-labelledby="coachStatusL">' + COACH_STATUS.map(function (o) {
+        return '<button type="button" data-coach-status="' + esc(o) + '" data-look="' + COACH_LOOK[o] + '" aria-pressed="' + (co.status === o) + '">' + esc(o) + '</button>';
+      }).join('') + '</div></div>' +
+      '<label class="f coach-retest" for="coachRetest"><span>Next retest</span><input id="coachRetest" data-coach="retest" type="date" value="' + esc(co.retest) + '"></label>' +
+      '<label class="f coach-mods" for="coachMods"><span>Modifications</span><input id="coachMods" data-coach="mods" type="text" maxlength="120" value="' + esc(co.mods) +
+      '" placeholder="Optional, e.g. no max-velocity sprinting" autocapitalize="sentences" autocomplete="off" enterkeyhint="done"></label></div></section>';
+  }
+  function coachSet(co) { return !!(co && (co.status || !blank(co.mods) || co.retest)); }
+  function coachData(t) {                             // what the report prints (the date in the report's style)
+    var co = state[t].coach;
+    if (!coachSet(co)) return null;
+    return { status: co.status, mods: String(co.mods || '').replace(/\s+/g, ' ').trim(), retest: co.retest ? E.displayIso(co.retest) : '' };
+  }
+  function setCoachStatus(b) {
+    var co = state[state.tool].coach, v = b.dataset.coachStatus;
+    co.status = co.status === v ? '' : v;
+    b.parentNode.querySelectorAll('button').forEach(function (x) { x.setAttribute('aria-pressed', String(co.status === x.dataset.coachStatus)); });
+    saveDraft();
+  }
+
+  // ------------------------------------------------------------------ ACL return-to-sport criteria
+  // The clinic's own checklist ("rts" in acl_norms.json), kept apart from the phase norms: each criterion is met,
+  // not yet or not tested, with "X of Y met" on the card, in the summary panel, on the report and in the AI payload.
+  // Decision support only: the app compares the numbers with the clinic's thresholds; the clinician decides.
+  var RTS_CHIP = { met: 'Green', not: 'Red', untested: 'n/a' };
+  function aclMonths() {                              // the months the report prints: typed, or from the two dates
+    var m = state.acl.meta;
+    if (!blank(m.months)) return E.parseInput(m.months);
+    var d = daysBetween(m.dos, m.date);
+    return d !== null && d >= 0 ? Math.floor(d / 30.4375) : null;
+  }
+  function rtsData(c) {
+    var R = DATA.acl && DATA.acl.rts;
+    if (!R || !Array.isArray(R.criteria) || !c || !c.groups) return null;
+    var results = {}, units = {};
+    E.flatten(c.groups).forEach(function (r) { var n = E.num(r.result); if (n !== null) results[r.name] = n; });
+    DATA.acl.groups.forEach(function (g) { g.metrics.forEach(function (m) { units[m.name] = m.unit || ''; }); });
+    var out = E.rtsCheck(R, results, { months: aclMonths() }, units);
+    return out.total ? out : null;
+  }
+  function rtsCardHtml() {
+    var R = DATA.acl && DATA.acl.rts;
+    if (!R || !Array.isArray(R.criteria) || !R.criteria.length) return '';
+    return '<section class="card rts" id="rtsCard" tabindex="-1" aria-labelledby="rtsTitle">' +
+      '<div class="card-head"><h2 id="rtsTitle">' + esc(R.title || 'Return-to-sport criteria') + '</h2><span class="rts-count" id="rtsCount"></span></div>' +
+      '<ul class="rts-list" id="rtsList"></ul>' + (R.note ? '<p class="fine rts-note">' + esc(R.note) + '</p>' : '') + '</section>';
+  }
+  function refreshRts(c) {
+    var list = $('rtsList'), card = $('rtsCard');
+    if (!list) return;
+    var r = rtsData(c);
+    card.hidden = !r;
+    if (!r) return;
+    $('rtsCount').textContent = E.rtsSummary(r);
+    var html = r.rows.map(function (row) {
+      return '<li class="rts-row" data-status="' + row.status + '"><div class="rts-l"><b>' + esc(row.label) + '</b><span class="rts-t">needs ' + esc(row.target) +
+        (row.fallback ? ' · from ' + esc(row.metric) : '') + '</span></div><span class="rts-v">' + esc(row.text) + '</span>' + chip(RTS_CHIP[row.status], E.RTS_WORDS[row.status]) + '</li>';
+    }).join('');
+    if (list._html !== html) { list.innerHTML = html; list._html = html; }
+  }
+  function rtsSumHtml(c) {                            // the one line in the summary panel (taps through to the card)
+    var r = rtsData(c);
+    return r ? '<button type="button" class="quiet rts-sum" data-action="goto-rts"><span class="rts-sum-t">' + esc(r.title) + '</span><b>' + esc(E.rtsSummary(r)) + '</b></button>' : '';
+  }
+  function gotoRts() {
+    var card = $('rtsCard');
+    if (!card) return;
+    card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    setTimeout(function () { try { card.focus({ preventScroll: true }); } catch (e) { card.focus(); } }, 350);
+  }
+  function rtsLine(r) {                               // the AI payload's line (no dates, no names)
+    var not = r.rows.filter(function (x) { return x.status === 'not'; }).map(function (x) { return x.label + ' ' + x.text + ' (needs ' + x.target + ')'; });
+    var un = r.rows.filter(function (x) { return x.status === 'untested'; }).map(function (x) { return x.label; });
+    return 'Return-to-sport criteria (set by the clinic; decision support only, the return-to-sport decision rests with the clinician): ' +
+      r.met + ' of ' + r.total + ' met' + (not.length ? '; not yet: ' + not.join(', ') : '') + (un.length ? '; not tested: ' + un.join(', ') : '') + '.';
+  }
+
+  // ------------------------------------------------------------------ trend sparklines
+  // With the client's record loaded, a metric tested today and in at least two earlier sessions (of the last five, as
+  // on the report's Progress table) gets a tiny line beside its "prev" note: missing values skipped, the available
+  // points joined, the last point coloured like the change since the first.
+  function trends(t, c) {
+    var s = state[t], h = s.hist, key = E.nameKey(s.meta.name);
+    var cl = h && h.key === key ? clients.clients[key] : null, out = {};
+    if (!cl) return out;
+    E.progress(cl.sessions, t, { date: s.meta.date || todayIso(), results: currentResults(t, c) }, 5).rows.forEach(function (r) {
+      var v = r.values;
+      if (v[v.length - 1] === null) return;                                     // not tested today
+      if (v.slice(0, -1).filter(function (x) { return x !== null; }).length >= 2) out[r.metric] = r;
+    });
+    return out;
+  }
+  function sparkSvg(r, dir, who) {
+    var n = r.values.length, pts = [];
+    r.values.forEach(function (v, i) { if (v !== null) pts.push([i, v]); });
+    var ys = pts.map(function (q) { return q[1]; }), lo = Math.min.apply(null, ys), hi = Math.max.apply(null, ys);
+    var W = 46, H = 16, padX = 3.5, padY = 3.5;
+    var xy = pts.map(function (q) { return [padX + (W - 2 * padX) * q[0] / (n - 1), hi === lo ? H / 2 : padY + (H - 2 * padY) * (hi - q[1]) / (hi - lo)]; });
+    var d = r.last - r.first, good = dir === 'Higher' ? d > 0 : (dir === 'Lower' ? d < 0 : null);
+    var f = function (v) { return String(Math.round(v * 10) / 10); }, e = xy[xy.length - 1];
+    return '<svg class="spark ' + (d === 0 || good === null ? 'same' : (good ? 'gain' : 'drop')) + '" viewBox="0 0 ' + W + ' ' + H + '" width="' + W + '" height="' + H +
+      '" role="img" aria-label="' + esc((who ? who + 'trend' : 'Trend') + ' over ' + pts.length + ' tests: ' + ys.map(E.fmt).join(', ')) + '">' +
+      '<polyline points="' + xy.map(function (q) { return f(q[0]) + ',' + f(q[1]); }).join(' ') + '"/>' +
+      xy.slice(0, -1).map(function (q) { return '<circle cx="' + f(q[0]) + '" cy="' + f(q[1]) + '" r="1.4"/>'; }).join('') +
+      '<circle class="sp-last" cx="' + f(e[0]) + '" cy="' + f(e[1]) + '" r="2.7"/></svg>';
+  }
+  function setSpark(el, html) {
+    var sk = el.querySelector('.m-spark');
+    if (sk && sk._h !== html) { sk.innerHTML = html; sk._h = html; }
+  }
+
   // ------------------------------------------------------------------ rendering: summary + dock
-  var TALLY = {
-    screen: ['Green', 'Amber', 'Red'],
-    rehab: ['On / ahead', 'Within 1 SD', '>1 SD behind']
-  };
+  var TALLY = { screen: E.TALLY_WORDS.target, rehab: E.TALLY_WORDS.rehab };
   function blocker(c) {
     if (state.tool === 'str') {
       if (c.rows.length) return '';
@@ -476,9 +858,9 @@
       : t === 'str'
         ? '<h2>Strength summary</h2><p class="against">Each leg against <b>BASE Health strength targets</b></p>'
         : '<h2>Phase progress</h2><p class="against"><b>' + esc(state[t].phase) + (t === 'acl' ? ' · ' + esc(state.acl.sex) : '') + '</b> targets</p>';
-    var tally = '<div class="tally"><div class="g"><b>' + c.counts.Green + '</b><span>' + labels[0] + '</span></div>' +
-      '<div class="a"><b>' + c.counts.Amber + '</b><span>' + labels[1] + '</span></div>' +
-      '<div class="r"><b>' + c.counts.Red + '</b><span>' + labels[2] + '</span></div></div>';
+    var tally = '<div class="tally"><div class="g"><b>' + c.counts.Green + '</b><span>' + statusIcon('Green') + esc(labels[0]) + '</span></div>' +
+      '<div class="a"><b>' + c.counts.Amber + '</b><span>' + statusIcon('Amber') + esc(labels[1]) + '</span></div>' +
+      '<div class="r"><b>' + c.counts.Red + '</b><span>' + statusIcon('Red') + esc(labels[2]) + '</span></div></div>';
     var list;
     if (t === 'str') {
       if (!c.rows.length) {
@@ -502,38 +884,47 @@
         return '<li>' + chip(r.status) + '<span class="pn">' + esc(r.name) + '</span><span class="pd">= ' + esc(val) + ' · needs ' + esc(r.target) + '</span></li>';
       }).join('') + '</ol>';
     }
-    var html = '<div class="sum"><div class="sum-scroll">' + head + tally + '<h3>' + (t === 'screen' ? 'Top priorities <small>worst first</small>' : (t === 'str' ? 'Below target <small>worst first</small>' : 'Behind target <small>worst first</small>')) + '</h3>' + list;
+    var html = '<div class="sum"><div class="sum-scroll">' + head + tally + (t === 'acl' ? rtsSumHtml(c) : '') + '<h3>' + (t === 'screen' ? 'Top priorities <small>worst first</small>' : (t === 'str' ? 'Below target <small>worst first</small>' : 'Behind target <small>worst first</small>')) + '</h3>' + list;
     if (t === 'screen' && c.radarOptions.length) {
       var full = c.radarPicked.length >= 6;
-      html += '<h3>Radar graph <small>pick 3–6 for page 1</small></h3><div class="picks">' + c.radarOptions.map(function (o) {
+      html += '<h3>Profile chart <small>pick 3–6 for page 1</small></h3><div class="picks">' + c.radarOptions.map(function (o) {
         var on = c.radarPicked.indexOf(o[0]) >= 0;
         return '<button type="button" data-radar="' + esc(o[0]) + '" aria-pressed="' + on + '"' + (!on && full ? ' disabled' : '') + '>' + esc(o[1]) + '</button>';
       }).join('') + '</div>';
-      if (c.radarPicked.length < 3) html += '<p class="fine">The radar needs at least 3 metrics; with fewer it is left off the report.</p>';
+      html += '<p class="fine picks-note">' + (c.radarPicked.length < 3 ? 'The profile needs at least 3 metrics; with fewer it is left off the report.'
+        : c.radarPicked.length <= 4 ? 'With 3–4 picks the report shows bars (% of target); pick 5 or 6 for a radar.' : 'With 5–6 picks the report shows a radar; pick 3 or 4 for bars.') + '</p>';
     }
     var why = blocker(c);
-    html += '</div><div class="sum-foot">' + interpFlagHtml(t, c) + '<button type="button" class="primary make" data-action="report"' + (why ? ' disabled' : '') + '>Create PDF report</button>' +
+    html += '</div><div class="sum-foot">' + checkFlagHtml() + interpFlagHtml(t, c) + '<button type="button" class="primary make" data-action="report"' + (why ? ' disabled' : '') + '>Create PDF report</button>' +
       '<p class="fine">' + esc(why || 'Opens a preview you can share by AirDrop, Mail or Messages, or save to Files.') + '</p>' +
       '<p class="fine client-line">' + esc(clientLine(t)) + '</p></div></div>';
     els.summary.innerHTML = html;
-    els.dock.innerHTML = '<div class="dt"><a href="#summary" class="g" aria-label="' + labels[0] + '">' + c.counts.Green + '</a><a href="#summary" class="a" aria-label="' + labels[1] + '">' + c.counts.Amber + '</a><a href="#summary" class="r" aria-label="' + labels[2] + '">' + c.counts.Red + '</a></div>' +
+    var nCheck = typoList.length;
+    els.dock.innerHTML = '<div class="dt">' + [['g', 'Green', 0], ['a', 'Amber', 1], ['r', 'Red', 2]].map(function (x) {
+      return '<a href="#summary" class="' + x[0] + '" aria-label="' + esc(labels[x[2]] + ': ' + c.counts[x[1]]) + '">' + statusIcon(x[1]) + c.counts[x[1]] + '</a>';
+    }).join('') + '</div>' +
+      (nCheck ? '<button type="button" class="dock-check" data-action="goto-check">' + statusIcon('Amber') + nCheck + (nCheck === 1 ? ' value to check' : ' values to check') + '</button>' : '') +
       '<button type="button" class="primary" data-action="report"' + (why ? ' disabled' : '') + '>Create report</button>';
+    els.dock.classList.toggle('has-check', nCheck > 0);   // on a phone the check takes the tally's place (the tally stays in the summary)
   }
 
   // ------------------------------------------------------------------ input handling
   function onInput(e) {
     var el = e.target, t = state.tool;
     if (el.id === 'interpText') { onInterpInput(el); return; }
+    if (el.dataset.coach) { state[t].coach[el.dataset.coach] = el.value; saveDraft(); keepAwake(); return; }
     unmarkScanned(el);
     if (el.dataset.meta) {
       state[t].meta[el.dataset.meta] = el.value;
       refresh();
       if (el.dataset.meta === 'name') suggestClients(t, el.value);
     } else if (el.dataset.field) {
-      var row = el.closest('.metric');
-      val(t, row.dataset.metric)[el.dataset.field] = el.value;
+      var row = el.closest('.metric'), v = val(t, row.dataset.metric);
+      v[el.dataset.field] = el.value;
+      if (el.dataset.field === 'previous') v.prevDate = '';     // typed by hand now, no longer the saved record's value
       refresh();
     }
+    keepAwake();
   }
   function onChange(e) {
     var el = e.target, t = state.tool;
@@ -541,11 +932,39 @@
     else if (el.dataset.choice === 'phase') { state[t].phase = el.value; refresh(); }
     else if (el.id === 'valdFiles') importVald(el.files);
     else if (el.id === 'scanFiles') { var picked = Array.prototype.slice.call(el.files || []); el.value = ''; startScan(picked); }
+    else if (el.dataset.coach) { state[t].coach[el.dataset.coach] = el.value; saveDraft(); }
+    keepAwake();
   }
   function onClick(e) {
     var b = e.target.closest('button');
     if (!b) return;
+    onButton(b);
+    keepAwake();
+  }
+  function onButton(b) {
     var t = state.tool;
+    if (b.dataset.action === 'explain') {
+      var box = document.getElementById(b.getAttribute('aria-controls')), open = b.getAttribute('aria-expanded') !== 'true';
+      var mk = t + '|' + b.closest('.metric').dataset.metric;
+      b.setAttribute('aria-expanded', String(open));
+      if (box) box.hidden = !open;
+      if (open) explainOpen[mk] = 1; else delete explainOpen[mk];
+      return;
+    }
+    if (b.dataset.action === 'prev-edit') {
+      var prow = b.closest('.metric'), pv = val(t, prow.dataset.metric);
+      pv.prevEdit = true;
+      b.closest('.m-prevtext').outerHTML = metricInput(prow.id, esc(prow.dataset.metric), pv, 'previous', 'm-prev', 'Prev.', 'previous result');
+      var pin = document.getElementById(prow.id + '-previous');
+      if (pin) { pin.focus(); try { pin.select(); } catch (e) { /* not selectable */ } }
+      refresh();
+      return;
+    }
+    if (b.dataset.coachStatus) { setCoachStatus(b); return; }
+    if (b.dataset.action === 'goto-rts') { gotoRts(); return; }
+    if (b.dataset.action === 'typo-ok') { typoOk(b); return; }
+    if (b.dataset.action === 'goto-check') { gotoCheck(); return; }
+    if (b.dataset.action === 'retest') { toggleRetest(); return; }
     if (b.dataset.seg) {
       var key = b.dataset.seg, cur = state[t].meta[key];
       state[t].meta[key] = cur === b.dataset.value ? '' : b.dataset.value;
@@ -598,7 +1017,8 @@
   function onKey(e) {
     if (e.key !== 'Enter' || !e.target.matches('input')) return;
     e.preventDefault();
-    var stops = els.entry.querySelectorAll('.athlete input:not([type=file]):not([type=date]), .group:not(.collapsed) input.m-result, .group:not(.collapsed) input.m-in');
+    var live = '.group:not(.collapsed):not([hidden]) .metric:not([hidden]) ';          // skips rows the retest filter hides
+    var stops = els.entry.querySelectorAll('.athlete input:not([type=file]):not([type=date]), ' + live + 'input.m-result, ' + live + 'input.m-in');
     var next = null;
     for (var i = 0; i < stops.length; i++) {
       if (e.target.compareDocumentPosition(stops[i]) & Node.DOCUMENT_POSITION_FOLLOWING) { next = stops[i]; break; }
@@ -687,12 +1107,17 @@
     if (blocker(c)) return null;
     var it = state[t].interp, interp = blank(it.text) ? null : { text: String(it.text).trim(), ai: !!it.ai };
     var progress = progressData(t, c);
+    // each priority carries its plain-English explainer (printed under it in smaller text)
+    function explained(list, keyOf) {
+      return list.map(function (r) { var x = explainer(keyOf(r)); return Object.assign({}, r, { what: x ? String(x.what).trim() : '' }); });
+    }
     if (t === 'str') {
       return {
         file: fileName('_strength.pdf'),
         rep: window.BHReport.strength({
           meta: { name: m.name, date: E.displayIso(m.date), mass: m.mass, sport: m.sport, tester: m.tester, notes: m.notes },
-          tests: c.tests, counts: c.counts, prios: c.prios, amberPct: DATA.str.amber_pct, interp: interp, progress: progress
+          tests: c.tests, counts: c.counts, prios: explained(c.prios, function (r) { return r.id; }), amberPct: DATA.str.amber_pct, interp: interp, progress: progress,
+          coach: coachData(t)
         })
       };
     }
@@ -703,8 +1128,8 @@
         file: fileName('_report.pdf'),
         rep: window.BHReport.screening({
           meta: { name: m.name, date: E.displayIso(m.date), sport: m.sport, tester: m.tester, age: m.age, sex: m.sex, mass: m.mass, notes: m.notes },
-          popLabel: c.pop.label, groups: c.groups, counts: c.counts, prios: c.prios,
-          radarKeys: c.radarPicked.map(function (k) { return [k, labels[k]]; }), interp: interp, progress: progress
+          popLabel: c.pop.label, groups: c.groups, counts: c.counts, prios: explained(c.prios, function (r) { return r.name; }),
+          radarKeys: c.radarPicked.map(function (k) { return [k, labels[k]]; }), interp: interp, progress: progress, coach: coachData(t)
         })
       };
     }
@@ -713,7 +1138,7 @@
       return {
         file: fileName('_hamstring.pdf'),
         rep: window.BHReport.rehab({
-          kind: 'ham', phase: state.ham.phase, groups: c.groups, counts: c.counts, disclaimer: DATA.ham.disclaimer || '', interp: interp, progress: progress,
+          kind: 'ham', phase: state.ham.phase, groups: c.groups, counts: c.counts, disclaimer: DATA.ham.disclaimer || '', interp: interp, progress: progress, coach: coachData(t),
           meta: { name: m.name, date: E.displayIso(m.date), injured: m.injured, clinician: m.clinician, weeks: blank(m.weeks) ? auto(m.doi, 7) : m.weeks, sport: m.sport, notes: m.notes }
         })
       };
@@ -722,6 +1147,7 @@
       file: fileName('_acl.pdf'),
       rep: window.BHReport.rehab({
         kind: 'acl', phase: state.acl.phase, sex: state.acl.sex, groups: c.groups, counts: c.counts, disclaimer: DATA.acl.disclaimer || '', interp: interp, progress: progress,
+        coach: coachData(t), rts: rtsData(c),
         meta: { name: m.name, date: E.displayIso(m.date), injured: m.injured, graft: m.graft, surgeon: m.surgeon, months: blank(m.months) ? auto(m.dos, 30.4375) : m.months, sport: m.sport, notes: m.notes }
       })
     };
@@ -802,6 +1228,7 @@
     });
     Object.keys(s.meta).forEach(function (k) { if (k !== 'date' && !blank(s.meta[k])) details = true; });
     if (s.interp && !blank(s.interp.text)) details = true;
+    if (coachSet(s.coach)) details = true;
     return { results: n, any: n > 0 || details || !!s.importLog, name: String(s.meta.name || '').trim() };
   }
   function setBackgroundInert(on) {
@@ -866,6 +1293,7 @@
     aiGen++;
     aiBusy = null; interpMsg = { tool: null, kind: '', text: '' }; interpUndo = null;
     scanBusy = null; scanInfo = null; scanGen++;
+    releaseWake();                                     // nothing entered now: the screen may sleep again
     // drop the last report built (it holds the athlete's details) and its preview
     current = { file: null, blob: null, title: '' };
     els.pages.innerHTML = '';
@@ -897,7 +1325,8 @@
     for (var i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; }
     return ('0000000' + h.toString(16)).slice(-8);
   }
-  var STATUS_WORD = { Green: 'Green', Amber: 'Amber', Red: 'Red', 'n/a': 'no target available' };
+  // the AI reads the same status words as the chips (defined in the status key at the top of the payload)
+  function STATUS_WORD(status, t) { return status === 'n/a' ? 'no target available' : E.statusWord(status, wordKind(t)); }
   var CHANGE_WORDS = { gain: 'real improvement', drop: 'real decline', noise: 'within normal test variation, not a real change', shift: 'meaningful change' };
   function changeWords(r) {
     if (!r.change) return '';
@@ -905,20 +1334,20 @@
     var delta = String(r.change).replace(/^[^\d+\-−]*/, '').replace(/\s+/g, ' ').trim().replace(/\s*\(([^)]*)\)$/, ', $1');
     return 'vs previous test: ' + (CHANGE_WORDS[r.change_kind] || 'changed') + (delta ? ' (' + delta + ')' : '');
   }
-  function rowLine(r, targetWord) {
+  function rowLine(r, targetWord, t) {
     var v = E.fmt(r.result) + (r.unit ? ' ' + r.unit : '') + (r.side ? ' (' + (r.side === 'L' ? 'left' : 'right') + ' side higher)' : '');
     var scored = r.target && r.target !== 'n/a';
     var parts = [r.name + ': ' + v, scored ? targetWord + ' ' + r.target : 'no ' + targetWord + ' available'];
-    if (scored) parts.push(STATUS_WORD[r.status] || r.status || 'not scored');
+    if (scored) parts.push(r.status ? STATUS_WORD(r.status, t) : 'not scored');
     var ch = changeWords(r);
     if (ch) parts.push(ch);
     return '- ' + parts.join(' | ');
   }
-  function groupLines(groups, targetWord) {
+  function groupLines(groups, targetWord, t) {
     var out = [];
     groups.forEach(function (g) {
       out.push(clean1(g.title));
-      g.rows.forEach(function (r) { out.push(rowLine(r, targetWord)); });
+      g.rows.forEach(function (r) { out.push(rowLine(r, targetWord, t)); });
     });
     return out;
   }
@@ -934,23 +1363,25 @@
     var d2 = daysBetween(m.dos, m.date); return d2 !== null && d2 >= 0 ? String(Math.floor(d2 / 30.4375)) : '';
   }
   function interpPayload(t, c) {
-    var m = state[t].meta, L = [];
-    var totals = 'Totals: ' + c.counts.Green + ' Green, ' + c.counts.Amber + ' Amber, ' + c.counts.Red + ' Red.';
+    var m = state[t].meta, L = [], rehab = t === 'ham' || t === 'acl';
+    var totals = 'Totals: ' + (rehab
+      ? c.counts.Green + ' on / ahead, ' + c.counts.Amber + ' within 1 SD, ' + c.counts.Red + ' behind.'
+      : c.counts.Green + ' on target, ' + c.counts.Amber + ' close, ' + c.counts.Red + ' off target.');
     if (t === 'screen') {
       L.push('Report: athlete performance and readiness screen (VALD force plate and related tests).');
       L.push('Compared against: ' + clean1(c.pop.label) + '.');
       var who = joinBits([clean1(m.sex), blank(m.age) ? '' : clean1(m.age) + ' years', blank(m.mass) ? '' : clean1(m.mass) + ' kg', blank(m.sport) ? '' : 'sport: ' + clean1(m.sport)]);
       if (who) L.push('Athlete: ' + who + '.');
-      L.push('Status key: Green = meets the target; Amber = close to the target; Red = well short of the target.');
+      L.push('Status key: On target = meets the target; Close = close to the target; Off target = well short of the target.');
       L.push(totals);
       L.push('Results (metric: result | target | status | change since the previous test, if given):');
-      L = L.concat(groupLines(c.groups, 'target'));
+      L = L.concat(groupLines(c.groups, 'target', t));
     } else if (t === 'str') {
       var pct = DATA.str.amber_pct == null ? 5 : DATA.str.amber_pct;
       L.push('Report: lower-limb strength and capacity battery. Each leg is scored against a target relative to body weight (BW). RM = repetition maximum.');
       var who2 = joinBits([blank(m.mass) ? '' : 'body mass ' + clean1(m.mass) + ' kg', blank(m.sport) ? '' : 'sport: ' + clean1(m.sport)]);
       if (who2) L.push('Athlete: ' + who2 + '.');
-      L.push('Status key: Green = at or above target; Amber = up to ' + pct + '% below target; Red = more than ' + pct + '% below target. For the hip ratio the target is a band, and Amber is within ' + pct + '% outside it.');
+      L.push('Status key: On target = at or above target; Close = up to ' + pct + '% below target; Off target = more than ' + pct + '% below target. For the hip ratio the target is a band, and Close is within ' + pct + '% outside it.');
       L.push(totals.replace('Totals:', 'Totals (each leg counted separately):'));
       L.push('Results (test: left leg | right leg | target | difference between legs):');
       c.tests.forEach(function (tt) {
@@ -960,7 +1391,7 @@
           var raw = tt.input === 'calc' ? 'adduction ' + E.fmt(cell.parts[0]) + ' N ÷ abduction ' + E.fmt(cell.parts[1]) + ' N'
             : E.fmt(cell.input) + ' ' + (tt.input === 'reps' ? 'reps' : tt.input);
           var cw = cell.change ? ', ' + changeWords({ change: cell.change, change_kind: cell.change_kind }) : '';
-          return label + ' ' + cell.text + (cell.text.indexOf(raw) === 0 ? '' : ' (' + raw + ')') + ' ' + (STATUS_WORD[cell.status] || cell.status) + cw;
+          return label + ' ' + cell.text + (cell.text.indexOf(raw) === 0 ? '' : ' (' + raw + ')') + ' ' + STATUS_WORD(cell.status, t) + cw;
         });
         var diff = E.diffText(tt.diff);
         L.push('- ' + tt.name + (tt.detail ? ' (' + tt.detail + ')' : '') + ': ' + sides.join(' | ') + ' | target ' + tt.target + (diff ? ' | ' + diff : ''));
@@ -975,10 +1406,12 @@
         since ? (acl ? 'months since surgery: ' : 'weeks since injury: ') + since : '', acl && !blank(m.graft) ? 'graft: ' + clean1(m.graft) : '',
         blank(m.sport) ? '' : 'sport: ' + clean1(m.sport)]);
       L.push('Context: ' + ctx + '.');
-      L.push('Status key: Green = at or ahead of the typical case at this phase; Amber = within 1 SD behind; Red = more than 1 SD behind.');
+      L.push('Status key: On / ahead = at or ahead of the typical case at this phase; Within 1 SD = within 1 SD behind; Behind = more than 1 SD behind.');
       L.push(totals);
       L.push('Results (metric: result | phase target | status | change since the previous test, if given):');
-      L = L.concat(groupLines(c.groups, 'phase target'));
+      L = L.concat(groupLines(c.groups, 'phase target', t));
+      var rts = acl ? rtsData(c) : null;
+      if (rts) L.push(rtsLine(rts));
     }
     return L.join('\n');
   }
@@ -1160,7 +1593,7 @@
     els.aiErr.hidden = true;
     els.aiRemove.hidden = !k;
     els.aiKeyState.textContent = k ? 'A key ending in ' + k.slice(-4) + ' is saved on this device. Paste a new one to replace it.' : KEY_NOTE;
-    els.aiLead.textContent = lead || 'Drafting interpretations and reading scanned notes use Claude through the clinic’s own Claude API key.';
+    els.aiLead.textContent = lead || 'Drafting interpretations and reading scanned notes or VALD screenshots use Claude through the clinic’s own Claude API key.';
     openModal(els.aiDialog, els.aiKey);
   }
   function saveAiKey() {
@@ -1199,14 +1632,17 @@
   var SCAN_DEFAULT = {
     effort: 'medium', max_tokens: 8000, timeout_s: 120, max_edge: 2000, max_photos: 6,
     system: [
-      'You read handwritten results from photos of a clinician’s testing notes at BASE Health Noosa, a sports physiotherapy clinic in Queensland, Australia, and match them to the tests listed in the request.',
-      'The notes are on the clinician’s own paper, so labels may be abbreviated or shorthand (for example SS for split squat, KE for knee extension, CMJ for countermovement jump, JH for jump height, Add/Abd for hip adduction/abduction, L/R for left/right, Inj for injured). Match each written result to the listed test it clearly belongs to.',
+      'You read test results from photos taken at BASE Health Noosa, a sports physiotherapy clinic in Queensland, Australia, and match them to the tests listed in the request. Each photo is either the clinician’s handwritten testing notes or a screenshot of a VALD app (ForceDecks, NordBord, ForceFrame, DynaMo, SmartSpeed or VALD Hub).',
+      'Handwritten notes are on the clinician’s own paper, so labels may be abbreviated or shorthand (for example SS for split squat, KE for knee extension, CMJ for countermovement jump, JH for jump height, Add/Abd for hip adduction/abduction, L/R for left/right, Inj for injured). Match each written result to the listed test it clearly belongs to.',
       'Copy each number exactly as written, as a plain number without units, using a full stop for decimals. Never calculate anything: no averages, differences, percentages, ratios or LSIs. If a listed test is a calculated value that is not written on the paper, but the numbers it would come from are, leave the test out and put those numbers in unclear so the clinician can work it out.',
       'If several trials are written for one test and none is marked as the result, use the best one (the highest, or the lowest where lower is better) and say so in unclear.',
-      'Only return a reading when you can tell both which test it belongs to and what the number is. If a number is hard to read, or you are unsure which test or side it belongs to, give your best reading and also describe the doubt in unclear (for example: "Nordic R: 318 or 348?"). Never invent values for tests that are not on the paper.',
-      'If a result is written in a different unit from the one listed (for example lb instead of kg), do not convert it: leave it out and mention it in unclear.',
-      'Dates are written Australian style (day/month/year). Give the test date as YYYY-MM-DD if one is written, otherwise an empty string. Give body mass in kg if it is written, otherwise an empty string.',
-      'Keep each unclear note short and name the test it is about. Ignore names and any other personal details on the paper, and never include them in your answer.'
+      'VALD screenshots: copy each value exactly as the app displays it (the same digits and decimal places), without units. A value VALD itself displays, such as an imbalance %, RSI-modified or a force per body mass, counts as written, so copy it; still never work anything out yourself.',
+      'Match VALD labels to the listed tests by meaning. For example: "Jump Height (Imp-Mom)" or "Jump Height (Flight Time)" is Jump Height (cm); "Peak Power / BM" is Peak Power (W/kg); "RSI-modified" is RSI-modified; on an IMTP screen "Peak Vertical Force" is IMTP Peak Force and "Peak Vertical Force / BM" is IMTP Relative Force; NordBord left and right max force are Nordic Peak Force — Left and Nordic Peak Force — Right; the NordBord imbalance % is Nordic L/R Imbalance, with side = the stronger side VALD shows (L or R); ForceFrame adduction and abduction forces are Adductor Peak Force and Abductor Peak Force. On the other sections use the listed test that matches: for example CMJ — Jump height or Nordic peak force — injured on the rehab sections, and Hip adduction or Hip abduction, left and right, on LL Strength. If a side is not clear on the screen, leave it out and say so in unclear.',
+      'Where a VALD screen shows several reps or trials and highlights a best or average result (for example in bold, starred, or labelled Best or Avg), use the highlighted result. If nothing is highlighted, use the best rep (the highest, or the lowest where lower is better) and say so in unclear.',
+      'Only return a reading when you can tell both which test it belongs to and what the number is. If a number is hard to read, or you are unsure which test or side it belongs to, give your best reading and also describe the doubt in unclear (for example: "Nordic R: 318 or 348?"). Never invent values for tests that are not on the paper or screen.',
+      'If a result is written or displayed in a different unit from the one listed (for example lb instead of kg, or N instead of N/kg), do not convert it: leave it out and mention it in unclear. This applies to handwriting and screenshots alike.',
+      'Dates are written Australian style (day/month/year); on a screenshot read the date as the app shows it. Give the test date as YYYY-MM-DD if one is written, otherwise an empty string. Give body mass in kg if it is written or shown, otherwise an empty string.',
+      'Keep each unclear note short and name the test it is about. Ignore names and any other personal details on the paper or screen, and never include them in your answer.'
     ]
   };
   function scanCfg() {
@@ -1256,7 +1692,7 @@
     L.push('Tests (id: name — what to look for — fields to return):');
     list.forEach(function (x) { L.push(x.id + ': ' + x.name + ' — ' + x.what + ' — ' + x.fields.join(', ')); });
     L.push('');
-    L.push('Return every reading you can match. Use field "result" for a single value, "left" and "right" for each side, and "side" with the value L or R for the higher side (asymmetry tests only). Leave out tests that are not on the paper.');
+    L.push('Return every reading you can match. Use field "result" for a single value, "left" and "right" for each side, and "side" with the value L or R for the higher side (asymmetry tests only). Leave out tests that are not on the paper or screen.');
     return L.join('\n');
   }
   function scanSchema(list) {
@@ -1324,7 +1760,7 @@
     if (!photos.length) return fail('That file isn’t a photo. Choose a photo of your notes.');
     if (!aiKey()) {
       openAiSettings(function () { if (state.tool === t) startScan(files); },
-        'To read photos of your notes, the app needs a Claude API key. You only need to do this once on each device.');
+        'To read photos of your notes or VALD screenshots, the app needs a Claude API key. You only need to do this once on each device.');
       return;
     }
     if (navigator.onLine === false) return fail('No internet connection. Connect to scan your notes, or type the results in.');
@@ -1363,7 +1799,7 @@
     }).then(function () {
       if (gen !== scanGen) return;
       scanBusy = null;
-      if (state.tool === t && scanInfo && scanInfo.undo) { showFilled(t); refresh(); applyScanMarks(); }
+      if (state.tool === t && scanInfo && scanInfo.undo) { showFilled(t); retest.tool = null; refresh(); applyScanMarks(); }
       renderScanBar();
       var bar = $('scanBar');
       if (bar && !bar.hidden && bar.scrollIntoView && state.tool === t) {
@@ -1490,7 +1926,7 @@
     var extra = [info.date ? 'test date' : '', info.mass ? 'body mass' : ''].filter(Boolean);
     var html = '<span class="scan-ico">' + CAMERA + '</span>' + (info.kind === 'empty'
       ? '<span class="scan-msg">Nothing on the photo matched the ' + esc(TOOL_NAMES[t]) + ' tests' + (extra.length ? ' (only the ' + extra.join(' and ') + ')' : '') + '. Check you’re on the right tab, or try a clearer photo.</span>'
-      : '<span class="scan-msg"><b>Filled ' + info.n + (info.n === 1 ? ' result' : ' results') + (extra.length ? ' and the ' + extra.join(' and ') : '') + ' from your notes.</b> Check the highlighted boxes against the paper before creating the report.</span>');
+      : '<span class="scan-msg"><b>Filled ' + info.n + (info.n === 1 ? ' result' : ' results') + (extra.length ? ' and the ' + extra.join(' and ') : '') + ' from your notes.</b> Check the highlighted boxes against the paper or screenshot before creating the report.</span>');
     if (info.undo) html += '<button type="button" class="quiet scan-undo" data-action="scan-undo">Undo</button>';
     html += close;
     if (info.unclear && info.unclear.length) {
@@ -1507,6 +1943,7 @@
   var clients = { v: 1, clients: {} };
   var SCORE_UNITS = { xBW: '× BW', xBWf: '× BW', pctBW: '% BW', Nkg: 'N/kg', reps: 'reps', ratio: '' };
   var PREFILL = { screen: ['sex', 'age', 'sport', 'tester'], str: ['sport', 'tester'], ham: ['injured', 'doi', 'clinician', 'sport'], acl: ['injured', 'dos', 'graft', 'surgeon', 'sport'] };
+  var SAME_TOOL_ONLY = { injured: true, doi: true, dos: true, graft: true, surgeon: true, clinician: true };
   function loadClients() {
     try {
       var c = JSON.parse(localStorage.getItem(HIST));
@@ -1548,6 +1985,8 @@
     if (t === 'screen') meta.pop = state.screen.pop;
     if (t === 'ham' || t === 'acl') meta.phase = state[t].phase;
     if (t === 'acl') meta.normSex = state.acl.sex;
+    var co = state[t].coach;                          // kept with the session, never filled back in from records
+    if (coachSet(co)) meta.coach = { status: co.status, mods: String(co.mods || '').trim(), retest: co.retest };
     var sess = { tool: t, date: date, savedAt: new Date().toISOString(), meta: meta, values: compactValues(t), results: currentResults(t, c),
       mass: E.parseInput(m.mass), interp: blank(state[t].interp.text) ? '' : String(state[t].interp.text).trim() };
     var cl = clients.clients[key] || (clients.clients[key] = { name: name, sessions: [] });
@@ -1578,6 +2017,8 @@
     PREFILL[t].forEach(function (f) {
       if (!blank(m[f])) return;
       for (var i = all.length - 1; i >= 0; i--) {
+        // injury details belong to that injury: an ACL test never takes the injured side from a hamstring record
+        if (SAME_TOOL_ONLY[f] && all[i].tool !== t) continue;
         var v = all[i].meta && all[i].meta[f];
         if (!blank(v)) { m[f] = v; break; }
       }
@@ -1601,13 +2042,19 @@
       DATA[t].groups.forEach(function (g) {
         g.metrics.forEach(function (mm) {
           var v = val(t, mm.name), p = E.previousFor(cl.sessions, t, mm.name, date);
-          if (!p) { v.prevDate = ''; return; }
+          v.prevEdit = false;
+          if (!p) {
+            if (v.prevDate) v.previous = '';           // a value from an earlier load (e.g. another client) goes; typed ones stay
+            v.prevDate = '';
+            return;
+          }
           var raw = p.session.values && p.session.values[mm.name];
           v.previous = raw && !blank(raw.result) ? raw.result : String(p.value);
           v.prevDate = p.date; n++; dates[p.date] = 1;
         });
       });
     }
+    if (!s.hist || s.hist.key !== key) s.onlyPrev = false;   // "Only last time's tests" starts off for a different client
     s.hist = { key: key, name: cl.name, n: n, dates: Object.keys(dates).sort(), date: date };
     hideSuggest();
     render();
@@ -1639,10 +2086,13 @@
     var h = s.hist;
     if (cl && h && h.key === key) {
       bar.hidden = false; bar.className = 'client-bar loaded';
+      var on = retest.on && retest.tool === t;
       bar.innerHTML = '<b>' + esc(cl.name) + '</b>' + (h.n
         ? ' — previous results loaded from ' + esc(h.dates.map(E.displayIso).join(', ')) + ' (' + h.n + (h.n === 1 ? ' test' : ' tests') + ')'
         : ' — no earlier ' + TOOL_NAMES[t] + ' sessions; details filled in') +
-        (h.date !== date ? ' <button type="button" class="quiet" data-action="reload-history">Reload for this date</button>' : '');
+        (h.date !== date ? ' <button type="button" class="quiet" data-action="reload-history">Reload for this date</button>' : '') +
+        (h.n ? ' <button type="button" class="quiet retest" data-action="retest">' + (on ? 'Show all tests' : 'Only last time’s tests') + '</button>' +
+          (on ? '<span class="retest-n">Showing ' + retest.n + ' of ' + retest.total + ' tests</span>' : '') : '');
     } else if (cl) {
       var earlier = earlierCount(cl, t, date), total = cl.sessions.length;
       bar.hidden = false; bar.className = 'client-bar';
@@ -1762,8 +2212,11 @@
   function start() {
     // the AI settings are optional: the app works without them (the Draft button explains)
     var ai = fetchJson('interpretation.json').catch(function () { return null; });
-    Promise.all([fetchJson('norms.json'), fetchJson('hamstring_norms.json'), fetchJson('acl_norms.json'), fetchJson('strength_norms.json'), ai]).then(function (r) {
+    // so are the metric explainers: without them the names are plain text and the PDF has no explainer lines
+    var explain = fetchJson('explainers.json').catch(function () { return null; });
+    Promise.all([fetchJson('norms.json'), fetchJson('hamstring_norms.json'), fetchJson('acl_norms.json'), fetchJson('strength_norms.json'), ai, explain]).then(function (r) {
       DATA.screen = r[0]; DATA.ham = r[1]; DATA.acl = r[2]; DATA.str = r[3]; DATA.ai = r[4];
+      DATA.explain = r[5] && r[5].metrics && typeof r[5].metrics === 'object' ? r[5] : { metrics: {} };
       clients = loadClients();
       state = loadDraft() || { v: 1, tool: 'screen', screen: freshTool('screen'), str: freshTool('str'), ham: freshTool('ham'), acl: freshTool('acl') };
       tidyState();
@@ -1775,7 +2228,7 @@
       els.dock.addEventListener('click', onClick);
       document.querySelector('.tools').addEventListener('click', function (e) {
         var b = e.target.closest('button[data-tool]');
-        if (b) switchTool(b.dataset.tool);
+        if (b) { switchTool(b.dataset.tool); keepAwake(); }
       });
       els.clearAll.addEventListener('click', openClearDialog);
       els.clearCancel.addEventListener('click', function () { closeModal(); });
@@ -1795,7 +2248,10 @@
       // tapping a suggested client must not blur the name box before the tap lands
       els.entry.addEventListener('pointerdown', function (e) { if (e.target.closest('.suggest')) e.preventDefault(); });
       els.entry.addEventListener('focusout', function (e) {
-        if (e.target.dataset && e.target.dataset.meta === 'name') setTimeout(function () { hideSuggest(); }, 200);
+        if (e.target.dataset && e.target.dataset.meta === 'name') setTimeout(function () {
+          var a = document.activeElement;                 // back in the name box by now: keep its fresh suggestions
+          if (!(a && a.dataset && a.dataset.meta === 'name')) hideSuggest();
+        }, 200);
       });
       els.back.addEventListener('click', closeReport);
       els.save.addEventListener('click', savePdf);
@@ -1804,6 +2260,8 @@
         if (openModalEl) { onModalKey(e); return; }
         if (e.key === 'Escape' && !els.sheet.hidden) closeReport();
       });
+      // the system lets a screen wake lock go when the app is hidden: ask again on coming back, if still needed
+      document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible') keepAwake(); });
       render();
     }).catch(function (err) {
       els.entry.innerHTML = '<section class="card error-card"><div class="card-head"><h2>Norms not found</h2></div>' +

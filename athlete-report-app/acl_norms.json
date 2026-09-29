@@ -19,61 +19,71 @@
           "name": "IKDC",
           "unit": "AU",
           "dir": "Higher",
-          "thr": 5
+          "thr": 5,
+          "range": [0, 100]
         },
         {
           "name": "KOOS — ADL",
           "unit": "AU",
           "dir": "Higher",
-          "thr": 5
+          "thr": 5,
+          "range": [0, 100]
         },
         {
           "name": "KOOS — Pain",
           "unit": "AU",
           "dir": "Higher",
-          "thr": 5
+          "thr": 5,
+          "range": [0, 100]
         },
         {
           "name": "KOOS — QOL",
           "unit": "AU",
           "dir": "Higher",
-          "thr": 5
+          "thr": 5,
+          "range": [0, 100]
         },
         {
           "name": "KOOS — Sport & Rec",
           "unit": "AU",
           "dir": "Higher",
-          "thr": 5
+          "thr": 5,
+          "range": [0, 100]
         },
         {
           "name": "KOOS — Symptoms",
           "unit": "AU",
           "dir": "Higher",
-          "thr": 5
+          "thr": 5,
+          "range": [0, 100]
         },
         {
           "name": "ACL-RSI",
           "unit": "AU",
           "dir": "Higher",
-          "thr": 5
+          "thr": 5,
+          "range": [0, 100]
         },
         {
           "name": "Cincinnati Knee Score",
           "unit": "AU",
           "dir": "Higher",
-          "thr": 5
+          "thr": 5,
+          "range": [0, 100]
         },
         {
           "name": "GRS Perceived Function",
           "unit": "AU",
           "dir": "Higher",
-          "thr": 5
+          "thr": 5,
+          "range": [0, 100]
         },
         {
           "name": "Pedi-IKDC",
           "unit": "AU",
           "dir": "Higher",
-          "thr": 5
+          "thr": 5,
+          "range": [0, 100]
         }
       ]
     },
@@ -84,44 +94,51 @@
           "name": "Knee extension torque — injured",
           "unit": "Nm",
           "dir": "Higher",
-          "thr": 10
+          "thr": 10,
+          "range": [10, 500]
         },
         {
           "name": "Knee flexion torque — injured",
           "unit": "Nm",
           "dir": "Higher",
-          "thr": 10
+          "thr": 10,
+          "range": [10, 400]
         },
         {
           "name": "Knee extension LSI",
           "unit": "%",
           "dir": "Higher",
-          "thr": 5
+          "thr": 5,
+          "range": [10, 160]
         },
         {
           "name": "Knee flexion LSI",
           "unit": "%",
           "dir": "Higher",
-          "thr": 5
+          "thr": 5,
+          "range": [10, 160]
         },
         {
           "name": "Quadriceps LSI",
           "unit": "%",
           "dir": "Higher",
           "thr": 5,
-          "calc": "LSI"
+          "calc": "LSI",
+          "range": [10, 160]
         },
         {
           "name": "Hamstring LSI",
           "unit": "%",
           "dir": "Higher",
-          "thr": 5
+          "thr": 5,
+          "range": [10, 160]
         },
         {
           "name": "Quadriceps strength index (90° ISO)",
           "unit": "%",
           "dir": "Higher",
-          "thr": 5
+          "thr": 5,
+          "range": [10, 160]
         }
       ]
     },
@@ -132,55 +149,64 @@
           "name": "CMJ — Jump height",
           "unit": "cm",
           "dir": "Higher",
-          "thr": 1
+          "thr": 1,
+          "range": [3, 80]
         },
         {
           "name": "CMJ — Peak power",
           "unit": "W/kg",
           "dir": "Higher",
-          "thr": 1
+          "thr": 1,
+          "range": [10, 100]
         },
         {
           "name": "CMJ — Concentric impulse",
           "unit": "Ns",
           "dir": "Higher",
-          "thr": 5
+          "thr": 5,
+          "range": [20, 600]
         },
         {
           "name": "CMJ — Concentric peak force",
           "unit": "N",
           "dir": "Higher",
-          "thr": 20
+          "thr": 20,
+          "range": [200, 8000]
         },
         {
           "name": "CMJ — Eccentric impulse",
           "unit": "Ns",
           "dir": "Higher",
-          "thr": 5
+          "thr": 5,
+          "range": [10, 600]
         },
         {
           "name": "CMJ — Take-off impulse",
           "unit": "BW/s",
           "dir": "Higher",
-          "thr": 0.02
+          "thr": 0.02,
+          "range": [0.05, 5]
         },
         {
           "name": "SJ — P1 concentric impulse",
           "unit": "Ns",
           "dir": "Higher",
-          "thr": 5
+          "thr": 5,
+          "range": [10, 600]
         },
         {
           "name": "SJ — P2 concentric impulse",
           "unit": "Ns",
           "dir": "Higher",
-          "thr": 5
+          "thr": 5,
+          "range": [5, 400]
         },
         {
           "name": "SJ — Peak power",
           "unit": "W/kg",
           "dir": "Higher",
-          "thr": 1
+          "thr": 1,
+          "range": [10, 100]
         }
       ]
     },
@@ -191,31 +217,36 @@
           "name": "SLCMJ — Jump height (injured)",
           "unit": "cm",
           "dir": "Higher",
-          "thr": 1
+          "thr": 1,
+          "range": [1, 50]
         },
         {
           "name": "SLCMJ — Power/BW (injured)",
           "unit": "W/kg",
           "dir": "Higher",
-          "thr": 50
+          "thr": 50,
+          "range": [5, 6000]
         },
         {
           "name": "SL Drop Jump 15cm — RSI (injured)",
           "unit": "AU",
           "dir": "Higher",
-          "thr": 0.03
+          "thr": 0.03,
+          "range": [0.05, 3]
         },
         {
           "name": "SL Drop Jump 15cm — Jump height (injured)",
           "unit": "cm",
           "dir": "Higher",
-          "thr": 1
+          "thr": 1,
+          "range": [1, 60]
         },
         {
           "name": "SL Drop Jump 15cm — Ground contact time (injured)",
           "unit": "s",
           "dir": "Lower",
-          "thr": 0.02
+          "thr": 0.02,
+          "range": [0.08, 1.5]
         }
       ]
     },
@@ -226,37 +257,43 @@
           "name": "Single hop LSI",
           "unit": "%",
           "dir": "Higher",
-          "thr": 5
+          "thr": 5,
+          "range": [10, 160]
         },
         {
           "name": "Triple hop LSI",
           "unit": "%",
           "dir": "Higher",
-          "thr": 5
+          "thr": 5,
+          "range": [10, 160]
         },
         {
           "name": "Crossover hop LSI",
           "unit": "%",
           "dir": "Higher",
-          "thr": 5
+          "thr": 5,
+          "range": [10, 160]
         },
         {
           "name": "6 m timed hop LSI",
           "unit": "%",
           "dir": "Higher",
-          "thr": 5
+          "thr": 5,
+          "range": [10, 160]
         },
         {
           "name": "Single-leg hop for distance (injured)",
           "unit": "cm",
           "dir": "Higher",
-          "thr": 5
+          "thr": 5,
+          "range": [10, 350]
         },
         {
           "name": "Side hop (injured)",
           "unit": "count",
           "dir": "Higher",
-          "thr": 3
+          "thr": 3,
+          "range": [0, 150]
         }
       ]
     },
@@ -267,7 +304,8 @@
           "name": "SEBT anterior reach composite (injured)",
           "unit": "%",
           "dir": "Higher",
-          "thr": 3
+          "thr": 3,
+          "range": [30, 160]
         }
       ]
     }
@@ -1018,5 +1056,21 @@
       }
     }
   },
-  "disclaimer": "Aggregated ACLR research norms (VALD Research Normative Data Report; quad LSI from Schwery et al. 2022 IJSPT for 3/6/9 mo). Green = at or ahead of the TYPICAL ACLR case at this phase (study average); Amber = within 1 SD behind; Red = >1 SD behind. Quadriceps LSI is auto-calculated as operated ÷ non-operated limb × 100 from the Left/Right values you enter (operated side is taken from 'Injured side'). IMPORTANT: a phase-appropriate (green) early LSI is NOT the same as return-to-sport clearance — the widely used RTS criterion is quadriceps LSI ≥ 90% (with hop symmetry ≥ 90% and criteria met), typically not before 9 months. Norms are split by sex; the age band for each metric is shown in its source tag. 9-month force-plate data are male-only in the VALD source. Absolute force-plate values come from different studies across phases and are NOT directly comparable phase-to-phase. Decision SUPPORT only — not return-to-play clearance. Apply clinical judgement."
+  "disclaimer": "Aggregated ACLR research norms (VALD Research Normative Data Report; quad LSI from Schwery et al. 2022 IJSPT for 3/6/9 mo). On / ahead = at or ahead of the TYPICAL ACLR case at this phase (study average); Within 1 SD = up to 1 SD behind; Behind = more than 1 SD behind. Quadriceps LSI is auto-calculated as operated ÷ non-operated limb × 100 from the Left/Right values you enter (operated side is taken from 'Injured side'). IMPORTANT: a phase-appropriate (on / ahead) early LSI is NOT the same as return-to-sport clearance — the widely used RTS criterion is quadriceps LSI ≥ 90% (with hop symmetry ≥ 90% and criteria met), typically not before 9 months. Norms are split by sex; the age band for each metric is shown in its source tag. 9-month force-plate data are male-only in the VALD source. Absolute force-plate values come from different studies across phases and are NOT directly comparable phase-to-phase. Decision SUPPORT only — not return-to-play clearance. Apply clinical judgement.",
+  "rts": {
+    "title": "Return-to-sport criteria",
+    "note": "Decision support only: the return-to-sport decision rests with the treating clinician.",
+    "about": "The clinic's own return-to-sport checklist, separate from the phase norms. Each criterion uses the first metric in its list that has a result (or \"meta\": \"months\" = months since surgery, typed or worked out from the surgery and test dates) and is met at or above \"min\" (or at or below \"max\"). Edit the numbers, labels or list to change the checklist.",
+    "criteria": [
+      { "label": "Quadriceps strength LSI", "metrics": ["Quadriceps LSI", "Knee extension LSI"], "min": 90 },
+      { "label": "Hamstring strength LSI", "metrics": ["Hamstring LSI", "Knee flexion LSI"], "min": 90 },
+      { "label": "Single hop LSI", "metrics": ["Single hop LSI"], "min": 90 },
+      { "label": "Triple hop LSI", "metrics": ["Triple hop LSI"], "min": 90 },
+      { "label": "Crossover hop LSI", "metrics": ["Crossover hop LSI"], "min": 90 },
+      { "label": "6 m timed hop LSI", "metrics": ["6 m timed hop LSI"], "min": 90 },
+      { "label": "IKDC", "metrics": ["IKDC"], "min": 90 },
+      { "label": "ACL-RSI", "metrics": ["ACL-RSI"], "min": 65 },
+      { "label": "Time since surgery", "meta": "months", "min": 9 }
+    ]
+  }
 }

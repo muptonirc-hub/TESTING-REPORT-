@@ -76,6 +76,19 @@
 
   function isEmptyObj(o) { return !o || typeof o !== 'object' || Object.keys(o).length === 0; }
 
+  // ---------------------------------------------------------------- status words (screen, PDF and AI payload)
+  // Statuses stay Green / Amber / Red inside the app and in saved records; what people read says what each
+  // one means. Screening and LL Strength compare with a target, the rehab tabs with the typical case at the phase.
+  var STATUS_WORDS = {
+    target: { Green: 'On target', Amber: 'Close', Red: 'Off target', 'n/a': 'No target' },
+    rehab: { Green: 'On / ahead', Amber: 'Within 1 SD', Red: 'Behind', 'n/a': 'No target' }
+  };
+  var TALLY_WORDS = { target: ['On target', 'Close', 'Off target'], rehab: ['On / ahead', 'Within 1 SD', '>1 SD behind'] };
+  function statusWord(status, kind) {
+    var w = STATUS_WORDS[kind === 'rehab' ? 'rehab' : 'target'];
+    return w[status] || String(status || '');
+  }
+
   // ---------------------------------------------------------------- engine.py
   function status(result, norm) {
     var r = num(result);
@@ -166,7 +179,8 @@
         rows.push({
           name: name, unit: m.unit, result: result, status: status(result, norm),
           target: targetStr(norm), source: (norm && norm.source) || '', norm: norm,
-          change: ch[0], change_kind: ch[1], side: inp.side || ''
+          change: ch[0], change_kind: ch[1], side: inp.side || '',
+          prev: num(prevForChange)                   // the previous result in the scored unit (for the meter)
         });
       });
       if (rows.length) groups.push({ title: g.title, rows: rows });
@@ -210,7 +224,7 @@
         rows.push({
           name: name, unit: m.unit, result: result, status: status(result, norm),
           target: targetStr(norm), source: (norm && norm.source) || '', norm: norm,
-          side: '', change: ch[0], change_kind: ch[1]
+          side: '', change: ch[0], change_kind: ch[1], prev: num(inp.previous)
         });
       });
       if (rows.length) groups.push({ title: g.title, rows: rows });
@@ -301,7 +315,7 @@
       .reduce(function (w, s) { return (WORST_RANK[s] || 0) > (WORST_RANK[w] || 0) ? s : w; });
     var sc = score(v, g, (ref.norm || {}).dir || 'Higher');
     if (sc === null) return null;
-    return { value: v, target: g, status: worst, unit: unit, score: sc };
+    return { value: v, target: g, status: worst, unit: unit, score: sc, dir: (ref.norm || {}).dir || 'Higher' };
   }
   function spoke(name, rm) {
     if (name === '__NORDIC__') return avgSpoke(rm, NORDIC_L, NORDIC_R, 'N');
@@ -312,7 +326,7 @@
     if (v === null || !g) return null;
     var sc = score(v, g, nm.dir || 'Higher');
     if (sc === null) return null;
-    return { value: v, target: g, status: r.status, unit: r.unit, score: sc };
+    return { value: v, target: g, status: r.status, unit: r.unit, score: sc, dir: nm.dir || 'Higher' };
   }
   function radarOptions(groups) {
     var rm = rowMap(groups), opts = [];
@@ -342,6 +356,49 @@
       if (s) { s.label = k[1]; out.push(s); }
     });
     return out;
+  }
+
+  // ---------------------------------------------------------------- return-to-sport criteria (acl_norms.json "rts")
+  // The clinic's checklist, kept apart from the phase norms. Each criterion reads a list of metrics (the first one
+  // with a result is used) or a meta value such as "months" since surgery, and has a min and/or max. Every row is
+  // met, not yet or not tested. It is decision support: the app compares numbers, the clinician decides.
+  // results = { metric: number }, meta = { months: number }, units = { metric: unit } for display.
+  var RTS_WORDS = { met: 'Met', not: 'Not yet', untested: 'Not tested' };
+  var META_UNITS = { months: 'months' };
+  function rtsCheck(rts, results, meta, units) {
+    var list = rts && Array.isArray(rts.criteria) ? rts.criteria : [];
+    var rows = [], met = 0, not = 0, untested = 0;
+    results = results || {}; meta = meta || {}; units = units || {};
+    list.forEach(function (c) {
+      if (!c || typeof c !== 'object') return;
+      var metrics = Array.isArray(c.metrics) ? c.metrics : (typeof c.metric === 'string' ? [c.metric] : []);
+      var lo = num(c.min), hi = num(c.max);
+      if ((!metrics.length && !c.meta) || (lo === null && hi === null)) return;     // nothing to read or no threshold
+      var value = null, used = '', idx = -1;
+      if (c.meta) { value = num(meta[c.meta]); used = String(c.meta); }
+      else {
+        for (var i = 0; i < metrics.length; i++) {
+          var v = num(results[metrics[i]]);
+          if (v !== null) { value = v; used = metrics[i]; idx = i; break; }
+        }
+        if (idx < 0) used = metrics[0];
+      }
+      var unit = typeof c.unit === 'string' ? c.unit : (c.meta ? (META_UNITS[c.meta] || '') : (units[used] || ''));
+      if (unit === 'AU') unit = '';
+      var u = unit ? (unit === '%' ? '%' : ' ' + unit) : '';
+      var target = lo !== null && hi !== null ? pyStr(lo) + ' – ' + pyStr(hi) + u : (lo !== null ? '≥ ' + pyStr(lo) + u : '≤ ' + pyStr(hi) + u);
+      var st = value === null ? 'untested' : ((lo === null || value >= lo) && (hi === null || value <= hi) ? 'met' : 'not');
+      if (st === 'met') met++; else if (st === 'not') not++; else untested++;
+      // shown the way the report prints numbers; a meta value such as months to one decimal at most (9.5, not 9.50)
+      var text = value === null ? '—' : (c.meta ? String(pyRound(value, 1)) : fmt(value)) + u;
+      rows.push({ label: String(c.label || used), metric: used, fallback: idx > 0, value: value, text: text, unit: unit, min: lo, max: hi, target: target, status: st });
+    });
+    return { title: String((rts && rts.title) || 'Return-to-sport criteria'), note: String((rts && rts.note) || ''), rows: rows,
+      met: met, not: not, untested: untested, total: rows.length };
+  }
+  // "5 of 9 met · 2 not tested" (the screen, the report and the AI read the same count)
+  function rtsSummary(r) {
+    return r.met + ' of ' + r.total + ' met' + (r.untested ? ' · ' + r.untested + ' not tested' : '');
   }
 
   // ---------------------------------------------------------------- scorecard (report_pdf.py)
@@ -390,8 +447,38 @@
     var span = (hi - lo) || 1;
     return {
       segments: pts.map(function (p) { return { color: p[0], width: Math.max(0, (p[2] - p[1]) / span * 100) }; }),
-      marker: Math.min(100, Math.max(0, (r - lo) / span * 100))
+      marker: Math.min(100, Math.max(0, (r - lo) / span * 100)),
+      lo: lo, hi: hi
     };
+  }
+  // Where another value (the previous result) sits on a meter's scale, 0-100, clamped to the bar ends.
+  // The scale is today's: it isn't stretched to fit the previous value.
+  function meterAt(m, v) {
+    var x = num(v);
+    if (!m || x === null) return null;
+    var span = (m.hi - m.lo) || 1;
+    return Math.min(100, Math.max(0, (x - m.lo) / span * 100));
+  }
+
+  // ---------------------------------------------------------------- typo guard
+  // A typed value is worth a second look when it is outside the metric's usual range ("range" in the norms
+  // files, in the unit typed) or when it differs from the previous result by more than TYPO_JUMP_PCT percent.
+  // It is only a prompt: nothing is blocked. jump === false skips the second check (differences and asymmetries,
+  // where a percentage change means little near zero).
+  var TYPO_JUMP_PCT = 35;
+  function typoCheck(value, range, previous, jump) {
+    var v = num(value);
+    if (v === null) return null;
+    if (Array.isArray(range) && range.length === 2) {
+      var lo = num(range[0]), hi = num(range[1]);
+      if ((lo !== null && v < lo) || (hi !== null && v > hi)) return { kind: 'range', value: v };
+    }
+    var p = num(previous);
+    if (jump !== false && p !== null && p !== 0) {
+      var pct = (v - p) / Math.abs(p) * 100;
+      if (Math.abs(pct) > TYPO_JUMP_PCT) return { kind: 'jump', value: v, previous: p, pct: pct };
+    }
+    return null;
   }
 
   // ---------------------------------------------------------------- strength battery (strength_norms.json)
@@ -737,7 +824,10 @@
     lsi: lsi, ageToBand: ageToBand, resolvePopulation: resolvePopulation, sportPopulations: sportPopulations,
     isAsym: isAsym, GEN_M: GEN_M, GEN_F: GEN_F,
     radarOptions: radarOptions, radarDefault: radarDefault, radarSpokes: radarSpokes, SHORT_LABEL: SHORT_LABEL,
-    scorecard: scorecard, shortDomain: shortDomain, meter: meter,
+    scorecard: scorecard, shortDomain: shortDomain, meter: meter, meterAt: meterAt,
+    STATUS_WORDS: STATUS_WORDS, TALLY_WORDS: TALLY_WORDS, statusWord: statusWord,
+    RTS_WORDS: RTS_WORDS, rtsCheck: rtsCheck, rtsSummary: rtsSummary,
+    TYPO_JUMP_PCT: TYPO_JUMP_PCT, typoCheck: typoCheck,
     buildStrength: buildStrength, strengthNorm: strengthNorm, strengthScore: strengthScore,
     strengthRawTarget: strengthRawTarget, formatScore: formatScore, diffText: diffText,
     displayIso: displayIso, parseDate: parseDate, isoOf: isoOf, displayDate: displayDate,

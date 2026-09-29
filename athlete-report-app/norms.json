@@ -16,42 +16,50 @@
      "unit": "cm",
      "calc": null,
      "dir": "Higher",
-     "thr": 2.5
+     "thr": 2.5,
+     "range": [5, 80]
     },
     {
      "name": "Peak Power",
      "unit": "W/kg",
      "calc": null,
      "dir": "Higher",
-     "thr": 3
+     "thr": 3,
+     "range": [10, 100]
     },
     {
      "name": "CMJ Peak Force",
      "unit": "N",
      "calc": null,
      "dir": "Higher",
-     "thr": 150
+     "thr": 150,
+     "range": [300, 8000]
     },
     {
      "name": "RSI-modified",
      "unit": "AU",
      "calc": null,
      "dir": "Higher",
-     "thr": 5
+     "thr": 5,
+     "range": [0.05, 100]
     },
     {
      "name": "Concentric Asymmetry",
      "unit": "%",
      "calc": null,
      "dir": "Lower",
-     "thr": 5
+     "thr": 5,
+     "range": [0, 60],
+     "jump": false
     },
     {
      "name": "Landing Asymmetry",
      "unit": "%",
      "calc": null,
      "dir": "Lower",
-     "thr": 5
+     "thr": 5,
+     "range": [0, 80],
+     "jump": false
     }
    ]
   },
@@ -63,21 +71,24 @@
      "unit": "N",
      "calc": null,
      "dir": "Higher",
-     "thr": 200
+     "thr": 200,
+     "range": [400, 8000]
     },
     {
      "name": "IMTP Relative Force",
      "unit": "N/kg",
      "calc": null,
      "dir": "Higher",
-     "thr": 2.5
+     "thr": 2.5,
+     "range": [10, 80]
     },
     {
      "name": "IMTP RFD 0–200 ms",
      "unit": "N/s",
      "calc": null,
      "dir": "Higher",
-     "thr": 600
+     "thr": 600,
+     "range": [300, 30000]
     }
    ]
   },
@@ -89,28 +100,33 @@
      "unit": "AU",
      "calc": null,
      "dir": "Higher",
-     "thr": 0.2
+     "thr": 0.2,
+     "range": [0.2, 5]
     },
     {
      "name": "Hop Contact Time",
      "unit": "s",
      "calc": null,
      "dir": "Lower",
-     "thr": 0.02
+     "thr": 0.02,
+     "range": [0.08, 1]
     },
     {
      "name": "Hop Jump Height",
      "unit": "cm",
      "calc": null,
      "dir": "Higher",
-     "thr": 2
+     "thr": 2,
+     "range": [2, 60]
     },
     {
      "name": "Reactive Asymmetry",
      "unit": "%",
      "calc": null,
      "dir": "Lower",
-     "thr": 5
+     "thr": 5,
+     "range": [0, 60],
+     "jump": false
     }
    ]
   },
@@ -122,28 +138,33 @@
      "unit": "N",
      "calc": null,
      "dir": "Higher",
-     "thr": 30
+     "thr": 30,
+     "range": [50, 1000]
     },
     {
      "name": "Nordic Peak Force — Right",
      "unit": "N",
      "calc": null,
      "dir": "Higher",
-     "thr": 30
+     "thr": 30,
+     "range": [50, 1000]
     },
     {
      "name": "Nordic L/R Imbalance",
      "unit": "%",
      "calc": null,
      "dir": "Lower",
-     "thr": 5
+     "thr": 5,
+     "range": [0, 60],
+     "jump": false
     },
     {
      "name": "Nordic Relative Force",
      "unit": "N/kg",
      "calc": null,
      "dir": "Higher",
-     "thr": 0.4
+     "thr": 0.4,
+     "range": [1, 12]
     }
    ]
   },
@@ -155,28 +176,33 @@
      "unit": "N",
      "calc": null,
      "dir": "Higher",
-     "thr": 30
+     "thr": 30,
+     "range": [50, 1000]
     },
     {
      "name": "Abductor Peak Force",
      "unit": "N",
      "calc": null,
      "dir": "Higher",
-     "thr": 30
+     "thr": 30,
+     "range": [50, 1000]
     },
     {
      "name": "Adduction Asymmetry",
      "unit": "%",
      "calc": null,
      "dir": "Lower",
-     "thr": 5
+     "thr": 5,
+     "range": [0, 60],
+     "jump": false
     },
     {
      "name": "Add : Abd Ratio",
      "unit": "ratio",
      "calc": null,
      "dir": "Band",
-     "thr": 0.1
+     "thr": 0.1,
+     "range": [0.3, 3]
     }
    ]
   },
@@ -200,21 +226,24 @@
      "unit": "N",
      "calc": null,
      "dir": "Higher",
-     "thr": 30
+     "thr": 30,
+     "range": [20, 3000]
     },
     {
      "name": "Quad ISO @ 60° — Left",
      "unit": "× BW",
      "calc": "PERBW",
      "dir": "Higher",
-     "thr": 0.05
+     "thr": 0.05,
+     "range": [50, 3000]
     },
     {
      "name": "Quad ISO @ 60° — Right",
      "unit": "× BW",
      "calc": "PERBW",
      "dir": "Higher",
-     "thr": 0.05
+     "thr": 0.05,
+     "range": [50, 3000]
     }
    ]
   },
@@ -226,28 +255,32 @@
      "unit": "s",
      "calc": null,
      "dir": "Lower",
-     "thr": 0.04
+     "thr": 0.04,
+     "range": [1.3, 5]
     },
     {
      "name": "20 m sprint",
      "unit": "s",
      "calc": null,
      "dir": "Lower",
-     "thr": 0.05
+     "thr": 0.05,
+     "range": [2.4, 8]
     },
     {
      "name": "30 m sprint",
      "unit": "s",
      "calc": null,
      "dir": "Lower",
-     "thr": 0.06
+     "thr": 0.06,
+     "range": [3.4, 10]
     },
     {
      "name": "5-10-5 (pro-agility)",
      "unit": "s",
      "calc": null,
      "dir": "Lower",
-     "thr": 0.05
+     "thr": 0.05,
+     "range": [3.8, 10]
     }
    ]
   }
@@ -672,7 +705,7 @@
     "amber": 2756,
     "gmax": null,
     "amax": null,
-    "source": "★★★ Lit: Badby et al. 2025, J Sports Sci · EFL pro men (n=139) · Green≥avg, Amber≥below-avg"
+    "source": "★★★ Lit: Badby et al. 2025, J Sports Sci · EFL pro men (n=139) · On target ≥ avg, Close ≥ below-avg"
    },
    "IMTP Relative Force": {
     "dir": "Higher",
@@ -680,7 +713,7 @@
     "amber": 34.7,
     "gmax": null,
     "amax": null,
-    "source": "★★★ Lit: Badby et al. 2025, J Sports Sci · EFL pro men (n=139) · Green≥avg, Amber≥below-avg"
+    "source": "★★★ Lit: Badby et al. 2025, J Sports Sci · EFL pro men (n=139) · On target ≥ avg, Close ≥ below-avg"
    },
    "Hop RSI (best)": {
     "dir": "Higher",

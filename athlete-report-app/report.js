@@ -26,6 +26,7 @@
     WHITE: '#FFFFFF', NA: '#999999'
   };
   var COL = { Green: C.G, Amber: C.A, Red: C.R };
+  var TEXT_COL = { Green: C.G, Amber: '#A35F00', Red: C.R, 'n/a': C.MUTE };   // status-coloured words on white (amber darkened to read)
 
   // ------------------------------------------------------------------ fonts & text measuring
   var ASC = 1854 / 2048, DESC = 434 / 2048, LH_NORMAL = (1854 + 434 + 67) / 2048;
@@ -182,17 +183,18 @@
 
   function dash(v) { v = clean(v).trim(); return v ? v : '—'; }
 
-  // label/value pairs that wrap like the .meta flex row
-  function meta(doc, pairs) {
-    var x0 = ML + px(2), maxW = CW - px(4), gapX = px(22), gapY = px(4), lh = lineH(10);
+  // label/value pairs that wrap like the .meta flex row; size = CSS px (10 unless a report asks for larger type)
+  function meta(doc, pairs, size) {
+    var sz = size || 10;
+    var x0 = ML + px(2), maxW = CW - px(4), gapX = px(22), gapY = px(4), lh = lineH(sz);
     var lines = [[]], x = 0;
     pairs.forEach(function (p) {
       var label = p[0], value = dash(p[1]);
-      var lw = width(label + ' ', 'bold', fs(10));
-      var vw = width(value, 'regular', fs(10));
+      var lw = width(label + ' ', 'bold', fs(sz));
+      var vw = width(value, 'regular', fs(sz));
       var item = { label: label, value: value, lw: lw, w: lw + vw, vlines: null };
       if (item.w > maxW) {                          // long notes: wrap inside the row
-        item.vlines = wrap(value, 'regular', fs(10), maxW - lw);
+        item.vlines = wrap(value, 'regular', fs(sz), maxW - lw);
         item.w = maxW;
       }
       if (lines[lines.length - 1].length && x + gapX + item.w > maxW) { lines.push([]); x = 0; }
@@ -205,10 +207,10 @@
     lines.forEach(function (line) {
       var rows = 1;
       line.forEach(function (it) {
-        var bl = baseline(y, 10);
-        doc.text(it.label, x0 + it.x, bl, { style: 'bold', size: fs(10), color: C.BLUE });
+        var bl = baseline(y, sz);
+        doc.text(it.label, x0 + it.x, bl, { style: 'bold', size: fs(sz), color: C.BLUE });
         (it.vlines || [it.value]).forEach(function (v, i) {
-          doc.text(v, x0 + it.x + it.lw, bl + i * lh, { style: 'regular', size: fs(10), color: C.INK });
+          doc.text(v, x0 + it.x + it.lw, bl + i * lh, { style: 'regular', size: fs(sz), color: C.INK });
         });
         rows = Math.max(rows, (it.vlines || [1]).length);
       });
@@ -217,64 +219,128 @@
     doc.y = y - gapY + px(10);
   }
 
-  function chip(doc, text, x, midY, color, o) {   // x = left edge (or right edge when o.right)
+  // Status symbols (tick, exclamation mark, cross, dash) so a status reads without colour. Drawn as filled shapes,
+  // not font glyphs, so the PDF and the preview match exactly. Coordinates in a unit box centred on 0,0.
+  var ICONS = {
+    Green: [[[-0.34, 0.02], [-0.1, 0.27], [0.36, -0.27]]],
+    Amber: [[[0, -0.37], [0, 0.1]]],
+    Red: [[[-0.26, -0.26], [0.26, 0.26]], [[0.26, -0.26], [-0.26, 0.26]]],
+    'n/a': [[[-0.27, 0], [0.27, 0]]]
+  };
+  function strokeShape(pts, hw) {                 // outline of a polyline, half width hw, mitred joins, flat ends
+    var n = pts.length, nrm = [], left = [], right = [], i;
+    for (i = 0; i < n - 1; i++) {
+      var dx = pts[i + 1][0] - pts[i][0], dy = pts[i + 1][1] - pts[i][1], L = Math.sqrt(dx * dx + dy * dy) || 1;
+      nrm.push([-dy / L, dx / L]);
+    }
+    for (i = 0; i < n; i++) {
+      var a = nrm[Math.max(0, i - 1)], b = nrm[Math.min(n - 2, i)];
+      var mx = a[0] + b[0], my = a[1] + b[1], ml = Math.sqrt(mx * mx + my * my) || 1;
+      mx /= ml; my /= ml;
+      var k = hw / Math.max(0.3, mx * b[0] + my * b[1]);
+      left.push([pts[i][0] + mx * k, pts[i][1] + my * k]);
+      right.push([pts[i][0] - mx * k, pts[i][1] - my * k]);
+    }
+    return left.concat(right.reverse());
+  }
+  function statusIcon(doc, status, cx, cy, s, color) {   // s = box size in mm
+    var lines = ICONS[status];
+    if (!lines) return;
+    var hw = 0.105 * s;
+    lines.forEach(function (ln) {
+      var pts = ln.map(function (p) { return [cx + p[0] * s, cy + p[1] * s]; });
+      doc.poly(strokeShape(pts, hw), { fill: color });
+      doc.circle(pts[0][0], pts[0][1], hw, { fill: color });                          // round ends
+      doc.circle(pts[pts.length - 1][0], pts[pts.length - 1][1], hw, { fill: color });
+    });
+    if (status === 'Amber') doc.circle(cx, cy + 0.3 * s, 0.12 * s, { fill: color });
+  }
+  function iconW(size) { return px(size) * 0.78; }  // room a symbol takes beside text of this size (CSS px)
+
+  function chip(doc, text, x, midY, color, o) {   // x = left edge (or right edge when o.right); o.icon = status
     o = o || {};
     var size = o.size || 9, padX = o.padX == null ? 7 : o.padX, padY = o.padY == null ? 1 : o.padY;
     var tw = width(text, 'bold', fs(size));
-    var w = tw + px(2 * padX), h = lineH(size) + px(2 * padY);
+    var iw = o.icon && ICONS[o.icon] ? iconW(size) : 0, ig = iw ? px(size * 0.34) : 0;
+    var w = tw + iw + ig + px(2 * padX), h = lineH(size) + px(2 * padY);
     var left = o.right ? x - w : x;
     doc.rect(left, midY - h / 2, w, h, { r: px(o.radius || 3), fill: color });
-    doc.text(text, left + px(padX), baseline(midY - h / 2 + px(padY), size), { style: 'bold', size: fs(size), color: C.WHITE });
+    if (iw) statusIcon(doc, o.icon, left + px(padX) + iw / 2, midY, px(size), C.WHITE);
+    doc.text(text, left + px(padX) + iw + ig, baseline(midY - h / 2 + px(padY), size), { style: 'bold', size: fs(size), color: C.WHITE });
     return w;
   }
+  function chipW(text, o) {                       // the width chip() will use
+    o = o || {};
+    var size = o.size || 9, padX = o.padX == null ? 7 : o.padX;
+    var iw = o.icon && ICONS[o.icon] ? iconW(size) : 0;
+    return width(text, 'bold', fs(size)) + iw + (iw ? px(size * 0.34) : 0) + px(2 * padX);
+  }
+  // the words a report uses for each status (engine.js holds them, shared with the screen and the AI)
+  function words(kind) { return kind === 'rehab' ? E.STATUS_WORDS.rehab : E.STATUS_WORDS.target; }
+  function tallyChips(kind, counts) {
+    var t = E.TALLY_WORDS[kind === 'rehab' ? 'rehab' : 'target'];
+    return [[t[0] + ': ' + counts.Green, C.G, 'Green'], [t[1] + ': ' + counts.Amber, C.A, 'Amber'], [t[2] + ': ' + counts.Red, C.R, 'Red']];
+  }
 
-  // "Compared against [pill]"  ...  [Green: n] [Amber: n] [Red: n]
-  function band(doc, lead, pillText, counts) {
-    var top = doc.y, h = px(19.5), mid = top + h / 2;
+  // "Compared against [pill]"  ...  [✓ On target: n] [! Close: n] [✕ Off target: n]
+  function band(doc, lead, pillText, counts, size) {
+    var sz = size || 10, top = doc.y, h = px(19.5 * sz / 10), mid = top + h / 2;
     var x = ML;
-    var lw = doc.text(lead + ' ', x, baseline(mid - lineH(10) / 2, 10), { style: 'regular', size: fs(10), color: C.INK });
-    var ptw = width(pillText, 'bold', fs(10));
-    var pw = ptw + px(18 + 2), ph = lineH(10) + px(6 + 2);
+    var lw = doc.text(lead + ' ', x, baseline(mid - lineH(sz) / 2, sz), { style: 'regular', size: fs(sz), color: C.INK });
+    var ptw = width(pillText, 'bold', fs(sz));
+    var pw = ptw + px(18 + 2), ph = lineH(sz) + px(6 + 2);
     doc.rect(x + lw, mid - ph / 2, pw, ph, { r: px(4), fill: '#EAF1F9', stroke: '#BBD3EA', lw: px(1) });
-    doc.text(pillText, x + lw + px(10), baseline(mid - lineH(10) / 2, 10), { style: 'bold', size: fs(10), color: C.BLUEINK });
+    doc.text(pillText, x + lw + px(10), baseline(mid - lineH(sz) / 2, sz), { style: 'bold', size: fs(sz), color: C.BLUEINK });
     var right = ML + CW;
     for (var i = counts.length - 1; i >= 0; i--) {
-      var w = chip(doc, counts[i][0], right, mid, counts[i][1], { size: 10, padX: 9, padY: 2, right: true });
+      var w = chip(doc, counts[i][0], right, mid, counts[i][1], { size: sz, padX: 9, padY: 2, right: true, icon: counts[i][2] });
       right -= w + px(5);
     }
     doc.y = top + h + px(4);
   }
 
+  // a section heading with its teal rule. opts.keep = room the content after it needs on the same page;
+  // opts.size = heading size in CSS px (11 unless a report asks for larger type); opts.right = a note at the right end
   function section(doc, title, opts) {
     opts = opts || {};
-    var h = px(12) + lineH(11) + px(3 + 2) + px(5);
+    var ts = opts.size || 11;
+    var h = px(12) + lineH(ts) + px(3 + 2) + px(5);
     if (opts.newPage) { if (doc.y > MT + 0.5) doc.newPage(); }
     else doc.ensure(h + (opts.keep || 0));
     var top = doc.y + (doc.y > MT + 0.5 ? px(12) : 0);
-    doc.text(title, ML + px(2), baseline(top, 11), { style: 'bold', size: fs(11), color: C.BLACK, cs: px(0.5) });
-    var ly = top + lineH(11) + px(3) + px(1);
+    doc.text(title, ML + px(2), baseline(top, ts), { style: 'bold', size: fs(ts), color: C.BLACK, cs: px(0.5) });
+    if (opts.right) {
+      var rs = opts.rightSize || 10;
+      doc.text(opts.right, ML + CW - px(2), baseline(top + (lineH(ts) - lineH(rs)) / 2, rs), { style: 'bold', size: fs(rs), color: opts.rightColor || C.INK, align: 'right' });
+    }
+    var ly = top + lineH(ts) + px(3) + px(1);
     doc.line(ML + px(2), ly, ML + CW - px(2), ly, { stroke: C.BLUE, lw: px(2) });
     doc.y = ly + px(1) + px(5);
   }
 
-  function scorecard(doc, cards) {
+  var CARD_SZ = { domain: 9.5, status: 8.5, count: 8 };
+  function scorecard(doc, cards, sz) {
     if (!cards.length) return;
+    sz = sz || CARD_SZ;
     var gap = 6, minW = 108, perLine = Math.max(1, Math.floor((CW_PX + gap) / (minW + gap)));
     var lines = [];
     for (var i = 0; i < cards.length; i += perLine) lines.push(cards.slice(i, i + perLine));
-    var cardH = px(38.1);
+    // domain, then the worst status in it (symbol and word), then how many of its metrics are on target
+    var cardH = px(1 + 5 + 4 + 1 + 1 + 7) + lineH(sz.domain) + lineH(sz.status) + lineH(sz.count);
     doc.y += px(2);
     lines.forEach(function (line) {
       doc.ensure(cardH);
       var w = (CW_PX - (line.length - 1) * gap) / line.length, x = ML;
       line.forEach(function (c) {
-        var col = COL[c.worst], top = doc.y;
+        var col = COL[c.worst], ink = TEXT_COL[c.worst] || col, top = doc.y;
         doc.rect(x, top, px(w), cardH, { r: px(5), fill: C.WHITE, stroke: C.LINE, lw: px(1) });
         doc.rect(x + px(0.5), top + px(0.5), px(w - 1), px(5.5), { r: [px(4.5), px(4.5), 0, 0], fill: col });
-        var bt = top + px(1 + 5 + 4);
-        doc.text(c.worst, x + px(w - 1 - 8), baseline(bt, 9), { style: 'bold', size: fs(9), color: col, align: 'right' });
-        doc.text(c.domain, x + px(1 + 8), baseline(bt, 9.5), { style: 'bold', size: fs(9.5), color: C.BLACK });
-        doc.text(c.green + '/' + c.total + ' on target', x + px(1 + 8), baseline(bt + lineH(9.5) + px(1), 8), { style: 'regular', size: fs(8), color: C.MUTE });
+        var bt = top + px(1 + 5 + 4), lx = x + px(1 + 8);
+        doc.text(c.domain, lx, baseline(bt, sz.domain), { style: 'bold', size: fs(sz.domain), color: C.BLACK });
+        var st = bt + lineH(sz.domain) + px(1), iw = iconW(sz.status);
+        statusIcon(doc, c.worst, lx + iw / 2, st + lineH(sz.status) / 2, px(sz.status), ink);
+        doc.text(E.statusWord(c.worst, 'target'), lx + iw + px(3), baseline(st, sz.status), { style: 'bold', size: fs(sz.status), color: ink });
+        doc.text(c.green + '/' + c.total + ' on target', lx, baseline(st + lineH(sz.status) + px(1), sz.count), { style: 'regular', size: fs(sz.count), color: C.MUTE });
         x += px(w + gap);
       });
       doc.y += cardH + px(gap);
@@ -282,10 +348,10 @@
     doc.y += px(2 - gap);
   }
 
-  function radar(doc, spokes, quadNote) {
+  function radar(doc, spokes, quadNote, headSize) {
     if (spokes.length < 3) return false;
     var u = CW / 480, H = 300 * u, n = spokes.length;
-    section(doc, 'Athlete profile — key components', { keep: H + px(14) });
+    section(doc, 'Athlete profile — key components', { keep: H + px(14), size: headSize });
     var ox = ML, oy = doc.y, cx = 240, cy = 150, Rmax = 98, CAP = 1.5;
     function pt(score, i) {
       var ang = (-90 + i * 360 / n) * Math.PI / 180, rr = Math.min(score, CAP) / CAP * Rmax;
@@ -321,43 +387,139 @@
     return true;
   }
 
-  function priorities(doc, prios, emptyText) {
+  // With 3 or 4 picks the profile is drawn as bars: a radar with so few spokes is a thin shape over a lot of page.
+  // Each bar is the result as a share of its norm target, normalised exactly as the radar does (E.radarSpokes:
+  // result ÷ target, or target ÷ result where lower is better), so 100% is the target whatever the unit.
+  // Same 0-150% scale as the radar; a result beyond 150% fills the bar and gets a small arrow at the end.
+  var BAR_SZ = { label: 13.33, value: 13.33, sub: 11 };  // CSS px: 10 pt labels and values, 8.25 pt status line
+  function profileBars(doc, spokes, quadNote, headSize) {
+    var CAP = 1.5, S = BAR_SZ;
+    var widest = Math.max.apply(null, spokes.map(function (sp) { return width(sp.label, 'bold', fs(S.label)); }));
+    var pad = px(6), labW = Math.min(px(170), Math.max(px(90), widest)), valW = px(122), gap = px(16), barH = px(16);
+    var x0 = ML + pad, tx = x0 + labW + gap, xr = ML + CW - pad, tw = xr - valW - gap - tx;
+    function X(s) { return tx + tw * Math.min(Math.max(s, 0), CAP) / CAP; }
+    var valH = lineH(S.value) + px(1) + lineH(S.sub);
+    var rows = spokes.map(function (sp) {
+      var ll = wrap(sp.label, 'bold', fs(S.label), labW);
+      return { sp: sp, ll: ll, h: Math.max(ll.length * lineH(S.label), valH, barH) + px(12) };
+    });
+    var lower = spokes.some(function (sp) { return sp.dir === 'Lower'; });
+    var cap = wrap('Bar length = result as a % of the athlete’s norm target (dashed line = target).' +
+      (lower ? ' For times, a faster time gives a longer bar.' : '') + (quadNote ? ' Quad ISO @ 60° uses a placeholder norm.' : ''), 'italic', fs(7.5), CW - px(4));
+    var topH = lineH(7.5) + px(3), axH = px(4) + lineH(7.5), capH = px(6) + cap.length * lineH(7.5);
+    var total = topH + rows.reduce(function (s, r) { return s + r.h; }, 0) + axH + capH;
+    section(doc, 'Athlete profile — key components', { keep: total, size: headSize });
+    var top = doc.y, ys = [], y = top + topH;
+    rows.forEach(function (r) { ys.push(y); y += r.h; });
+    var last = rows.length - 1;
+    var gTop = ys[0] + (rows[0].h - barH) / 2 - px(5), gBot = ys[last] + (rows[last].h + barH) / 2 + px(5);
+    doc.line(X(0.5), gTop, X(0.5), gBot, { stroke: '#D7DCE5', lw: px(1) });              // faint 50% guide
+    rows.forEach(function (r, i) {
+      var sp = r.sp, mid = ys[i] + r.h / 2, bt = mid - barH / 2;
+      var ink = TEXT_COL[sp.status] || C.MUTE, fill = COL[sp.status] || C.NA;
+      r.ll.forEach(function (l, k) {
+        doc.text(l, x0, baseline(mid - r.ll.length * lineH(S.label) / 2 + k * lineH(S.label), S.label), { style: 'bold', size: fs(S.label), color: C.INK });
+      });
+      doc.rect(tx, bt, tw, barH, { r: px(3), fill: '#F0F2F5' });
+      var fw = X(sp.score) - tx;
+      if (fw > 0.05) doc.rect(tx, bt, fw, barH, { r: px(3), fill: fill });
+      if (sp.score > CAP) {                                                                // off the scale: arrow at the end
+        var ax = tx + tw - px(5), ah = px(4.5);
+        doc.poly([[ax - ah, mid - ah], [ax, mid], [ax - ah, mid + ah]], { fill: C.WHITE });
+      }
+      var vTop = mid - valH / 2;
+      doc.text(E.fmt(sp.value) + (sp.unit ? ' ' + sp.unit : ''), xr, baseline(vTop, S.value), { style: 'bold', size: fs(S.value), color: C.BLACK, align: 'right' });
+      var sub = E.statusWord(sp.status, 'target') + ' · ' + E.pyFixed(sp.score * 100, 0) + '%';
+      var sTop = vTop + lineH(S.value) + px(1), sw = width(sub, 'bold', fs(S.sub)), iw = iconW(S.sub);
+      statusIcon(doc, sp.status, xr - sw - px(3) - iw / 2, sTop + lineH(S.sub) / 2, px(S.sub), ink);
+      doc.text(sub, xr, baseline(sTop, S.sub), { style: 'bold', size: fs(S.sub), color: ink, align: 'right' });
+    });
+    // the target: a dashed line over the bars, named above and on the scale below
+    doc.line(X(1), gTop, X(1), gBot, { stroke: C.DARK, lw: px(1.6), dash: [px(4), px(3)] });
+    var lab = { style: 'bold', size: fs(7.5), color: C.MUTE, cs: px(0.5) };
+    doc.text('TARGET', X(1), baseline(top, 7.5), Object.assign({}, lab, { color: C.DARK, align: 'center' }));
+    var ay = gBot + px(4);
+    [[0, '0', 'left'], [0.5, '50%', 'center'], [1, '100%', 'center'], [1.5, '150%', 'right']].forEach(function (t) {
+      doc.text(t[1], X(t[0]), baseline(ay, 7.5), Object.assign({}, lab, { align: t[2] }));
+    });
+    doc.y = ay + lineH(7.5) + px(6);
+    cap.forEach(function (l) {
+      doc.text(l, ML + CW / 2, baseline(doc.y, 7.5), { style: 'italic', size: fs(7.5), color: C.MUTE, align: 'center' });
+      doc.y += lineH(7.5);
+    });
+    return true;
+  }
+  // the profile the clinician picked: bars for 3-4 metrics, the radar for 5-6, nothing with fewer than 3
+  function profile(doc, spokes, quadNote, headSize) {
+    if (spokes.length < 3) return false;
+    return spokes.length <= 4 ? profileBars(doc, spokes, quadNote, headSize) : radar(doc, spokes, quadNote, headSize);
+  }
+
+  // The flagged metrics, worst first: status chip, name, "= value · needs target · source" and the explainer line.
+  // sz = CSS px sizes { name, detail, what, chip }; the screening report's page 1 uses larger type than the others.
+  var PRIO_SZ = { name: 10, detail: 9, what: 8, chip: 9 };
+  function prioLayout(prios, kind, sz) {
+    sz = sz || PRIO_SZ;
+    var W = words(kind);
+    // one column for the chips, so the names line up whatever the status
+    var cw = prios.length ? Math.max.apply(null, prios.map(function (r) { return chipW(W[r.status] || r.status, { icon: r.status, size: sz.chip }); })) : 0;
+    return prios.map(function (r) {
+      var name = r.name, word = W[r.status] || r.status;
+      var detail = r.detail || ('= ' + E.fmt(r.result) + ' ' + r.unit + (r.side ? ' (' + r.side + ' higher)' : '') +
+        ' · needs ' + r.target + ' · ' + (r.source || '—'));
+      var nameW = width(name, 'bold', fs(sz.name));
+      var detW = CW - px(12) - cw - px(8) - nameW - px(8);
+      var dl = wrap(detail, 'regular', fs(sz.detail), Math.max(detW, px(120)));
+      var contentH = Math.max(lineH(sz.chip) + px(2), lineH(sz.name), dl.length * lineH(sz.detail));
+      // what the test measures (explainers.json), under the name in smaller muted text
+      var nx = ML + px(6) + cw + px(8);
+      var wl = r.what ? wrap(r.what, 'regular', fs(sz.what), ML + CW - px(6) - nx) : [];
+      var whatH = wl.length ? px(1) + wl.length * lineH(sz.what) : 0;
+      return { r: r, name: name, word: word, dl: dl, wl: wl, nx: nx, contentH: contentH, h: contentH + whatH + px(8) + px(1) };
+    });
+  }
+  function emptyPrioH(sz) { return lineH((sz || PRIO_SZ).name) + px(9); }
+  // the room the first n items need (so a heading is never left without them)
+  function prioKeep(prios, kind, sz, n) {
+    if (!prios.length) return emptyPrioH(sz);
+    return prioLayout(prios.slice(0, n), kind, sz).reduce(function (s, L) { return s + L.h; }, 0);
+  }
+  function priorities(doc, prios, emptyText, kind, sz) {
+    sz = sz || PRIO_SZ;
     if (!prios.length) {
-      var h0 = lineH(10) + px(9);
+      var h0 = emptyPrioH(sz);
       doc.ensure(h0);
-      doc.text(emptyText || '✓ Nothing flagged — all tested metrics on target.', ML + px(6), baseline(doc.y + px(4), 10), { style: 'regular', size: fs(10), color: C.G });
+      doc.text(emptyText || '✓ Nothing flagged — all tested metrics on target.', ML + px(6), baseline(doc.y + px(4), sz.name), { style: 'regular', size: fs(sz.name), color: C.G });
       doc.line(ML, doc.y + h0 - px(0.5), ML + CW, doc.y + h0 - px(0.5), { stroke: C.LINE, lw: px(1) });
       doc.y += h0;
       return;
     }
-    prios.forEach(function (r) {
-      var name = r.name;
-      var detail = r.detail || ('= ' + E.fmt(r.result) + ' ' + r.unit + (r.side ? ' (' + r.side + ' higher)' : '') +
-        ' · needs ' + r.target + ' · ' + (r.source || '—'));
-      var chipW = width(r.status, 'bold', fs(9)) + px(14);
-      var nameW = width(name, 'bold', fs(10));
-      var detW = CW - px(12) - chipW - px(8) - nameW - px(8);
-      var dl = wrap(detail, 'regular', fs(9), Math.max(detW, px(120)));
-      var contentH = Math.max(lineH(9) + px(2), lineH(10), dl.length * lineH(9));
-      var h = contentH + px(8) + px(1);
+    prioLayout(prios, kind, sz).forEach(function (L) {
+      var r = L.r, h = L.h, contentH = L.contentH;
       doc.ensure(h);
       var top = doc.y, mid = top + px(4) + contentH / 2;
-      chip(doc, r.status, ML + px(6), mid, COL[r.status] || C.NA);
-      doc.text(name, ML + px(6) + chipW + px(8), baseline(mid - lineH(10) / 2, 10), { style: 'bold', size: fs(10), color: C.INK });
-      var dTop = mid - dl.length * lineH(9) / 2;
-      dl.forEach(function (l, i) {
-        doc.text(l, ML + CW - px(6), baseline(dTop + i * lineH(9), 9), { style: 'regular', size: fs(9), color: C.MUTE, align: 'right' });
+      chip(doc, L.word, ML + px(6), mid, COL[r.status] || C.NA, { icon: r.status, size: sz.chip });
+      doc.text(L.name, L.nx, baseline(mid - lineH(sz.name) / 2, sz.name), { style: 'bold', size: fs(sz.name), color: C.INK });
+      var dTop = mid - L.dl.length * lineH(sz.detail) / 2;
+      L.dl.forEach(function (l, i) {
+        doc.text(l, ML + CW - px(6), baseline(dTop + i * lineH(sz.detail), sz.detail), { style: 'regular', size: fs(sz.detail), color: C.MUTE, align: 'right' });
+      });
+      L.wl.forEach(function (l, i) {
+        doc.text(l, L.nx, baseline(top + px(4) + contentH + px(1) + i * lineH(sz.what), sz.what), { style: 'regular', size: fs(sz.what), color: C.MUTE });
       });
       doc.line(ML, top + h - px(0.5), ML + CW, top + h - px(0.5), { stroke: C.LINE, lw: px(1) });
       doc.y = top + h;
     });
   }
 
-  function asymmetry(doc, groups) {
-    var rows = E.flatten(groups).filter(function (r) { return E.isAsym(r.name); });
+  function asymmetry(doc, groups, headSize) {
+    var rows = E.flatten(groups).filter(function (r) { return E.isAsym(r.name) && E.num(r.result) !== null; });
     if (!rows.length) return;
     var rowH = px(22);
-    section(doc, 'Limb symmetry — L vs R', { keep: px(16) + rowH });
+    // the caption stays with the last bar (never alone at the top of a page)
+    var note = wrap('Bar length = asymmetry magnitude; faint ticks mark the balanced (on-target) limit. Direction = higher/dominant side.', 'italic', fs(7.5), CW - px(4));
+    var noteH = px(5) + note.length * lineH(7.5);
+    section(doc, 'Limb symmetry — L vs R', { keep: px(16) + rowH + (rows.length === 1 ? noteH : 0), size: headSize });
     var hy = doc.y + px(3);
     var o = { style: 'bold', size: fs(7.5), color: C.MUTE, cs: px(0.5) };
     doc.text('◀ LEFT higher', ML + px(2), baseline(hy, 7.5), o);
@@ -365,10 +527,9 @@
     doc.text('RIGHT higher ▶', ML + CW - px(2), baseline(hy, 7.5), Object.assign({ align: 'right' }, o));
     doc.y = hy + lineH(7.5) + px(3);
     var SCALE = 25.0;
-    rows.forEach(function (r) {
+    rows.forEach(function (r, ri) {
       var pct = E.num(r.result);
-      if (pct === null) return;
-      doc.ensure(rowH);
+      doc.ensure(rowH + (ri === rows.length - 1 ? noteH : 0));
       var top = doc.y, mid = top + rowH / 2 - px(0.5);
       var nameW = px(150), valW = px(96), gap = px(8);
       var nl = wrap(r.name, 'bold', fs(9.5), nameW);
@@ -393,7 +554,6 @@
       doc.y = top + rowH;
     });
     doc.y += px(5);
-    var note = wrap('Bar length = asymmetry magnitude; faint ticks mark the balanced (green) limit. Direction = higher/dominant side.', 'italic', fs(7.5), CW - px(4));
     note.forEach(function (l) {
       doc.ensure(lineH(7.5));
       doc.text(l, ML + px(2), baseline(doc.y, 7.5), { style: 'italic', size: fs(7.5), color: C.MUTE });
@@ -401,12 +561,15 @@
     });
   }
 
-  function meterBar(doc, x, y, w, result, norm) {
+  // prev = { value, kind }: the previous result on the same scale (a hollow ring, clamped to the bar ends), joined to
+  // today's marker by a line coloured for a real gain (green), a real drop (red) or change within noise (grey).
+  var LINK_COL = { gain: C.G, drop: C.R };
+  function meterBar(doc, x, y, w, result, norm, prev) {
     var h = px(9), r = px(5);
     var pill = pillPolygon(x, y, w, h, r);
     doc.poly(pill, { fill: '#EEEEEE' });
     var m = E.meter(result, norm);
-    if (!m) return;
+    if (!m) return false;
     var at = 0;
     m.segments.forEach(function (s) {
       var x0 = x + w * at / 100, x1 = x + w * Math.min(100, at + s.width) / 100;
@@ -415,14 +578,32 @@
       var clipped = clipX(pill, x0, x1);
       if (clipped.length > 2) doc.poly(clipped, { fill: COL[s.color] });
     });
-    var mx = x + w * m.marker / 100;
+    var mx = x + w * m.marker / 100, cy = y + h / 2;
+    var p = prev ? E.meterAt(m, prev.value) : null;
+    if (p !== null) {
+      var bx = x + w * p / 100, rr = px(4.2);
+      var a0 = Math.min(bx, mx), a1 = Math.max(bx, mx);
+      if (a1 - a0 > 0.05) {                            // a pale trail over the bar between the two, with the line on it
+        var trail = clipX(pill, a0, a1);
+        if (trail.length > 2) doc.poly(trail, { fill: C.WHITE, fillOpacity: 0.62 });
+      }
+      if (a1 - a0 > rr) {
+        var from = bx < mx ? bx + rr : bx - rr;        // from the ring's edge to the marker
+        doc.line(from, cy, mx, cy, { stroke: LINK_COL[prev.kind] || C.MUTE, lw: px(2.2) });
+      }
+      doc.circle(bx, cy, rr, { stroke: C.WHITE, lw: px(3.6) });
+      doc.circle(bx, cy, rr, { stroke: C.INK, lw: px(1.6) });
+    }
     doc.rect(mx - px(1.5), y - px(2) - px(1.5), px(3 + 3), px(13 + 3), { r: px(3), fill: C.WHITE });
     doc.rect(mx, y - px(2), px(3), px(13), { r: px(2), fill: C.BLACK });
+    return p !== null;
   }
 
-  // grouped result rows (Full results / rehab body)
-  function results(doc, groups, cols, tgtPrefix, tailH) {
+  // grouped result rows (Full results / rehab body); kind = 'target' (screening) or 'rehab' picks the status words;
+  // head = { title, size }: a section heading kept with the first group band and its first row
+  function results(doc, groups, cols, tgtPrefix, tailH, kind, head) {
     tailH = tailH || 0;                             // the footer: never leave it alone on a new page
+    var W = words(kind);
     var c1 = px(cols[0]), c2 = px(cols[1]), c4 = px(cols[2]), gap = px(8), pad = px(6);
     var c3 = CW - 2 * pad - c1 - c2 - c4 - 3 * gap;
     function rowLayout(r) {
@@ -447,6 +628,10 @@
       var h3 = px(9 + 2) + lineH(8);
       var h4 = lineH(9) + px(2) + (chg.length ? px(2) + chg.length * lineH(8.5) : 0);
       return { lines: lines, chg: chg, h: Math.max(h1, lineH(13), h3, h4) + px(10) + px(1), h1: h1, h4: h4 };
+    }
+    if (head && groups.length) {
+      var r0 = rowLayout(groups[0].rows[0]), only = groups.length === 1 && groups[0].rows.length === 1;
+      section(doc, head.title, { keep: px(7) + lineH(9.5) + px(6) + r0.h + (only ? tailH : 0), size: head.size });
     }
     groups.forEach(function (gp, gi) {
       var bandH = lineH(9.5) + px(6), lastGroup = gi === groups.length - 1;
@@ -473,10 +658,10 @@
         var x2 = x1 + c1 + gap;
         doc.text(E.fmt(r.result), x2 + c2 / 2, baseline(mid - lineH(13) / 2, 13), { style: 'bold', size: fs(13), color: C.BLACK, align: 'center' });
         var x3 = x2 + c2 + gap, mTop = mid - (px(11) + lineH(8)) / 2;
-        meterBar(doc, x3, mTop, c3, r.result, r.norm);
+        meterBar(doc, x3, mTop, c3, r.result, r.norm, r.prev != null ? { value: r.prev, kind: r.change_kind } : null);
         doc.text(tgtPrefix + ' ' + r.target, x3, baseline(mTop + px(11), 8), { style: 'regular', size: fs(8), color: C.MUTE });
         var x4r = ML + CW - pad, sTop = mid - L.h4 / 2;
-        if (r.status) chip(doc, r.status, x4r, sTop + (lineH(9) + px(2)) / 2, COL[r.status] || C.NA, { right: true });
+        if (r.status) chip(doc, W[r.status] || r.status, x4r, sTop + (lineH(9) + px(2)) / 2, COL[r.status] || C.NA, { right: true, icon: r.status });
         var kcol = r.change_kind === 'gain' ? C.G : (r.change_kind === 'drop' ? C.R : C.MUTE);
         L.chg.forEach(function (l, i) {
           doc.text(l, x4r, baseline(sTop + lineH(9) + px(4) + i * lineH(8.5), 8.5), { style: 'bold', size: fs(8.5), color: kcol, align: 'right' });
@@ -489,10 +674,11 @@
 
   // The clinician's interpretation (optionally drafted with AI): a tinted box with a teal edge.
   // Keeps paragraph breaks and splits across pages if it has to.
-  function interpretation(doc, it) {
+  function interpretation(doc, it, o) {
+    o = o || {};
     var raw = String((it && it.text) || '').replace(/\r\n?/g, '\n').trim();
     if (!raw) return;
-    var size = 10, LH = 1.45, lh = lineH(size, LH), bar = px(3), padX = px(10), padY = px(7), paraGap = px(5);
+    var size = o.size || 10, LH = 1.45, lh = lineH(size, LH), bar = px(3), padX = px(10), padY = px(7), paraGap = px(5);
     var maxW = CW - bar - 2 * padX;
     var lines = [];
     raw.split(/\n\s*\n|\n/).forEach(function (para) {
@@ -502,7 +688,7 @@
     if (!lines.length) return;
     var note = it.ai ? 'Drafted with AI assistance and reviewed by the clinician.' : '';
     var noteH = note ? px(4) + lineH(7.5) : 0;
-    section(doc, 'Interpretation', { keep: 2 * padY + Math.min(3, lines.length) * lh });
+    section(doc, 'Interpretation', { keep: 2 * padY + Math.min(3, lines.length) * lh, size: o.head });
     var i = 0;
     while (i < lines.length) {
       var avail = PAGE_H - MB - doc.y - 2 * padY, n = 0, h = 0;
@@ -531,14 +717,42 @@
     }
   }
 
+  // A small line through one row's values: points spaced like the date columns, missing values skipped and the
+  // available points joined. The last point is larger and coloured like the change since the first (green better,
+  // red worse, grey otherwise). Fewer than two points: nothing is drawn.
+  var SPARK = '#9AA3AD';
+  function sparkline(doc, values, x, midY, w, h, col) {
+    var n = values.length, pts = [];
+    values.forEach(function (v, i) { var f = E.num(v); if (f !== null) pts.push([i, f]); });
+    if (pts.length < 2 || n < 2) return false;
+    var lo = Math.min.apply(null, pts.map(function (q) { return q[1]; })), hi = Math.max.apply(null, pts.map(function (q) { return q[1]; }));
+    var xy = pts.map(function (q) {
+      return [x + w * q[0] / (n - 1), hi === lo ? midY : midY + h / 2 - (q[1] - lo) / (hi - lo) * h];
+    });
+    doc.poly(xy, { stroke: SPARK, lw: px(1.3), closed: false });
+    xy.slice(0, -1).forEach(function (q) { doc.circle(q[0], q[1], px(1.5), { fill: SPARK }); });
+    var e = xy[xy.length - 1];
+    doc.circle(e[0], e[1], px(2.7), { fill: col, stroke: C.WHITE, lw: px(0.8) });
+    return true;
+  }
+  // the colour the "since first" change uses: green for a change in the better direction, red for worse, else grey
+  function changeCol(r) {
+    var delta = (r.first === null || r.last === null) ? null : r.last - r.first;
+    if (delta === null) return C.MUTE;
+    var good = r.dir === 'Higher' ? delta > 0 : (r.dir === 'Lower' ? delta < 0 : null);
+    return delta === 0 || good === null ? C.MUTE : (good ? C.G : C.R);
+  }
+
   // Progress across the client's saved sessions: one column per test date (this test last), one row per
-  // metric measured more than once, and the change from the first of those sessions to this one.
-  function progressTable(doc, p) {
+  // metric measured more than once, a trend line, and the change from the first of those sessions to this one.
+  // tailH = the footer's height: the last row keeps the note and the footer company (never a page with only those).
+  function progressTable(doc, p, headSize, tailH) {
     if (!p || !p.rows || !p.rows.length) return;
-    var pad = px(6), gap = px(6), nameW = px(150), chgW = px(78);
-    var n = p.dates.length, colW = (CW - 2 * pad - nameW - chgW - (n + 1) * gap) / n;
+    tailH = tailH || 0;
+    var pad = px(6), gap = px(6), nameW = px(150), chgW = px(78), spkW = px(64);
+    var n = p.dates.length, colW = (CW - 2 * pad - nameW - chgW - spkW - (n + 2) * gap) / n;
     var bandH = lineH(9.5) + px(6), headH = px(4) + lineH(7.5) + px(3);
-    var x0 = ML + pad, xc = x0 + nameW + gap, xChg = ML + CW - pad;
+    var x0 = ML + pad, xc = x0 + nameW + gap, xChg = ML + CW - pad, xs = xc + n * (colW + gap);
     function head() {
       var top = doc.y;
       doc.rect(ML, top, CW, bandH, { r: px(3), fill: C.GBAND });
@@ -550,49 +764,192 @@
       p.dates.forEach(function (d, i) {
         doc.text(String(d).toUpperCase(), xc + i * (colW + gap) + colW, hy, Object.assign({ align: 'right' }, i === n - 1 ? { color: C.BLACK } : o, { style: 'bold', size: fs(7.5), cs: px(0.5) }));
       });
+      doc.text('TREND', xs + spkW / 2, hy, Object.assign({ align: 'center' }, o));
       doc.text('SINCE FIRST', xChg, hy, Object.assign({ align: 'right' }, o));
       doc.y = top + bandH + headH;
     }
-    section(doc, 'Progress over time', { keep: px(7) + bandH + headH + lineH(10) + px(12) });
-    doc.y += px(7);
-    head();
-    p.rows.forEach(function (r) {
+    var layout = p.rows.map(function (r) {
       var nl = wrap(r.name, 'bold', fs(9), nameW), unitW = r.unit ? width(r.unit, 'regular', fs(8)) : 0;
       var lastW = width(nl[nl.length - 1], 'bold', fs(9));
-      var unitOwnLine = r.unit && lastW + px(5) + unitW > nameW;
+      var unitOwnLine = !!r.unit && lastW + px(5) + unitW > nameW;
       var lines = nl.length + (unitOwnLine ? 1 : 0);
-      var h = Math.max(lines * lineH(9), lineH(10)) + px(9);
-      if (!doc.fits(h)) { doc.newPage(); head(); }
+      return { r: r, nl: nl, lastW: lastW, unitOwnLine: unitOwnLine, lines: lines, h: Math.max(lines * lineH(9), lineH(10)) + px(9) };
+    });
+    var note = wrap('Values from this client’s saved sessions on this device, up to the last 5 tests. Only metrics measured more than once are listed. Trend: the values left to right, the last point coloured like the change since the first.', 'italic', fs(7.5), CW - px(4));
+    var noteH = px(4) + note.length * lineH(7.5), lastI = layout.length - 1;
+    var firstTwo = layout[0].h + (lastI >= 1 ? layout[1].h : 0);
+    section(doc, 'Progress over time', { keep: px(7) + bandH + headH + firstTwo + (lastI <= 1 ? noteH + tailH : 0), size: headSize });
+    doc.y += px(7);
+    head();
+    layout.forEach(function (L, ri) {
+      var r = L.r, h = L.h, lines = L.lines, nl = L.nl;
+      if (!doc.fits(h + (ri === lastI ? noteH + tailH : 0))) { doc.newPage(); head(); }
       var top = doc.y, mid = top + h / 2, nTop = mid - lines * lineH(9) / 2;
       nl.forEach(function (l, i) {
         doc.text(l, x0, baseline(nTop + i * lineH(9), 9), { style: 'bold', size: fs(9), color: C.INK });
       });
       if (r.unit) {
-        doc.text(r.unit, unitOwnLine ? x0 : x0 + lastW + px(5), baseline(nTop + (unitOwnLine ? nl.length : nl.length - 1) * lineH(9), 9), { style: 'regular', size: fs(8), color: C.MUTE });
+        doc.text(r.unit, L.unitOwnLine ? x0 : x0 + L.lastW + px(5), baseline(nTop + (L.unitOwnLine ? nl.length : nl.length - 1) * lineH(9), 9), { style: 'regular', size: fs(8), color: C.MUTE });
       }
       r.values.forEach(function (v, i) {
         var last = i === n - 1;
         doc.text(v === null || v === undefined ? '—' : E.fmt(v), xc + i * (colW + gap) + colW, baseline(mid - lineH(10) / 2, 10),
           { style: last ? 'bold' : 'regular', size: fs(10), color: v === null || v === undefined ? C.NA : (last ? C.BLACK : C.INK), align: 'right' });
       });
-      var delta = (r.first === null || r.last === null) ? null : r.last - r.first;
+      var delta = (r.first === null || r.last === null) ? null : r.last - r.first, col = changeCol(r);
+      sparkline(doc, r.values, xs + px(6), mid, spkW - px(12), px(13), col);
       if (delta !== null) {
         var txt = (Math.abs(delta) < 10 ? E.pySigned(delta, 2).replace(/0+$/, '').replace(/\.$/, '') : E.pySigned(delta, 0)) +
           (r.first ? ' (' + E.pySigned(delta / r.first * 100, 0) + '%)' : '');
-        var good = r.dir === 'Higher' ? delta > 0 : (r.dir === 'Lower' ? delta < 0 : null);
-        var col = delta === 0 || good === null ? C.MUTE : (good ? C.G : C.R);
         doc.text(txt, xChg, baseline(mid - lineH(9) / 2, 9), { style: 'bold', size: fs(9), color: col, align: 'right' });
       }
       doc.line(ML, top + h - px(0.5), ML + CW, top + h - px(0.5), { stroke: C.LINE, lw: px(1) });
       doc.y = top + h;
     });
     doc.y += px(4);
-    var note = wrap('Values from this client’s saved sessions on this device, up to the last 5 tests. Only metrics measured more than once are listed.', 'italic', fs(7.5), CW - px(4));
     note.forEach(function (l) {
       doc.ensure(lineH(7.5));
       doc.text(l, ML + px(2), baseline(doc.y, 7.5), { style: 'italic', size: fs(7.5), color: C.MUTE });
       doc.y += lineH(7.5);
     });
+  }
+
+  // Words in several styles flowing as one paragraph: parts = [{ s, style, size (CSS px), color, keep, join }]. Words are
+  // separated by one space and lines wrap at maxW. keep: the part never breaks inside; join: it stays on the same line
+  // as the word before it. Returns lines of positioned words [{ s, x, style, size, color }].
+  function flow(parts, maxW) {
+    var units = [];
+    parts.forEach(function (p) {
+      var t = clean(p.s).trim();
+      if (!t) return;
+      (p.keep ? [t] : t.split(' ')).forEach(function (w, i) {
+        var run = { s: w, style: p.style, size: p.size, color: p.color };
+        if (i === 0 && p.join && units.length) units[units.length - 1].push(run);
+        else units.push([run]);
+      });
+    });
+    function sp(r) { return width(' ', r.style, fs(r.size)); }
+    var lines = [[]], lx = 0;
+    units.forEach(function (u) {
+      var ww = u.reduce(function (a, r, k) { return a + (k ? sp(r) : 0) + width(r.s, r.style, fs(r.size)); }, 0);
+      var gap = lx > 0 ? sp(u[0]) : 0;
+      if (lx > 0 && lx + gap + ww > maxW) { lines.push([]); lx = 0; gap = 0; }
+      if (u.length === 1 && ww > maxW) {                               // a very long word: split it
+        var r0 = u[0];
+        wrap(r0.s, r0.style, fs(r0.size), maxW).forEach(function (piece, k) {
+          if (k) lines.push([]);
+          lines[lines.length - 1].push({ s: piece, x: 0, style: r0.style, size: r0.size, color: r0.color });
+          lx = width(piece, r0.style, fs(r0.size));
+        });
+        return;
+      }
+      var x = lx + gap;
+      u.forEach(function (r, k) {
+        if (k) x += sp(r);
+        lines[lines.length - 1].push({ s: r.s, x: x, style: r.style, size: r.size, color: r.color });
+        x += width(r.s, r.style, fs(r.size));
+      });
+      lx = x;
+    });
+    return lines;
+  }
+
+  // For the coach: the clinician's call on training (the app never works it out), any modifications and the next
+  // retest, in a tinted band under the athlete details: green for Full training, amber for Modified, red for Rehab
+  // only, neutral when only modifications or a date are given. One or two lines; longer text is cut with an ellipsis.
+  var COACH = {
+    'Full training': { fill: '#E7F3E8', edge: C.G, ink: C.G },
+    'Modified': { fill: '#FCF0DC', edge: C.A, ink: TEXT_COL.Amber },
+    'Rehab only': { fill: '#FBE6E6', edge: C.R, ink: C.R }
+  };
+  var COACH_NEUTRAL = { fill: '#EEF1F4', edge: '#8A93A0', ink: C.INK };
+  function coachBand(doc, co) {
+    if (!co) return;
+    var status = COACH[co.status] ? co.status : '', mods = clean(co.mods).trim(), retest = clean(co.retest).trim();
+    if (!status && !mods && !retest) return;
+    var look = COACH[status] || COACH_NEUTRAL, size = 12, bar = px(4), padX = px(10), padY = px(6), maxW = CW - bar - 2 * padX;
+    var parts = [];
+    function part(s, style, color, o) { parts.push(Object.assign({ s: s, style: style, size: size, color: color || C.INK }, o || {})); }
+    var KEEP = { keep: true }, WITH = { keep: true, join: true };      // phrases that never break across lines
+    if (status) { part('Training status:', 'bold', null, KEEP); part(status, 'bold', look.ink, WITH); }
+    else if (mods) part('Modifications:', 'bold', null, KEEP);
+    if (mods) { if (status) part('·', 'regular', C.MUTE); part(mods, 'regular'); }
+    if (retest) {
+      if (status || mods) { part('·', 'regular', C.MUTE); part('Next retest', 'regular', null, KEEP); } else part('Next retest:', 'bold', null, KEEP);
+      part(retest, 'bold', null, WITH);
+    }
+    var lines = flow(parts, maxW);
+    if (lines.length > 2) {                                  // two lines at most: end the second with an ellipsis
+      lines = lines.slice(0, 2);
+      var l2 = lines[1];
+      var over = function (w) { return w.x + width(w.s + '…', w.style, fs(size)) > maxW; };
+      while (l2.length > 1 && (over(l2[l2.length - 1]) || l2[l2.length - 1].s === '·')) l2.pop();
+      l2[l2.length - 1].s += '…';
+    }
+    var lh = lineH(size), h = 2 * padY + lines.length * lh, top = doc.y + px(2);
+    doc.rect(ML, top, CW, h, { r: [0, px(3), px(3), 0], fill: look.fill });
+    doc.rect(ML, top, bar, h, { fill: look.edge });
+    lines.forEach(function (line, i) {
+      line.forEach(function (w) {
+        doc.text(w.s, ML + bar + padX + w.x, baseline(top + padY + i * lh, size), { style: w.style, size: fs(w.size), color: w.color });
+      });
+    });
+    doc.y = top + h + px(6);
+  }
+
+  // ACL: the clinic's return-to-sport criteria (acl_norms.json "rts", checked by E.rtsCheck), two columns of
+  // met / not yet / not tested with the value and what is needed, then the decision-support note. Kept together on
+  // one page. Left off when none of the criteria could be checked yet.
+  var RTS_LOOK = { met: ['Green', C.G], not: ['Red', C.R], untested: ['n/a', C.NA] };
+  function rtsSection(doc, rts, headSize) {
+    if (!rts || !rts.rows || !rts.rows.length || rts.untested === rts.rows.length) return;
+    var gapC = px(22), colW = (CW - gapC) / 2, chipO = { size: 9, padX: 6, padY: 1 };
+    var cw = Math.max.apply(null, ['met', 'not', 'untested'].map(function (k) { return chipW(E.RTS_WORDS[k], Object.assign({ icon: RTS_LOOK[k][0] }, chipO)); }));
+    var half = Math.ceil(rts.rows.length / 2), cols = [rts.rows.slice(0, half), rts.rows.slice(half)];
+    function cell(r) {
+      var val = r.text;
+      var vw = width(val, 'bold', fs(10)), lx = cw + px(8);
+      var ll = wrap(r.label, 'bold', fs(10), colW - lx - vw - px(8));
+      var sub = 'needs ' + r.target + (r.fallback ? ' · from ' + r.metric : '');
+      var sl = wrap(sub, 'regular', fs(8), colW - lx);
+      return { r: r, val: val, ll: ll, sl: sl, lx: lx, h: Math.max(lineH(10) * ll.length, lineH(9) + px(2)) + px(1) + sl.length * lineH(8) + px(9) };
+    }
+    var grid = [];
+    for (var i = 0; i < half; i++) {
+      var a = cell(cols[0][i]), b = cols[1][i] ? cell(cols[1][i]) : null;
+      grid.push({ cells: [a, b], h: Math.max(a.h, b ? b.h : 0) });
+    }
+    var note = rts.note ? wrap(rts.note, 'italic', fs(7.5), CW - px(4)) : [];
+    var bodyH = grid.reduce(function (s, g) { return s + g.h; }, 0) + px(2) + (note.length ? px(5) + note.length * lineH(7.5) : 0);
+    var head = E.rtsSummary(rts);
+    section(doc, rts.title || 'Return-to-sport criteria', { keep: bodyH, size: headSize, right: head });
+    doc.y += px(2);
+    grid.forEach(function (g) {
+      var top = doc.y;
+      g.cells.forEach(function (c, k) {
+        if (!c) return;
+        var x = ML + k * (colW + gapC), look = RTS_LOOK[c.r.status] || RTS_LOOK.untested, t = top + px(4);
+        chip(doc, E.RTS_WORDS[c.r.status], x + px(4), t + (lineH(9) + px(2)) / 2, look[1], Object.assign({ icon: look[0] }, chipO));
+        c.ll.forEach(function (l, j) {
+          doc.text(l, x + px(4) + c.lx, baseline(t + j * lineH(10), 10), { style: 'bold', size: fs(10), color: C.INK });
+        });
+        doc.text(c.val, x + colW - px(4), baseline(t, 10), { style: 'bold', size: fs(10), color: c.r.value === null ? C.NA : C.BLACK, align: 'right' });
+        var st = t + Math.max(lineH(10) * c.ll.length, lineH(9) + px(2)) + px(1);
+        c.sl.forEach(function (l, j) {
+          doc.text(l, x + px(4) + c.lx, baseline(st + j * lineH(8), 8), { style: 'regular', size: fs(8), color: C.MUTE });
+        });
+        doc.line(x, top + g.h - px(0.5), x + colW, top + g.h - px(0.5), { stroke: C.LINE, lw: px(1) });
+      });
+      doc.y = top + g.h;
+    });
+    doc.y += px(2);
+    if (note.length) {
+      doc.y += px(5);
+      note.forEach(function (l) {
+        doc.text(l, ML + px(2), baseline(doc.y, 7.5), { style: 'italic', size: fs(7.5), color: C.MUTE });
+        doc.y += lineH(7.5);
+      });
+    }
   }
 
   function footerH(text) { return px(12) + px(2 + 6) + wrap(text, 'italic', fs(8), CW).length * lineH(8); }
@@ -609,28 +966,40 @@
   }
 
   // ------------------------------------------------------------------ the three reports
+  // a legend line for the footer when any meter shows a previous result
+  var METER_NOTE = 'Meters: black bar = this test, ring = previous result; the joining line is green for a real improvement, red for a real decline and grey within normal test variation.';
+  function rowsHavePrev(groups) {
+    return E.flatten(groups || []).some(function (r) { return r.prev != null && !!E.meter(r.result, r.norm); });
+  }
+  function withNote(text, on) { return on ? (text ? text + ' ' : '') + METER_NOTE : text; }
+
+  // The screening report's first page is the one coaches read, often on a phone, so the screening report uses larger
+  // type for its headings, athlete details, interpretation and priorities (the other reports keep their sizes).
+  var P1 = { head: 13, meta: 11.33, band: 11.33, interp: 13.33, cards: { domain: 11, status: 10, count: 9.5 },
+    prio: { name: 13.33, detail: 11.33, what: 10.67, chip: 10 } };
   function screening(d) {
-    var doc = new Doc(), m = d.meta || {};
+    var doc = new Doc(), m = d.meta || {}, P = P1;
     header(doc, 'Athlete Performance & Readiness Report', 'VALD Testing • Normative screening with change-vs-previous');
     meta(doc, [['Athlete', m.name], ['Date', m.date], ['Sport', m.sport], ['Tester', m.tester], ['Age', m.age],
-      ['Sex', m.sex], ['Mass', clean(m.mass).trim() ? clean(m.mass).trim() + ' kg' : ''], ['Notes', m.notes]]);
-    band(doc, 'Compared against', d.popLabel || '—', [['Green: ' + d.counts.Green, C.G], ['Amber: ' + d.counts.Amber, C.A], ['Red: ' + d.counts.Red, C.R]]);
-    interpretation(doc, d.interp);
+      ['Sex', m.sex], ['Mass', clean(m.mass).trim() ? clean(m.mass).trim() + ' kg' : ''], ['Notes', m.notes]], P.meta);
+    coachBand(doc, d.coach);
+    band(doc, 'Compared against', d.popLabel || '—', tallyChips('target', d.counts), P.band);
+    interpretation(doc, d.interp, { size: P.interp, head: P.head });
     var cards = E.scorecard(d.groups);
-    if (cards.length) { section(doc, 'Overview by area', { keep: px(40) }); scorecard(doc, cards); }
+    if (cards.length) { section(doc, 'Overview by area', { keep: px(45), size: P.head }); scorecard(doc, cards, P.cards); }
     var keys = d.radarKeys && d.radarKeys.length ? d.radarKeys : null;
     var spokes = keys ? E.radarSpokes(d.groups, keys) : [];
     var quad = keys ? keys.some(function (k) { return k[0] === '__QUAD__'; }) : false;
-    var drewRadar = radar(doc, spokes, quad);
-    section(doc, 'Top priorities — worst first', { newPage: drewRadar, keep: px(22) });
-    priorities(doc, d.prios);
-    asymmetry(doc, d.groups);
-    section(doc, 'Full results', { keep: px(60) });
-    var foot = 'Confidence shown in grey (★★★ strong · ★★☆ moderate · ★☆☆ weak). ' +
+    profile(doc, spokes, quad, P.head);
+    // no forced page break: the priorities follow on the same page when the heading and the first two fit
+    section(doc, 'Top priorities — worst first', { keep: prioKeep(d.prios, 'target', P.prio, 2), size: P.head });
+    priorities(doc, d.prios, null, 'target', P.prio);
+    asymmetry(doc, d.groups, P.head);
+    var foot = withNote('Confidence shown in grey (★★★ strong · ★★☆ moderate · ★☆☆ weak). ' +
       'Norms are population- and protocol-dependent; targets reflect the selected reference population only. ' +
-      'This report organises and displays testing data and is not medical advice.';
-    results(doc, d.groups, [150, 52, 120], 'target', d.progress ? 0 : footerH(foot));
-    progressTable(doc, d.progress);
+      'This report organises and displays testing data and is not medical advice.', rowsHavePrev(d.groups));
+    results(doc, d.groups, [150, 52, 120], 'target', d.progress ? 0 : footerH(foot), 'target', { title: 'Full results', size: P.head });
+    progressTable(doc, d.progress, P.head, footerH(foot));
     footer(doc, foot);
     return finish(doc, 'Athlete Performance & Readiness Report', m.name);
   }
@@ -646,12 +1015,14 @@
       meta(doc, [['Athlete', m.name], ['Date', m.date], ['Injured side', m.injured], ['Clinician', m.clinician],
         ['Wks since injury', m.weeks], ['Sport', m.sport], ['Notes', m.notes]]);
     }
-    band(doc, 'Rehab phase', acl ? d.phase + ' · ' + d.sex : d.phase,
-      [['On/ahead: ' + d.counts.Green, C.G], ['Within 1 SD: ' + d.counts.Amber, C.A], ['>1 SD behind: ' + d.counts.Red, C.R]]);
+    coachBand(doc, d.coach);
+    band(doc, 'Rehab phase', acl ? d.phase + ' · ' + d.sex : d.phase, tallyChips('rehab', d.counts));
     interpretation(doc, d.interp);
-    results(doc, d.groups, acl ? [210, 56, 118] : [188, 56, 118], 'phase target', d.progress ? 0 : footerH(d.disclaimer || ''));
-    progressTable(doc, d.progress);
-    footer(doc, d.disclaimer || '');
+    if (acl) rtsSection(doc, d.rts);
+    var foot = withNote(d.disclaimer || '', rowsHavePrev(d.groups));
+    results(doc, d.groups, acl ? [210, 56, 118] : [188, 56, 118], 'phase target', d.progress ? 0 : footerH(foot), 'rehab');
+    progressTable(doc, d.progress, null, footerH(foot));
+    footer(doc, foot);
     return finish(doc, acl ? 'ACL Rehab & Return-to-Play' : 'Hamstring Rehab & Return-to-Play', m.name);
   }
 
@@ -704,9 +1075,9 @@
           return;
         }
         doc.text(cell.text, x, baseline(inner, 11), { style: 'bold', size: fs(11), color: C.BLACK });
-        chip(doc, cell.status, x + w, inner + lineH(11) / 2, COL[cell.status] || C.NA, { right: true, size: 8.5, padX: 6, padY: 1 });
+        chip(doc, E.statusWord(cell.status, 'target'), x + w, inner + lineH(11) / 2, COL[cell.status] || C.NA, { right: true, size: 8.5, padX: 6, padY: 1, icon: cell.status });
         var my = inner + lineH(11) + px(4);
-        meterBar(doc, x, my, w, cell.value, t.norm);
+        meterBar(doc, x, my, w, cell.value, t.norm, cell.prev ? { value: cell.prev.value, kind: cell.change_kind } : null);
         var raw;
         if (t.input === 'calc') raw = 'ADD ' + E.fmt(cell.parts[0]) + ' N ÷ ABD ' + E.fmt(cell.parts[1]) + ' N';
         else raw = E.fmt(cell.input) + ' ' + (t.input === 'reps' ? 'reps' : t.input) + (cell.also != null ? ' · ' + E.fmt(cell.also) + ' × BW' : '');
@@ -730,20 +1101,24 @@
     header(doc, 'Lower-Limb Strength & Capacity', 'Strength battery • targets relative to body weight');
     meta(doc, [['Athlete', m.name], ['Date', m.date], ['Mass', clean(m.mass).trim() ? clean(m.mass).trim() + ' kg' : ''],
       ['Sport', m.sport], ['Tester', m.tester], ['Notes', m.notes]]);
-    band(doc, 'Scored against', 'BASE Health strength targets', [['Green: ' + c.Green, C.G], ['Amber: ' + c.Amber, C.A], ['Red: ' + c.Red, C.R]]);
+    coachBand(doc, d.coach);
+    band(doc, 'Scored against', 'BASE Health strength targets', tallyChips('target', c));
     interpretation(doc, d.interp);
     section(doc, 'Below target — worst first', { keep: px(22) });
     priorities(doc, d.prios.map(function (r) {
-      return { status: r.status, name: r.name, detail: '= ' + r.text + ' · needs ' + r.target };
-    }), '✓ Nothing below target — every tested result is on target.');
+      return { status: r.status, name: r.name, detail: '= ' + r.text + ' · needs ' + r.target, what: r.what };
+    }), '✓ Nothing below target — every tested result is on target.', 'target');
     section(doc, 'Results — left vs right', { keep: px(90) });
     var pct = d.amberPct == null ? 5 : d.amberPct;
-    var foot = 'Green = at or above target · Amber = within ' + pct + '% of target · Red = further away. ' +
+    var prevShown = d.tests.some(function (t) {
+      return ['L', 'R'].some(function (k) { var cl = t.sides[k]; return cl && cl.prev && cl.value !== null && !!E.meter(cl.value, t.norm); });
+    });
+    var foot = withNote('On target = at or above target · Close = within ' + pct + '% of target · Off target = further away. ' +
       'Loads are divided by body mass; forces are converted to N/kg (N ÷ kg) or × body weight (N ÷ (kg × 9.81)). ' +
       'Hip ratio = adduction ÷ abduction. L/R diff = gap between legs as a % of the stronger leg. ' +
-      'BW = body weight · RM = repetition maximum. This report organises and displays testing data and is not medical advice.';
+      'BW = body weight · RM = repetition maximum. This report organises and displays testing data and is not medical advice.', prevShown);
     strengthTable(doc, d.tests.filter(function (t) { return t.any || t.sides.L.needsMass || t.sides.R.needsMass; }), d.progress ? 0 : footerH(foot));
-    progressTable(doc, d.progress);
+    progressTable(doc, d.progress, null, footerH(foot));
     footer(doc, foot);
     return finish(doc, 'Lower-Limb Strength & Capacity', m.name);
   }
