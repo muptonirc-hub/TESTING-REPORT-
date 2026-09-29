@@ -102,7 +102,8 @@ button { cursor: pointer; }
 }
 .tools button[aria-selected="true"] { background: #fff; color: #1B2430; box-shadow: 0 1px 3px rgba(0, 0, 0, .25); }
 .appbar .ghost { border: 1px solid rgba(255, 255, 255, .25); background: transparent; color: #fff; }
-.appbar .ghost.armed { background: var(--red); border-color: var(--red); }
+.appbar .clear-btn { padding-inline: 14px; }
+.appbar .clear-btn svg { flex: none; opacity: .85; }
 
 /* ---------- buttons */
 .ghost, .primary, .quiet {
@@ -114,6 +115,12 @@ button { cursor: pointer; }
 .primary:active { filter: brightness(.94); }
 .primary[disabled] { opacity: .45; cursor: not-allowed; }
 .quiet { border: 0; background: transparent; color: var(--teal-ink); padding-inline: 8px; }
+.danger {
+  min-height: 44px; padding: 10px 16px; border-radius: 11px; font-weight: 700; font-size: 15px;
+  display: inline-flex; align-items: center; justify-content: center; white-space: nowrap;
+  border: 0; background: #C62828; color: #fff;
+}
+.danger:active { filter: brightness(.92); }
 
 /* ---------- workspace */
 .workspace {
@@ -308,6 +315,28 @@ button { cursor: pointer; }
   z-index: 60; background: #1B2430; color: #fff; padding: 12px 18px; border-radius: 12px; font-weight: 600; font-size: 14.5px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, .25); max-width: calc(100vw - 32px);
 }
+/* ---------- clear-all confirmation */
+.modal {
+  position: fixed; inset: 0; z-index: 50; display: flex; align-items: center; justify-content: center;
+  padding: max(20px, env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) max(20px, env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px));
+  background: rgba(8, 13, 17, .55);
+}
+.modal-card {
+  width: 100%; max-width: 460px; max-height: 100%; overflow-y: auto; -webkit-overflow-scrolling: touch;
+  background: var(--surface); color: var(--fg); border: 1px solid var(--line); border-radius: 18px;
+  padding: 22px 22px 18px; box-shadow: 0 24px 64px rgba(0, 0, 0, .35);
+}
+.modal-card h2 { margin: 0 0 6px; font: 700 21px/1.2 var(--font-display); }
+.modal-card p { margin: 0; color: var(--muted); font-size: 14.5px; }
+.modal-card .modal-fine { font-size: 13.5px; }
+.clear-list { list-style: none; margin: 14px 0; padding: 0; border: 1px solid var(--line); border-radius: 12px; background: var(--field); }
+.clear-list li { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 10px 14px; }
+.clear-list li + li { border-top: 1px solid var(--line); }
+.clear-list .cl-t { font-weight: 650; font-size: 14.5px; white-space: nowrap; }
+.clear-list .cl-d { color: var(--muted); font-size: 13.5px; text-align: right; min-width: 0; overflow-wrap: anywhere; }
+.clear-list li.has-data .cl-d { color: var(--fg); }
+.modal-actions { display: flex; gap: 10px; margin-top: 18px; }
+.modal-actions button { flex: 1; }
 .boot { padding: 60px 20px; text-align: center; color: var(--muted); }
 .error-card { border-color: var(--red); }
 .error-card h2 { color: var(--red-ink); }
@@ -342,6 +371,7 @@ button { cursor: pointer; }
   }
   .cols { display: none; }
   .tab-extra { display: none; }
+  .clear-btn .cb-extra { display: none; }
   .tools button { padding-inline: 4px; }
   .metric.lr { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-areas: "label label" "left right" "out out"; }
   .metric.lr .m-out { align-items: stretch; }
@@ -350,6 +380,10 @@ button { cursor: pointer; }
   .metric input::placeholder { font-size: 13px; }
   .pagehead h1 { font-size: 22px; }
   .dock .dt a { padding: 0 8px; }
+}
+@media (max-width: 374px) {
+  .clear-btn .cb-label { display: none; }
+  .appbar .clear-btn { padding-inline: 12px; }
 }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
 </style>
@@ -369,7 +403,10 @@ button { cursor: pointer; }
     <button role="tab" id="tab-ham" data-tool="ham" aria-selected="false">Hamstring<span class="tab-extra"> rehab</span></button>
     <button role="tab" id="tab-acl" data-tool="acl" aria-selected="false">ACL<span class="tab-extra"> rehab</span></button>
   </nav>
-  <button class="ghost" id="newAthlete" type="button">New athlete</button>
+  <button class="ghost clear-btn" id="clearAll" type="button" aria-haspopup="dialog" aria-label="Clear all data">
+    <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/></svg>
+    <span class="cb-label">Clear all<span class="cb-extra"> data</span></span>
+  </button>
 </header>
 
 <main class="workspace">
@@ -391,12 +428,25 @@ button { cursor: pointer; }
   <div class="sheet-body"><div class="pages" id="pages"></div></div>
 </div>
 
+<div class="modal" id="clearDialog" role="alertdialog" aria-modal="true" aria-labelledby="clearTitle" aria-describedby="clearIntro" hidden>
+  <div class="modal-card">
+    <h2 id="clearTitle">Clear all data?</h2>
+    <p id="clearIntro">This deletes everything entered on this device in all four sections, including names, notes and tester details.</p>
+    <ul class="clear-list" id="clearList"></ul>
+    <p class="modal-fine">Save or share any reports you need first. This can’t be undone.</p>
+    <div class="modal-actions">
+      <button class="ghost" id="clearCancel" type="button">Cancel</button>
+      <button class="danger" id="clearConfirm" type="button">Delete everything</button>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast" role="status" hidden></div>
 
-<script src="engine.js?v=3" defer></script>
-<script src="report-fonts.js?v=3" defer></script>
-<script src="jspdf.umd.min.js?v=3" defer></script>
-<script src="report.js?v=3" defer></script>
-<script src="app.js?v=3" defer></script>
+<script src="engine.js?v=4" defer></script>
+<script src="report-fonts.js?v=4" defer></script>
+<script src="jspdf.umd.min.js?v=4" defer></script>
+<script src="report.js?v=4" defer></script>
+<script src="app.js?v=4" defer></script>
 </body>
 </html>

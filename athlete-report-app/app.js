@@ -1,6 +1,7 @@
 /* BASE Health Athlete Report: screen logic.
-   Three tools (screening, hamstring rehab, ACL rehab). Everything runs on the device: results are
-   scored as they are typed, the PDF is built locally, and a draft is kept in this browser only. */
+   Four tools (screening, LL strength, hamstring rehab, ACL rehab). Everything runs on the device: results are
+   scored as they are typed, the PDF is built locally, and a draft is kept in this browser only until
+   "Clear all data" wipes it. */
 (function () {
   'use strict';
   var E = window.BHEngine;
@@ -12,7 +13,8 @@
   var els = {
     entry: $('entry'), summary: $('summary'), dock: $('dock'), sheet: $('sheet'), pages: $('pages'),
     sheetTitle: $('sheetTitle'), share: $('sharePdf'), save: $('savePdf'), back: $('sheetBack'),
-    toast: $('toast'), newAthlete: $('newAthlete')
+    toast: $('toast'), clearAll: $('clearAll'), clearDialog: $('clearDialog'), clearList: $('clearList'),
+    clearCancel: $('clearCancel'), clearConfirm: $('clearConfirm')
   };
 
   // ------------------------------------------------------------------ small helpers
@@ -597,7 +599,7 @@
       var q = val('acl', 'Quadriceps LSI'); q.left = '248'; q.right = '205';
     }
     render();
-    toast('Example results filled in — tap New athlete to clear them');
+    toast('Example results filled in — tap Clear all data to clear them');
   }
 
   // ------------------------------------------------------------------ report
@@ -718,23 +720,74 @@
     render();
     window.scrollTo(0, 0);
   }
-  var armTimer = null;
-  function newAthlete() {
-    var b = els.newAthlete;
-    if (!b.classList.contains('armed')) {
-      b.classList.add('armed');
-      b.textContent = 'Tap again to clear';
-      armTimer = setTimeout(function () { b.classList.remove('armed'); b.textContent = 'New athlete'; }, 3500);
-      return;
-    }
-    clearTimeout(armTimer);
-    b.classList.remove('armed'); b.textContent = 'New athlete';
-    var t = state.tool, m = state[t].meta;
-    state[t] = freshTool(t, { tester: m.tester, clinician: m.clinician, surgeon: m.surgeon });
+  // ------------------------------------------------------------------ clear all data
+  // One button wipes every section (names, results, notes, tester details), the saved draft and
+  // the last report built, after a check that lists what will go.
+  var TOOLS = ['screen', 'str', 'ham', 'acl'];
+  var TOOL_NAMES = { screen: 'Screening', str: 'LL Strength', ham: 'Hamstring rehab', acl: 'ACL rehab' };
+  function toolContent(t) {
+    var s = state[t], n = 0, details = false;
+    Object.keys(s.values || {}).forEach(function (k) {
+      var v = s.values[k] || {};
+      if (['result', 'previous', 'side', 'left', 'right'].some(function (f) { return !blank(v[f]); })) n++;
+    });
+    Object.keys(s.meta).forEach(function (k) { if (k !== 'date' && !blank(s.meta[k])) details = true; });
+    return { results: n, any: n > 0 || details || !!s.importLog, name: String(s.meta.name || '').trim() };
+  }
+  function setBackgroundInert(on) {
+    ['.appbar', '.workspace', '#dock'].forEach(function (sel) {
+      var el = document.querySelector(sel);
+      if (!el) return;
+      if (on) el.setAttribute('inert', ''); else el.removeAttribute('inert');
+    });
+  }
+  var lastFocus = null;
+  function openClearDialog() {
+    var any = false;
+    els.clearList.innerHTML = TOOLS.map(function (t) {
+      var c = toolContent(t);
+      if (c.any) any = true;
+      var d = !c.any ? 'nothing entered'
+        : (c.name || 'no name') + ' · ' + (c.results ? c.results + (c.results === 1 ? ' result' : ' results') : 'details only');
+      return '<li' + (c.any ? ' class="has-data"' : '') + '><span class="cl-t">' + TOOL_NAMES[t] + '</span><span class="cl-d">' + esc(d) + '</span></li>';
+    }).join('');
+    if (!any) { toast('Nothing to clear — every section is already empty'); return; }
+    lastFocus = document.activeElement;
+    els.toast.hidden = true;
+    els.clearDialog.hidden = false;
+    setBackgroundInert(true);
+    document.documentElement.style.overflow = 'hidden';
+    els.clearCancel.focus();
+  }
+  function closeClearDialog(restoreFocus) {
+    if (els.clearDialog.hidden) return;
+    els.clearDialog.hidden = true;
+    setBackgroundInert(false);
+    document.documentElement.style.overflow = '';
+    if (restoreFocus !== false && lastFocus && lastFocus.focus) lastFocus.focus();
+  }
+  function clearAllData() {
+    TOOLS.forEach(function (t) { state[t] = freshTool(t); });
     tidyState();
+    // drop the last report built (it holds the athlete's details) and its preview
+    current = { file: null, blob: null, title: '' };
+    els.pages.innerHTML = '';
+    els.sheetTitle.textContent = 'Report';
+    // overwrite the saved draft straight away, so closing the app now can't bring the old data back
+    clearTimeout(saveTimer);
+    try { localStorage.setItem(STORE, JSON.stringify(state)); } catch (e) { /* storage unavailable */ }
+    closeClearDialog(false);
     render();
     window.scrollTo(0, 0);
-    toast('Cleared — ready for the next athlete');
+    els.clearAll.focus();
+    toast('All data cleared — ready for the next athlete');
+  }
+  function onDialogKey(e) {
+    if (e.key !== 'Tab') return;
+    var first = els.clearCancel, last = els.clearConfirm;
+    if (!els.clearDialog.contains(document.activeElement)) { e.preventDefault(); first.focus(); }
+    else if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
   }
 
   // ------------------------------------------------------------------ boot
@@ -759,11 +812,20 @@
         var b = e.target.closest('button[data-tool]');
         if (b) switchTool(b.dataset.tool);
       });
-      els.newAthlete.addEventListener('click', newAthlete);
+      els.clearAll.addEventListener('click', openClearDialog);
+      els.clearCancel.addEventListener('click', function () { closeClearDialog(); });
+      els.clearConfirm.addEventListener('click', clearAllData);
+      els.clearDialog.addEventListener('click', function (e) { if (e.target === els.clearDialog) closeClearDialog(); });
       els.back.addEventListener('click', closeReport);
       els.save.addEventListener('click', savePdf);
       els.share.addEventListener('click', sharePdf);
-      document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !els.sheet.hidden) closeReport(); });
+      document.addEventListener('keydown', function (e) {
+        if (!els.clearDialog.hidden) {
+          if (e.key === 'Escape') { e.preventDefault(); closeClearDialog(); } else onDialogKey(e);
+          return;
+        }
+        if (e.key === 'Escape' && !els.sheet.hidden) closeReport();
+      });
       render();
     }).catch(function (err) {
       els.entry.innerHTML = '<section class="card error-card"><div class="card-head"><h2>Norms not found</h2></div>' +
