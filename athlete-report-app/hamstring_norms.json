@@ -1,0 +1,321 @@
+{
+ "phases": [
+  "Initial Assessment",
+  "Week 1",
+  "Week 2–6",
+  "Return to Play"
+ ],
+ "groups": [
+  {
+   "title": "RANGE OF MOTION  /  LENGTH   (DynaMo)",
+   "metrics": [
+    {
+     "name": "AKET deficit vs uninjured",
+     "unit": "°",
+     "dir": "Lower",
+     "thr": 5
+    },
+    {
+     "name": "PKET deficit vs uninjured",
+     "unit": "°",
+     "dir": "Lower",
+     "thr": 5
+    },
+    {
+     "name": "SLR % of uninjured side",
+     "unit": "%",
+     "dir": "Higher",
+     "thr": 5
+    },
+    {
+     "name": "MHFAKE % of uninjured side",
+     "unit": "%",
+     "dir": "Higher",
+     "thr": 5
+    }
+   ]
+  },
+  {
+   "title": "STRENGTH  -  HAND-HELD / FIXED DYNAMOMETRY   (DynaMo)",
+   "metrics": [
+    {
+     "name": "HHD 90° knee-flex force — injured",
+     "unit": "N",
+     "dir": "Higher",
+     "thr": 25
+    },
+    {
+     "name": "HHD 90° knee-flex % of uninjured",
+     "unit": "%",
+     "dir": "Higher",
+     "thr": 8
+    },
+    {
+     "name": "HHD 15° knee-flex force — injured",
+     "unit": "N",
+     "dir": "Higher",
+     "thr": 25
+    },
+    {
+     "name": "HHD 45° force — injured",
+     "unit": "N",
+     "dir": "Higher",
+     "thr": 30
+    }
+   ]
+  },
+  {
+   "title": "ECCENTRIC STRENGTH   (NordBord)",
+   "metrics": [
+    {
+     "name": "Nordic peak force — injured",
+     "unit": "N",
+     "dir": "Higher",
+     "thr": 30
+    },
+    {
+     "name": "Nordic peak-force imbalance",
+     "unit": "N",
+     "dir": "Lower",
+     "thr": 15
+    }
+   ]
+  },
+  {
+   "title": "ISOKINETIC DYNAMOMETRY  (if available)",
+   "metrics": [
+    {
+     "name": "Knee-flexor ECC peak torque @60°/s — injured",
+     "unit": "Nm",
+     "dir": "Higher",
+     "thr": 20
+    },
+    {
+     "name": "Knee-flexor CONC peak torque @60°/s diff %",
+     "unit": "%",
+     "dir": "Lower",
+     "thr": 8
+    }
+   ]
+  },
+  {
+   "title": "FUNCTION   (SmartSpeed)",
+   "metrics": [
+    {
+     "name": "5 m sprint time",
+     "unit": "s",
+     "dir": "Lower",
+     "thr": 0.03
+    },
+    {
+     "name": "10 m sprint time",
+     "unit": "s",
+     "dir": "Lower",
+     "thr": 0.04
+    }
+   ]
+  },
+  {
+   "title": "CLINICAL  /  PATIENT-REPORTED",
+   "metrics": [
+    {
+     "name": "HaOS score",
+     "unit": "AU",
+     "dir": "Higher",
+     "thr": 6
+    },
+    {
+     "name": "Pain on palpation — length",
+     "unit": "cm",
+     "dir": "Lower",
+     "thr": 1.5
+    }
+   ]
+  }
+ ],
+ "norms": {
+  "Initial Assessment": {
+   "AKET deficit vs uninjured": {
+    "dir": "Lower",
+    "green": 13,
+    "amber": 27,
+    "source": "★★☆ VALD Research Norms · Hamstring Strain (Grade I–II, male, 20–30 yr) · avg ± 1 SD"
+   },
+   "PKET deficit vs uninjured": {
+    "dir": "Lower",
+    "green": 2,
+    "amber": 8,
+    "source": "★★☆ VALD Research Norms · Hamstring Strain (Grade I–II, male, 20–30 yr) · avg ± 1 SD"
+   },
+   "SLR % of uninjured side": {
+    "dir": "Higher",
+    "green": 87,
+    "amber": 70.5,
+    "source": "★★☆ VALD Research Norms · Hamstring Strain (Grade I–II, male, 20–30 yr) · avg ± 1 SD"
+   },
+   "HHD 90° knee-flex force — injured": {
+    "dir": "Higher",
+    "green": 131,
+    "amber": 75,
+    "source": "★★☆ VALD Research Norms · Hamstring Strain (Grade I–II, male, 20–30 yr) · avg ± 1 SD"
+   },
+   "HHD 90° knee-flex % of uninjured": {
+    "dir": "Higher",
+    "green": 46,
+    "amber": 21.5,
+    "source": "★★☆ VALD Research Norms · Hamstring Strain (Grade I–II, male, 20–30 yr) · avg ± 1 SD"
+   },
+   "HHD 15° knee-flex force — injured": {
+    "dir": "Higher",
+    "green": 143,
+    "amber": 66.5,
+    "source": "★★☆ VALD Research Norms · Hamstring Strain (Grade I–II, male, 20–30 yr) · avg ± 1 SD"
+   },
+   "HHD 45° force — injured": {
+    "dir": "Higher",
+    "green": 144,
+    "amber": 84.5,
+    "source": "★★☆ VALD Research Norms · Hamstring Strain (Grade I–II, male, 20–30 yr) · avg ± 1 SD"
+   },
+   "Pain on palpation — length": {
+    "dir": "Lower",
+    "green": 8,
+    "amber": 13,
+    "source": "★★☆ VALD Research Norms · Hamstring Strain (Grade I–II, male, 20–30 yr) · avg ± 1 SD"
+   }
+  },
+  "Week 1": {
+   "AKET deficit vs uninjured": {
+    "dir": "Lower",
+    "green": 3,
+    "amber": 13,
+    "source": "★★☆ VALD Research Norms · Hamstring Strain (Grade I–II, male, 20–30 yr) · avg ± 1 SD"
+   },
+   "PKET deficit vs uninjured": {
+    "dir": "Lower",
+    "green": 2,
+    "amber": 7,
+    "source": "★★☆ VALD Research Norms · Hamstring Strain (Grade I–II, male, 20–30 yr) · avg ± 1 SD"
+   },
+   "HHD 90° knee-flex force — injured": {
+    "dir": "Higher",
+    "green": 108,
+    "amber": 91,
+    "source": "★★☆ VALD Research Norms · Hamstring Strain (Grade I–II, male, 20–30 yr) · avg ± 1 SD"
+   },
+   "HHD 15° knee-flex force — injured": {
+    "dir": "Higher",
+    "green": 128,
+    "amber": 107,
+    "source": "★★☆ VALD Research Norms · Hamstring Strain (Grade I–II, male, 20–30 yr) · avg ± 1 SD"
+   }
+  },
+  "Week 2–6": {
+   "AKET deficit vs uninjured": {
+    "dir": "Lower",
+    "green": -1,
+    "amber": 4,
+    "source": "★★☆ VALD Research Norms · Hamstring Strain (Grade I–II, male, 20–30 yr) · avg ± 1 SD"
+   },
+   "PKET deficit vs uninjured": {
+    "dir": "Lower",
+    "green": -2,
+    "amber": 4,
+    "source": "★★☆ VALD Research Norms · Hamstring Strain (Grade I–II, male, 20–30 yr) · avg ± 1 SD"
+   }
+  },
+  "Return to Play": {
+   "AKET deficit vs uninjured": {
+    "dir": "Lower",
+    "green": 2,
+    "amber": 7,
+    "source": "★★☆ VALD Research Norms · Hamstring Strain (Grade I–II, male, 20–30 yr) · avg ± 1 SD"
+   },
+   "PKET deficit vs uninjured": {
+    "dir": "Lower",
+    "green": 1,
+    "amber": 5,
+    "source": "★★☆ VALD Research Norms · Hamstring Strain (Grade I–II, male, 20–30 yr) · avg ± 1 SD"
+   },
+   "SLR % of uninjured side": {
+    "dir": "Higher",
+    "green": 100,
+    "amber": 95.5,
+    "source": "★★☆ VALD Research Norms · Hamstring Strain (Grade I–II, male, 20–30 yr) · avg ± 1 SD"
+   },
+   "MHFAKE % of uninjured side": {
+    "dir": "Higher",
+    "green": 99,
+    "amber": 91,
+    "source": "★★☆ VALD Research Norms · Hamstring Strain (Grade I–II, male, 20–30 yr) · avg ± 1 SD"
+   },
+   "HHD 90° knee-flex force — injured": {
+    "dir": "Higher",
+    "green": 174,
+    "amber": 147.5,
+    "source": "★★☆ VALD Research Norms · Hamstring Strain (Grade I–II, male, 20–30 yr) · avg ± 1 SD"
+   },
+   "HHD 90° knee-flex % of uninjured": {
+    "dir": "Higher",
+    "green": 94,
+    "amber": 78,
+    "source": "★★☆ VALD Research Norms · Hamstring Strain (Grade I–II, male, 20–30 yr) · avg ± 1 SD"
+   },
+   "HHD 45° force — injured": {
+    "dir": "Higher",
+    "green": 248,
+    "amber": 192,
+    "source": "★★☆ VALD Research Norms · Hamstring Strain (Grade I–II, male, 20–30 yr) · avg ± 1 SD"
+   },
+   "Nordic peak force — injured": {
+    "dir": "Higher",
+    "green": 301,
+    "amber": 213,
+    "source": "★★☆ VALD Research Norms · Hamstring Strain (Grade I–II, male, 20–30 yr) · avg ± 1 SD"
+   },
+   "Nordic peak-force imbalance": {
+    "dir": "Lower",
+    "green": 3,
+    "amber": 16.5,
+    "source": "★★☆ VALD Research Norms · Hamstring Strain (Grade I–II, male, 20–30 yr) · avg ± 1 SD"
+   },
+   "Knee-flexor ECC peak torque @60°/s — injured": {
+    "dir": "Higher",
+    "green": 188,
+    "amber": 142.5,
+    "source": "★★☆ VALD Research Norms · Hamstring Strain (Grade I–II, male, 20–30 yr) · avg ± 1 SD"
+   },
+   "Knee-flexor CONC peak torque @60°/s diff %": {
+    "dir": "Lower",
+    "green": 18,
+    "amber": 31.5,
+    "source": "★★☆ VALD Research Norms · Hamstring Strain (Grade I–II, male, 20–30 yr) · avg ± 1 SD"
+   },
+   "5 m sprint time": {
+    "dir": "Lower",
+    "green": 1.36,
+    "amber": 1.46,
+    "source": "★★☆ VALD Research Norms · Hamstring Strain (Grade I–II, male, 20–30 yr) · avg ± 1 SD"
+   },
+   "10 m sprint time": {
+    "dir": "Lower",
+    "green": 2.12,
+    "amber": 2.25,
+    "source": "★★☆ VALD Research Norms · Hamstring Strain (Grade I–II, male, 20–30 yr) · avg ± 1 SD"
+   },
+   "HaOS score": {
+    "dir": "Higher",
+    "green": 88,
+    "amber": 76,
+    "source": "★★☆ VALD Research Norms · Hamstring Strain (Grade I–II, male, 20–30 yr) · avg ± 1 SD"
+   },
+   "Pain on palpation — length": {
+    "dir": "Lower",
+    "green": 0,
+    "amber": 1,
+    "source": "★★☆ VALD Research Norms · Hamstring Strain (Grade I–II, male, 20–30 yr) · avg ± 1 SD"
+   }
+  }
+ },
+ "disclaimer": "Aggregated research norms for Grade I–II hamstring strain (male soccer, ~20–30 yr). Green = at or ahead of the typical case at this phase; Amber = within 1 SD behind; Red = >1 SD behind. Decision SUPPORT only — not return-to-play clearance. No female norms; apply clinical judgement."
+}

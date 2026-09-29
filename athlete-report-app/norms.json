@@ -1,0 +1,2246 @@
+{
+ "population_order": [
+  "General Clinical — Male (all ages)",
+  "General Clinical — Female (all ages)",
+  "Men's Football (Soccer)",
+  "Women's Football (Soccer)",
+  "AFL",
+  "Custom (in-house)"
+ ],
+ "groups": [
+  {
+   "title": "FORCEDECKS  -  COUNTERMOVEMENT JUMP (CMJ)",
+   "metrics": [
+    {
+     "name": "Jump Height",
+     "unit": "cm",
+     "calc": null,
+     "dir": "Higher",
+     "thr": 2.5
+    },
+    {
+     "name": "Peak Power",
+     "unit": "W/kg",
+     "calc": null,
+     "dir": "Higher",
+     "thr": 3
+    },
+    {
+     "name": "CMJ Peak Force",
+     "unit": "N",
+     "calc": null,
+     "dir": "Higher",
+     "thr": 150
+    },
+    {
+     "name": "RSI-modified",
+     "unit": "AU",
+     "calc": null,
+     "dir": "Higher",
+     "thr": 5
+    },
+    {
+     "name": "Concentric Asymmetry",
+     "unit": "%",
+     "calc": null,
+     "dir": "Lower",
+     "thr": 5
+    },
+    {
+     "name": "Landing Asymmetry",
+     "unit": "%",
+     "calc": null,
+     "dir": "Lower",
+     "thr": 5
+    }
+   ]
+  },
+  {
+   "title": "FORCEDECKS  -  ISOMETRIC MID-THIGH PULL (IMTP)",
+   "metrics": [
+    {
+     "name": "IMTP Peak Force",
+     "unit": "N",
+     "calc": null,
+     "dir": "Higher",
+     "thr": 200
+    },
+    {
+     "name": "IMTP Relative Force",
+     "unit": "N/kg",
+     "calc": null,
+     "dir": "Higher",
+     "thr": 2.5
+    },
+    {
+     "name": "IMTP RFD 0–200 ms",
+     "unit": "N/s",
+     "calc": null,
+     "dir": "Higher",
+     "thr": 600
+    }
+   ]
+  },
+  {
+   "title": "FORCEDECKS  -  HOP TEST / REACTIVE STRENGTH (RSI)",
+   "metrics": [
+    {
+     "name": "Hop RSI (best)",
+     "unit": "AU",
+     "calc": null,
+     "dir": "Higher",
+     "thr": 0.2
+    },
+    {
+     "name": "Hop Contact Time",
+     "unit": "s",
+     "calc": null,
+     "dir": "Lower",
+     "thr": 0.02
+    },
+    {
+     "name": "Hop Jump Height",
+     "unit": "cm",
+     "calc": null,
+     "dir": "Higher",
+     "thr": 2
+    },
+    {
+     "name": "Reactive Asymmetry",
+     "unit": "%",
+     "calc": null,
+     "dir": "Lower",
+     "thr": 5
+    }
+   ]
+  },
+  {
+   "title": "NORDBORD  -  NORDIC HAMSTRING",
+   "metrics": [
+    {
+     "name": "Nordic Peak Force — Left",
+     "unit": "N",
+     "calc": null,
+     "dir": "Higher",
+     "thr": 30
+    },
+    {
+     "name": "Nordic Peak Force — Right",
+     "unit": "N",
+     "calc": null,
+     "dir": "Higher",
+     "thr": 30
+    },
+    {
+     "name": "Nordic L/R Imbalance",
+     "unit": "%",
+     "calc": null,
+     "dir": "Lower",
+     "thr": 5
+    },
+    {
+     "name": "Nordic Relative Force",
+     "unit": "N/kg",
+     "calc": null,
+     "dir": "Higher",
+     "thr": 0.4
+    }
+   ]
+  },
+  {
+   "title": "FORCEFRAME  -  HIP / GROIN STRENGTH",
+   "metrics": [
+    {
+     "name": "Adductor Peak Force",
+     "unit": "N",
+     "calc": null,
+     "dir": "Higher",
+     "thr": 30
+    },
+    {
+     "name": "Abductor Peak Force",
+     "unit": "N",
+     "calc": null,
+     "dir": "Higher",
+     "thr": 30
+    },
+    {
+     "name": "Adduction Asymmetry",
+     "unit": "%",
+     "calc": null,
+     "dir": "Lower",
+     "thr": 5
+    },
+    {
+     "name": "Add : Abd Ratio",
+     "unit": "ratio",
+     "calc": null,
+     "dir": "Band",
+     "thr": 0.1
+    }
+   ]
+  },
+  {
+   "title": "DSI  -  DYNAMIC STRENGTH INDEX (DERIVED)",
+   "metrics": [
+    {
+     "name": "DSI (CMJ ÷ IMTP)",
+     "unit": "ratio",
+     "calc": "DSI",
+     "dir": "Band",
+     "thr": 0.1
+    }
+   ]
+  },
+  {
+   "title": "DYNAMO  -  ISOMETRIC STRENGTH (GENERIC SLOT)",
+   "metrics": [
+    {
+     "name": "Isometric Peak Force",
+     "unit": "N",
+     "calc": null,
+     "dir": "Higher",
+     "thr": 30
+    },
+    {
+     "name": "Quad ISO @ 60° — Left",
+     "unit": "× BW",
+     "calc": "PERBW",
+     "dir": "Higher",
+     "thr": 0.05
+    },
+    {
+     "name": "Quad ISO @ 60° — Right",
+     "unit": "× BW",
+     "calc": "PERBW",
+     "dir": "Higher",
+     "thr": 0.05
+    }
+   ]
+  },
+  {
+   "title": "SMARTSPEED - SPEED & AGILITY",
+   "metrics": [
+    {
+     "name": "10 m sprint",
+     "unit": "s",
+     "calc": null,
+     "dir": "Lower",
+     "thr": 0.04
+    },
+    {
+     "name": "20 m sprint",
+     "unit": "s",
+     "calc": null,
+     "dir": "Lower",
+     "thr": 0.05
+    },
+    {
+     "name": "30 m sprint",
+     "unit": "s",
+     "calc": null,
+     "dir": "Lower",
+     "thr": 0.06
+    },
+    {
+     "name": "5-10-5 (pro-agility)",
+     "unit": "s",
+     "calc": null,
+     "dir": "Lower",
+     "thr": 0.05
+    }
+   ]
+  }
+ ],
+ "populations": {
+  "General Clinical — Male (all ages)": {
+   "Jump Height": {
+    "dir": "Higher",
+    "green": 34,
+    "amber": 28.2,
+    "gmax": null,
+    "amax": null,
+    "source": "★★★ VALD Norms · General clinical, all ages · Male · percentile-anchored"
+   },
+   "Peak Power": {
+    "dir": "Higher",
+    "green": 51,
+    "amber": 44,
+    "gmax": null,
+    "amax": null,
+    "source": "★★★ VALD Norms · General clinical, all ages · Male · percentile-anchored"
+   },
+   "Concentric Asymmetry": {
+    "dir": "Lower",
+    "green": 5.8,
+    "amber": 10,
+    "gmax": null,
+    "amax": null,
+    "source": "★★★ VALD Norms · General clinical, all ages · Male · percentile-anchored"
+   },
+   "Landing Asymmetry": {
+    "dir": "Lower",
+    "green": 9.87,
+    "amber": 16.63,
+    "gmax": null,
+    "amax": null,
+    "source": "★★★ VALD Norms · General clinical, all ages · Male · percentile-anchored"
+   },
+   "IMTP Peak Force": {
+    "dir": "Higher",
+    "green": 2808,
+    "amber": 2596,
+    "gmax": null,
+    "amax": null,
+    "source": "★★★ In-house: Base Health Noosa ForceDecks IMTP (n=35) · 50th/25th pct · sex split name-inferred"
+   },
+   "IMTP Relative Force": {
+    "dir": "Higher",
+    "green": 38.6,
+    "amber": 35.2,
+    "gmax": null,
+    "amax": null,
+    "source": "★★★ In-house: Base Health Noosa ForceDecks IMTP rel. PF/BM (n=35) · 50th/25th pct · sex split name-inferred"
+   },
+   "IMTP RFD 0–200 ms": {
+    "dir": "Higher",
+    "green": 4230,
+    "amber": 2740,
+    "gmax": null,
+    "amax": null,
+    "source": "★★★ In-house: Base Health Noosa ForceDecks IMTP RFD 0–200 ms (n=35) · 50th/25th pct · sex split name-inferred"
+   },
+   "Hop RSI (best)": {
+    "dir": "Higher",
+    "green": 1.62,
+    "amber": 1.18,
+    "gmax": null,
+    "amax": null,
+    "source": "★★★ VALD Norms · General clinical, all ages · Male · percentile-anchored"
+   },
+   "Hop Contact Time": {
+    "dir": "Lower",
+    "green": 0.39,
+    "amber": 0.51,
+    "gmax": null,
+    "amax": null,
+    "source": "★★★ VALD Norms · General clinical, all ages · Male · percentile-anchored"
+   },
+   "Reactive Asymmetry": {
+    "dir": "Lower",
+    "green": 10,
+    "amber": 15,
+    "gmax": null,
+    "amax": null,
+    "source": "★★☆ Practice threshold (Bishop): ≤10% ok, >15% flag · not population-specific"
+   },
+   "Nordic Peak Force — Left": {
+    "dir": "Higher",
+    "green": 322,
+    "amber": 253,
+    "gmax": null,
+    "amax": null,
+    "source": "★★★ VALD Norms · General clinical, all ages · Male · percentile-anchored"
+   },
+   "Nordic Peak Force — Right": {
+    "dir": "Higher",
+    "green": 322,
+    "amber": 253,
+    "gmax": null,
+    "amax": null,
+    "source": "★★★ VALD Norms · General clinical, all ages · Male · percentile-anchored"
+   },
+   "Nordic L/R Imbalance": {
+    "dir": "Lower",
+    "green": 9,
+    "amber": 16,
+    "gmax": null,
+    "amax": null,
+    "source": "★★★ VALD Norms · General clinical, all ages · Male · percentile-anchored"
+   },
+   "Adductor Peak Force": {
+    "dir": "Higher",
+    "green": 343,
+    "amber": 279,
+    "gmax": null,
+    "amax": null,
+    "source": "★★★ VALD Norms · General clinical, all ages · Male · percentile-anchored"
+   },
+   "Adduction Asymmetry": {
+    "dir": "Lower",
+    "green": 4,
+    "amber": 7,
+    "gmax": null,
+    "amax": null,
+    "source": "★★★ VALD Norms · General clinical, all ages · Male · percentile-anchored"
+   },
+   "Add : Abd Ratio": {
+    "dir": "Band",
+    "green": 0.9,
+    "gmax": 1.1,
+    "amber": 0.8,
+    "amax": 1.3,
+    "source": "★★☆ Evidence-based band · target ~1.0 (O'Brien 2019); flag <0.80 (Tyler 2001) or >1.30 (VALD youth academy). Ratio monitors balance — adductor strength is the primary predictor (2024 meta-analysis)."
+   },
+   "DSI (CMJ ÷ IMTP)": {
+    "dir": "Band",
+    "green": 0.6,
+    "gmax": 0.8,
+    "amber": 0.5,
+    "amax": 0.9,
+    "source": "★★★ Lit: Suchomel 2020 / Comfort 2018 · 0.60–0.80 balanced (applies to all populations)"
+   },
+   "Abductor Peak Force": {
+    "dir": "Higher",
+    "green": 354,
+    "amber": 296,
+    "gmax": null,
+    "amax": null,
+    "source": "★★★ VALD Norms · General clinical, all ages · Male · percentile-anchored"
+   },
+   "Quad ISO @ 60° — Left": {
+    "dir": "Higher",
+    "green": 0.75,
+    "amber": 0.6,
+    "gmax": null,
+    "amax": null,
+    "source": "★★★ Šarabon et al. · iso knee-ext reference (× BW), per leg · active general"
+   },
+   "Quad ISO @ 60° — Right": {
+    "dir": "Higher",
+    "green": 0.75,
+    "amber": 0.6,
+    "gmax": null,
+    "amax": null,
+    "source": "★★★ Šarabon et al. · iso knee-ext reference (× BW), per leg · active general"
+   },
+   "10 m sprint": {
+    "dir": "Lower",
+    "green": 1.85,
+    "amber": 2.0,
+    "gmax": null,
+    "amax": null,
+    "source": "★☆☆ Indicative · general population, standing start (derived)"
+   },
+   "20 m sprint": {
+    "dir": "Lower",
+    "green": 3.2,
+    "amber": 3.5,
+    "gmax": null,
+    "amax": null,
+    "source": "★☆☆ Indicative · general population, standing start (derived)"
+   },
+   "30 m sprint": {
+    "dir": "Lower",
+    "green": 4.2,
+    "amber": 4.6,
+    "gmax": null,
+    "amax": null,
+    "source": "★★☆ Recreational / PE norms · standing 0–30 m"
+   },
+   "5-10-5 (pro-agility)": {
+    "dir": "Lower",
+    "green": 4.8,
+    "amber": 5.2,
+    "gmax": null,
+    "amax": null,
+    "source": "★★☆ Lit: pro-agility (5-10-5) — Haff & Triplett 2015 (NSCA) · recreational adult male · electronic timing · lower=faster"
+   }
+  },
+  "General Clinical — Female (all ages)": {
+   "Jump Height": {
+    "dir": "Higher",
+    "green": 24.4,
+    "amber": 20.2,
+    "gmax": null,
+    "amax": null,
+    "source": "★★★ VALD Norms · General clinical, all ages · Female · percentile-anchored"
+   },
+   "Peak Power": {
+    "dir": "Higher",
+    "green": 41,
+    "amber": 36,
+    "gmax": null,
+    "amax": null,
+    "source": "★★★ VALD Norms · General clinical, all ages · Female · percentile-anchored"
+   },
+   "Concentric Asymmetry": {
+    "dir": "Lower",
+    "green": 6.7,
+    "amber": 11.1,
+    "gmax": null,
+    "amax": null,
+    "source": "★★★ VALD Norms · General clinical, all ages · Female · percentile-anchored"
+   },
+   "Landing Asymmetry": {
+    "dir": "Lower",
+    "green": 10.78,
+    "amber": 17.82,
+    "gmax": null,
+    "amax": null,
+    "source": "★★★ VALD Norms · General clinical, all ages · Female · percentile-anchored"
+   },
+   "IMTP Peak Force": {
+    "dir": "Higher",
+    "green": 2096,
+    "amber": 1807,
+    "gmax": null,
+    "amax": null,
+    "source": "★★☆ In-house: Base Health Noosa ForceDecks IMTP (n=22) · 50th/25th pct · sex split name-inferred"
+   },
+   "IMTP Relative Force": {
+    "dir": "Higher",
+    "green": 30.9,
+    "amber": 27.1,
+    "gmax": null,
+    "amax": null,
+    "source": "★★☆ In-house: Base Health Noosa ForceDecks IMTP rel. PF/BM (n=22) · 50th/25th pct · sex split name-inferred"
+   },
+   "IMTP RFD 0–200 ms": {
+    "dir": "Higher",
+    "green": 2268,
+    "amber": 2089,
+    "gmax": null,
+    "amax": null,
+    "source": "★★☆ In-house: Base Health Noosa ForceDecks IMTP RFD 0–200 ms (n=22) · 50th/25th pct · sex split name-inferred"
+   },
+   "Hop RSI (best)": {
+    "dir": "Higher",
+    "green": 1.42,
+    "amber": 1.11,
+    "gmax": null,
+    "amax": null,
+    "source": "★★★ VALD Norms · General clinical, all ages · Female · percentile-anchored"
+   },
+   "Hop Contact Time": {
+    "dir": "Lower",
+    "green": 0.37,
+    "amber": 0.49,
+    "gmax": null,
+    "amax": null,
+    "source": "★★★ VALD Norms · General clinical, all ages · Female · percentile-anchored"
+   },
+   "Reactive Asymmetry": {
+    "dir": "Lower",
+    "green": 10,
+    "amber": 15,
+    "gmax": null,
+    "amax": null,
+    "source": "★★☆ Practice threshold (Bishop): ≤10% ok, >15% flag · not population-specific"
+   },
+   "Nordic Peak Force — Left": {
+    "dir": "Higher",
+    "green": 223,
+    "amber": 173,
+    "gmax": null,
+    "amax": null,
+    "source": "★★★ VALD Norms · General clinical, all ages · Female · percentile-anchored"
+   },
+   "Nordic Peak Force — Right": {
+    "dir": "Higher",
+    "green": 223,
+    "amber": 173,
+    "gmax": null,
+    "amax": null,
+    "source": "★★★ VALD Norms · General clinical, all ages · Female · percentile-anchored"
+   },
+   "Nordic L/R Imbalance": {
+    "dir": "Lower",
+    "green": 8,
+    "amber": 14,
+    "gmax": null,
+    "amax": null,
+    "source": "★★★ VALD Norms · General clinical, all ages · Female · percentile-anchored"
+   },
+   "Adductor Peak Force": {
+    "dir": "Higher",
+    "green": 258,
+    "amber": 211,
+    "gmax": null,
+    "amax": null,
+    "source": "★★★ VALD Norms · General clinical, all ages · Female · percentile-anchored"
+   },
+   "Adduction Asymmetry": {
+    "dir": "Lower",
+    "green": 4,
+    "amber": 7,
+    "gmax": null,
+    "amax": null,
+    "source": "★★★ VALD Norms · General clinical, all ages · Female · percentile-anchored"
+   },
+   "Add : Abd Ratio": {
+    "dir": "Band",
+    "green": 0.9,
+    "gmax": 1.1,
+    "amber": 0.8,
+    "amax": 1.3,
+    "source": "★★☆ Evidence-based band · target ~1.0 (O'Brien 2019); flag <0.80 (Tyler 2001) or >1.30 (VALD youth academy). Ratio monitors balance — adductor strength is the primary predictor (2024 meta-analysis)."
+   },
+   "DSI (CMJ ÷ IMTP)": {
+    "dir": "Band",
+    "green": 0.6,
+    "gmax": 0.8,
+    "amber": 0.5,
+    "amax": 0.9,
+    "source": "★★★ Lit: Suchomel 2020 / Comfort 2018 · 0.60–0.80 balanced (applies to all populations)"
+   },
+   "Abductor Peak Force": {
+    "dir": "Higher",
+    "green": 261,
+    "amber": 218,
+    "gmax": null,
+    "amax": null,
+    "source": "★★★ VALD Norms · General clinical, all ages · Female · percentile-anchored"
+   },
+   "Quad ISO @ 60° — Left": {
+    "dir": "Higher",
+    "green": 0.75,
+    "amber": 0.6,
+    "gmax": null,
+    "amax": null,
+    "source": "★★★ Šarabon et al. · iso knee-ext reference (× BW), per leg · active general"
+   },
+   "Quad ISO @ 60° — Right": {
+    "dir": "Higher",
+    "green": 0.75,
+    "amber": 0.6,
+    "gmax": null,
+    "amax": null,
+    "source": "★★★ Šarabon et al. · iso knee-ext reference (× BW), per leg · active general"
+   },
+   "10 m sprint": {
+    "dir": "Lower",
+    "green": 2.05,
+    "amber": 2.2,
+    "gmax": null,
+    "amax": null,
+    "source": "★☆☆ Indicative · general population, standing start (derived)"
+   },
+   "20 m sprint": {
+    "dir": "Lower",
+    "green": 3.6,
+    "amber": 3.9,
+    "gmax": null,
+    "amax": null,
+    "source": "★☆☆ Indicative · general population, standing start (derived)"
+   },
+   "30 m sprint": {
+    "dir": "Lower",
+    "green": 4.6,
+    "amber": 5.0,
+    "gmax": null,
+    "amax": null,
+    "source": "★★☆ Recreational / PE norms · standing 0–30 m"
+   },
+   "5-10-5 (pro-agility)": {
+    "dir": "Lower",
+    "green": 5.3,
+    "amber": 5.7,
+    "gmax": null,
+    "amax": null,
+    "source": "★★☆ Lit: pro-agility (5-10-5) — Haff & Triplett 2015 (NSCA) · recreational adult female · electronic timing · lower=faster"
+   }
+  },
+  "Men's Football (Soccer)": {
+   "Jump Height": {
+    "dir": "Higher",
+    "green": 40,
+    "amber": 36,
+    "gmax": null,
+    "amax": null,
+    "source": "★★★ VALD Norms · Men's Football (Soccer) · percentile-anchored · ForceFrame Hip Ad/Ab @ 90°"
+   },
+   "Peak Power": {
+    "dir": "Higher",
+    "green": 54,
+    "amber": 50,
+    "gmax": null,
+    "amax": null,
+    "source": "★★★ VALD Norms · Men's Football (Soccer) · percentile-anchored · ForceFrame Hip Ad/Ab @ 90°"
+   },
+   "RSI-modified": {
+    "dir": "Higher",
+    "green": 53.9,
+    "amber": 45.9,
+    "gmax": null,
+    "amax": null,
+    "source": "★★★ VALD Norms · Men's Football (Soccer) · percentile-anchored · ForceFrame Hip Ad/Ab @ 90°"
+   },
+   "IMTP Peak Force": {
+    "dir": "Higher",
+    "green": 3031,
+    "amber": 2756,
+    "gmax": null,
+    "amax": null,
+    "source": "★★★ Lit: Badby et al. 2025, J Sports Sci · EFL pro men (n=139) · Green≥avg, Amber≥below-avg"
+   },
+   "IMTP Relative Force": {
+    "dir": "Higher",
+    "green": 37.4,
+    "amber": 34.7,
+    "gmax": null,
+    "amax": null,
+    "source": "★★★ Lit: Badby et al. 2025, J Sports Sci · EFL pro men (n=139) · Green≥avg, Amber≥below-avg"
+   },
+   "Hop RSI (best)": {
+    "dir": "Higher",
+    "green": 2.52,
+    "amber": 2.01,
+    "gmax": null,
+    "amax": null,
+    "source": "★★★ VALD Norms · Men's Football (Soccer) · percentile-anchored · ForceFrame Hip Ad/Ab @ 90°"
+   },
+   "Hop Contact Time": {
+    "dir": "Lower",
+    "green": 0.24,
+    "amber": 0.29,
+    "gmax": null,
+    "amax": null,
+    "source": "★★★ VALD Norms · Men's Football (Soccer) · percentile-anchored · ForceFrame Hip Ad/Ab @ 90°"
+   },
+   "Hop Jump Height": {
+    "dir": "Higher",
+    "green": 27.1,
+    "amber": 22.7,
+    "gmax": null,
+    "amax": null,
+    "source": "★★☆ Derived from VALD Hop Jump flight time (h=g·t²/8) · Men's Football (Soccer)"
+   },
+   "Reactive Asymmetry": {
+    "dir": "Lower",
+    "green": 10,
+    "amber": 15,
+    "gmax": null,
+    "amax": null,
+    "source": "★★☆ Practice threshold (Bishop): ≤10% ok, >15% flag · not population-specific"
+   },
+   "Nordic Peak Force — Left": {
+    "dir": "Higher",
+    "green": 401,
+    "amber": 348,
+    "gmax": null,
+    "amax": null,
+    "source": "★★★ VALD Norms · Men's Football (Soccer) · percentile-anchored · ForceFrame Hip Ad/Ab @ 90°"
+   },
+   "Nordic Peak Force — Right": {
+    "dir": "Higher",
+    "green": 401,
+    "amber": 348,
+    "gmax": null,
+    "amax": null,
+    "source": "★★★ VALD Norms · Men's Football (Soccer) · percentile-anchored · ForceFrame Hip Ad/Ab @ 90°"
+   },
+   "Nordic L/R Imbalance": {
+    "dir": "Lower",
+    "green": 7.3,
+    "amber": 12.4,
+    "gmax": null,
+    "amax": null,
+    "source": "★★★ VALD Norms · Men's Football (Soccer) · percentile-anchored · ForceFrame Hip Ad/Ab @ 90°"
+   },
+   "Adductor Peak Force": {
+    "dir": "Higher",
+    "green": 381,
+    "amber": 315,
+    "gmax": null,
+    "amax": null,
+    "source": "★★★ VALD Norms · Men's Football (Soccer) · percentile-anchored · ForceFrame Hip Ad/Ab @ 90°"
+   },
+   "Adduction Asymmetry": {
+    "dir": "Lower",
+    "green": 3.5,
+    "amber": 6.2,
+    "gmax": null,
+    "amax": null,
+    "source": "★★★ VALD Norms · Men's Football (Soccer) · percentile-anchored · ForceFrame Hip Ad/Ab @ 90°"
+   },
+   "Add : Abd Ratio": {
+    "dir": "Band",
+    "green": 0.9,
+    "gmax": 1.1,
+    "amber": 0.8,
+    "amax": 1.3,
+    "source": "★★☆ Evidence-based band · target ~1.0 (O'Brien 2019); flag <0.80 (Tyler 2001) or >1.30 (VALD youth academy). Ratio monitors balance — adductor strength is the primary predictor (2024 meta-analysis)."
+   },
+   "DSI (CMJ ÷ IMTP)": {
+    "dir": "Band",
+    "green": 0.6,
+    "gmax": 0.8,
+    "amber": 0.5,
+    "amax": 0.9,
+    "source": "★★★ Lit: Suchomel 2020 / Comfort 2018 · 0.60–0.80 balanced (applies to all populations)"
+   },
+   "Quad ISO @ 60° — Left": {
+    "dir": "Higher",
+    "green": 0.9,
+    "amber": 0.75,
+    "gmax": null,
+    "amax": null,
+    "source": "★★★ Šarabon et al. · iso knee-ext (× BW), per leg · field-sport target"
+   },
+   "Quad ISO @ 60° — Right": {
+    "dir": "Higher",
+    "green": 0.9,
+    "amber": 0.75,
+    "gmax": null,
+    "amax": null,
+    "source": "★★★ Šarabon et al. · iso knee-ext (× BW), per leg · field-sport target"
+   },
+   "10 m sprint": {
+    "dir": "Lower",
+    "green": 1.8,
+    "amber": 1.9,
+    "gmax": null,
+    "amax": null,
+    "source": "★★☆ Pooled elite-soccer reference (Haugen et al.) · standing start"
+   },
+   "20 m sprint": {
+    "dir": "Lower",
+    "green": 3.05,
+    "amber": 3.2,
+    "gmax": null,
+    "amax": null,
+    "source": "★★☆ Pooled elite-soccer reference (Haugen et al.) · standing start"
+   },
+   "30 m sprint": {
+    "dir": "Lower",
+    "green": 4.1,
+    "amber": 4.4,
+    "gmax": null,
+    "amax": null,
+    "source": "★★☆ Pooled elite-soccer reference (Haugen et al.) · standing start"
+   },
+   "5-10-5 (pro-agility)": {
+    "dir": "Lower",
+    "green": 4.5,
+    "amber": 4.8,
+    "gmax": null,
+    "amax": null,
+    "source": "★★☆ Lit: pro-agility (5-10-5) — Haff & Triplett 2015 (NSCA) · trained field-sport male · electronic timing · lower=faster"
+   }
+  },
+  "Women's Football (Soccer)": {
+   "Jump Height": {
+    "dir": "Higher",
+    "green": 35,
+    "amber": 31,
+    "gmax": null,
+    "amax": null,
+    "source": "★★★ VALD Norms · Women's Football (Soccer) · percentile-anchored · ForceFrame Hip Ad/Ab @ 90°"
+   },
+   "Peak Power": {
+    "dir": "Higher",
+    "green": 49,
+    "amber": 45,
+    "gmax": null,
+    "amax": null,
+    "source": "★★★ VALD Norms · Women's Football (Soccer) · percentile-anchored · ForceFrame Hip Ad/Ab @ 90°"
+   },
+   "RSI-modified": {
+    "dir": "Higher",
+    "green": 51.4,
+    "amber": 44.5,
+    "gmax": null,
+    "amax": null,
+    "source": "★★★ VALD Norms · Women's Football (Soccer) · percentile-anchored · ForceFrame Hip Ad/Ab @ 90°"
+   },
+   "Hop RSI (best)": {
+    "dir": "Higher",
+    "green": 2.02,
+    "amber": 1.39,
+    "gmax": null,
+    "amax": null,
+    "source": "★★★ VALD Norms · Women's Football (Soccer) · percentile-anchored · ForceFrame Hip Ad/Ab @ 90°"
+   },
+   "Hop Contact Time": {
+    "dir": "Lower",
+    "green": 0.29,
+    "amber": 0.43,
+    "gmax": null,
+    "amax": null,
+    "source": "★★★ VALD Norms · Women's Football (Soccer) · percentile-anchored · ForceFrame Hip Ad/Ab @ 90°"
+   },
+   "Hop Jump Height": {
+    "dir": "Higher",
+    "green": 25.9,
+    "amber": 23.7,
+    "gmax": null,
+    "amax": null,
+    "source": "★★☆ Derived from VALD Hop Jump flight time (h=g·t²/8) · Women's Football (Soccer)"
+   },
+   "Reactive Asymmetry": {
+    "dir": "Lower",
+    "green": 10,
+    "amber": 15,
+    "gmax": null,
+    "amax": null,
+    "source": "★★☆ Practice threshold (Bishop): ≤10% ok, >15% flag · not population-specific"
+   },
+   "Nordic Peak Force — Left": {
+    "dir": "Higher",
+    "green": 294,
+    "amber": 256,
+    "gmax": null,
+    "amax": null,
+    "source": "★★★ VALD Norms · Women's Football (Soccer) · percentile-anchored · ForceFrame Hip Ad/Ab @ 90°"
+   },
+   "Nordic Peak Force — Right": {
+    "dir": "Higher",
+    "green": 294,
+    "amber": 256,
+    "gmax": null,
+    "amax": null,
+    "source": "★★★ VALD Norms · Women's Football (Soccer) · percentile-anchored · ForceFrame Hip Ad/Ab @ 90°"
+   },
+   "Nordic L/R Imbalance": {
+    "dir": "Lower",
+    "green": 7.5,
+    "amber": 12.6,
+    "gmax": null,
+    "amax": null,
+    "source": "★★★ VALD Norms · Women's Football (Soccer) · percentile-anchored · ForceFrame Hip Ad/Ab @ 90°"
+   },
+   "Adductor Peak Force": {
+    "dir": "Higher",
+    "green": 322,
+    "amber": 299,
+    "gmax": null,
+    "amax": null,
+    "source": "★★★ VALD Norms · Women's Football (Soccer) · percentile-anchored · ForceFrame Hip Ad/Ab @ 90°"
+   },
+   "Adduction Asymmetry": {
+    "dir": "Lower",
+    "green": 3.1,
+    "amber": 5.1,
+    "gmax": null,
+    "amax": null,
+    "source": "★★★ VALD Norms · Women's Football (Soccer) · percentile-anchored · ForceFrame Hip Ad/Ab @ 90°"
+   },
+   "Add : Abd Ratio": {
+    "dir": "Band",
+    "green": 0.9,
+    "gmax": 1.1,
+    "amber": 0.8,
+    "amax": 1.3,
+    "source": "★★☆ Evidence-based band · target ~1.0 (O'Brien 2019); flag <0.80 (Tyler 2001) or >1.30 (VALD youth academy). Ratio monitors balance — adductor strength is the primary predictor (2024 meta-analysis)."
+   },
+   "DSI (CMJ ÷ IMTP)": {
+    "dir": "Band",
+    "green": 0.6,
+    "gmax": 0.8,
+    "amber": 0.5,
+    "amax": 0.9,
+    "source": "★★★ Lit: Suchomel 2020 / Comfort 2018 · 0.60–0.80 balanced (applies to all populations)"
+   },
+   "Quad ISO @ 60° — Left": {
+    "dir": "Higher",
+    "green": 0.9,
+    "amber": 0.75,
+    "gmax": null,
+    "amax": null,
+    "source": "★★★ Šarabon et al. · iso knee-ext (× BW), per leg · field-sport target"
+   },
+   "Quad ISO @ 60° — Right": {
+    "dir": "Higher",
+    "green": 0.9,
+    "amber": 0.75,
+    "gmax": null,
+    "amax": null,
+    "source": "★★★ Šarabon et al. · iso knee-ext (× BW), per leg · field-sport target"
+   },
+   "10 m sprint": {
+    "dir": "Lower",
+    "green": 1.95,
+    "amber": 2.05,
+    "gmax": null,
+    "amax": null,
+    "source": "★★☆ Elite female soccer (Haugen 2014) · standing start"
+   },
+   "20 m sprint": {
+    "dir": "Lower",
+    "green": 3.35,
+    "amber": 3.55,
+    "gmax": null,
+    "amax": null,
+    "source": "★★☆ Elite female soccer (Haugen 2014) · standing start"
+   },
+   "30 m sprint": {
+    "dir": "Lower",
+    "green": 4.55,
+    "amber": 4.85,
+    "gmax": null,
+    "amax": null,
+    "source": "★★☆ Elite female soccer (Haugen 2014) · standing start"
+   },
+   "5-10-5 (pro-agility)": {
+    "dir": "Lower",
+    "green": 5.0,
+    "amber": 5.3,
+    "gmax": null,
+    "amax": null,
+    "source": "★★☆ Lit: pro-agility (5-10-5) — Haff & Triplett 2015 (NSCA) · trained field-sport female · electronic timing · lower=faster"
+   }
+  },
+  "AFL": {
+   "Jump Height": {
+    "dir": "Higher",
+    "green": 40,
+    "amber": 35,
+    "gmax": null,
+    "amax": null,
+    "source": "★★★ VALD Norms · AFL · percentile-anchored · ForceFrame Hip Ad/Ab @ 90°"
+   },
+   "Peak Power": {
+    "dir": "Higher",
+    "green": 54,
+    "amber": 49,
+    "gmax": null,
+    "amax": null,
+    "source": "★★★ VALD Norms · AFL · percentile-anchored · ForceFrame Hip Ad/Ab @ 90°"
+   },
+   "RSI-modified": {
+    "dir": "Higher",
+    "green": 56.6,
+    "amber": 47.1,
+    "gmax": null,
+    "amax": null,
+    "source": "★★★ VALD Norms · AFL · percentile-anchored · ForceFrame Hip Ad/Ab @ 90°"
+   },
+   "IMTP Peak Force": {
+    "dir": "Higher",
+    "green": 3031,
+    "amber": 2756,
+    "gmax": null,
+    "amax": null,
+    "source": "★☆☆ Lit PROXY: Badby et al. 2025 (EFL pro men) — no AFL-specific IMTP norm; replace with in-house"
+   },
+   "IMTP Relative Force": {
+    "dir": "Higher",
+    "green": 37.4,
+    "amber": 34.7,
+    "gmax": null,
+    "amax": null,
+    "source": "★☆☆ Lit PROXY: Badby et al. 2025 (EFL pro men) — no AFL-specific IMTP norm; replace with in-house"
+   },
+   "Hop RSI (best)": {
+    "dir": "Higher",
+    "green": 2.55,
+    "amber": 2.18,
+    "gmax": null,
+    "amax": null,
+    "source": "★★★ VALD Norms · AFL · percentile-anchored · ForceFrame Hip Ad/Ab @ 90°"
+   },
+   "Hop Contact Time": {
+    "dir": "Lower",
+    "green": 0.22,
+    "amber": 0.26,
+    "gmax": null,
+    "amax": null,
+    "source": "★★★ VALD Norms · AFL · percentile-anchored · ForceFrame Hip Ad/Ab @ 90°"
+   },
+   "Hop Jump Height": {
+    "dir": "Higher",
+    "green": 24.8,
+    "amber": 16.8,
+    "gmax": null,
+    "amax": null,
+    "source": "★★☆ Derived from VALD Hop Jump flight time (h=g·t²/8) · AFL"
+   },
+   "Reactive Asymmetry": {
+    "dir": "Lower",
+    "green": 10,
+    "amber": 15,
+    "gmax": null,
+    "amax": null,
+    "source": "★★☆ Practice threshold (Bishop): ≤10% ok, >15% flag · not population-specific"
+   },
+   "Nordic Peak Force — Left": {
+    "dir": "Higher",
+    "green": 421,
+    "amber": 366,
+    "gmax": null,
+    "amax": null,
+    "source": "★★★ VALD Norms · AFL · percentile-anchored · ForceFrame Hip Ad/Ab @ 90°"
+   },
+   "Nordic Peak Force — Right": {
+    "dir": "Higher",
+    "green": 421,
+    "amber": 366,
+    "gmax": null,
+    "amax": null,
+    "source": "★★★ VALD Norms · AFL · percentile-anchored · ForceFrame Hip Ad/Ab @ 90°"
+   },
+   "Nordic L/R Imbalance": {
+    "dir": "Lower",
+    "green": 7,
+    "amber": 12.1,
+    "gmax": null,
+    "amax": null,
+    "source": "★★★ VALD Norms · AFL · percentile-anchored · ForceFrame Hip Ad/Ab @ 90°"
+   },
+   "Adductor Peak Force": {
+    "dir": "Higher",
+    "green": 399,
+    "amber": 354,
+    "gmax": null,
+    "amax": null,
+    "source": "★★★ VALD Norms · AFL · percentile-anchored · ForceFrame Hip Ad/Ab @ 90°"
+   },
+   "Adduction Asymmetry": {
+    "dir": "Lower",
+    "green": 2.8,
+    "amber": 5,
+    "gmax": null,
+    "amax": null,
+    "source": "★★★ VALD Norms · AFL · percentile-anchored · ForceFrame Hip Ad/Ab @ 90°"
+   },
+   "Add : Abd Ratio": {
+    "dir": "Band",
+    "green": 0.9,
+    "gmax": 1.1,
+    "amber": 0.8,
+    "amax": 1.3,
+    "source": "★★☆ Evidence-based band · target ~1.0 (O'Brien 2019); flag <0.80 (Tyler 2001) or >1.30 (VALD youth academy). Ratio monitors balance — adductor strength is the primary predictor (2024 meta-analysis)."
+   },
+   "DSI (CMJ ÷ IMTP)": {
+    "dir": "Band",
+    "green": 0.6,
+    "gmax": 0.8,
+    "amber": 0.5,
+    "amax": 0.9,
+    "source": "★★★ Lit: Suchomel 2020 / Comfort 2018 · 0.60–0.80 balanced (applies to all populations)"
+   },
+   "Quad ISO @ 60° — Left": {
+    "dir": "Higher",
+    "green": 0.9,
+    "amber": 0.75,
+    "gmax": null,
+    "amax": null,
+    "source": "★★★ Šarabon et al. · iso knee-ext (× BW), per leg · field-sport target"
+   },
+   "Quad ISO @ 60° — Right": {
+    "dir": "Higher",
+    "green": 0.9,
+    "amber": 0.75,
+    "gmax": null,
+    "amax": null,
+    "source": "★★★ Šarabon et al. · iso knee-ext (× BW), per leg · field-sport target"
+   },
+   "10 m sprint": {
+    "dir": "Lower",
+    "green": 1.8,
+    "amber": 1.9,
+    "gmax": null,
+    "amax": null,
+    "source": "★☆☆ PROXY · field-sport (elite-soccer values) · confirm with in-house AFL data"
+   },
+   "20 m sprint": {
+    "dir": "Lower",
+    "green": 3.05,
+    "amber": 3.2,
+    "gmax": null,
+    "amax": null,
+    "source": "★☆☆ PROXY · field-sport (elite-soccer values) · confirm with in-house AFL data"
+   },
+   "30 m sprint": {
+    "dir": "Lower",
+    "green": 4.1,
+    "amber": 4.4,
+    "gmax": null,
+    "amax": null,
+    "source": "★☆☆ PROXY · field-sport (elite-soccer values) · confirm with in-house AFL data"
+   },
+   "5-10-5 (pro-agility)": {
+    "dir": "Lower",
+    "green": 4.5,
+    "amber": 4.8,
+    "gmax": null,
+    "amax": null,
+    "source": "★★☆ Lit: pro-agility (5-10-5) — Haff & Triplett 2015 (NSCA) · trained field-sport male · electronic timing · lower=faster"
+   }
+  },
+  "Custom (in-house)": {
+   "Jump Height": {
+    "dir": "Higher",
+    "green": 40,
+    "amber": 36,
+    "gmax": null,
+    "amax": null,
+    "source": "☆☆☆ Editable — your in-house data (seeded from Men's Soccer)"
+   },
+   "Peak Power": {
+    "dir": "Higher",
+    "green": 54,
+    "amber": 50,
+    "gmax": null,
+    "amax": null,
+    "source": "☆☆☆ Editable — your in-house data (seeded from Men's Soccer)"
+   },
+   "RSI-modified": {
+    "dir": "Higher",
+    "green": 53.9,
+    "amber": 45.9,
+    "gmax": null,
+    "amax": null,
+    "source": "☆☆☆ Editable — your in-house data (seeded from Men's Soccer)"
+   },
+   "IMTP Peak Force": {
+    "dir": "Higher",
+    "green": 3031,
+    "amber": 2756,
+    "gmax": null,
+    "amax": null,
+    "source": "☆☆☆ Editable — seeded from EFL pro men (Badby 2025)"
+   },
+   "IMTP Relative Force": {
+    "dir": "Higher",
+    "green": 37.4,
+    "amber": 34.7,
+    "gmax": null,
+    "amax": null,
+    "source": "☆☆☆ Editable — seeded from EFL pro men (Badby 2025)"
+   },
+   "Hop RSI (best)": {
+    "dir": "Higher",
+    "green": 2.52,
+    "amber": 2.01,
+    "gmax": null,
+    "amax": null,
+    "source": "☆☆☆ Editable — your in-house data (seeded from Men's Soccer)"
+   },
+   "Hop Contact Time": {
+    "dir": "Lower",
+    "green": 0.24,
+    "amber": 0.29,
+    "gmax": null,
+    "amax": null,
+    "source": "☆☆☆ Editable — your in-house data (seeded from Men's Soccer)"
+   },
+   "Hop Jump Height": {
+    "dir": "Higher",
+    "green": 27.1,
+    "amber": 22.7,
+    "gmax": null,
+    "amax": null,
+    "source": "☆☆☆ Editable — seeded from Men's Soccer"
+   },
+   "Reactive Asymmetry": {
+    "dir": "Lower",
+    "green": 10,
+    "amber": 15,
+    "gmax": null,
+    "amax": null,
+    "source": "★★☆ Practice threshold (Bishop): ≤10% ok, >15% flag · not population-specific"
+   },
+   "Nordic Peak Force — Left": {
+    "dir": "Higher",
+    "green": 401,
+    "amber": 348,
+    "gmax": null,
+    "amax": null,
+    "source": "☆☆☆ Editable — your in-house data (seeded from Men's Soccer)"
+   },
+   "Nordic Peak Force — Right": {
+    "dir": "Higher",
+    "green": 401,
+    "amber": 348,
+    "gmax": null,
+    "amax": null,
+    "source": "☆☆☆ Editable — your in-house data (seeded from Men's Soccer)"
+   },
+   "Nordic L/R Imbalance": {
+    "dir": "Lower",
+    "green": 7.3,
+    "amber": 12.4,
+    "gmax": null,
+    "amax": null,
+    "source": "☆☆☆ Editable — your in-house data (seeded from Men's Soccer)"
+   },
+   "Adductor Peak Force": {
+    "dir": "Higher",
+    "green": 381,
+    "amber": 315,
+    "gmax": null,
+    "amax": null,
+    "source": "☆☆☆ Editable — your in-house data (seeded from Men's Soccer)"
+   },
+   "Adduction Asymmetry": {
+    "dir": "Lower",
+    "green": 3.5,
+    "amber": 6.2,
+    "gmax": null,
+    "amax": null,
+    "source": "☆☆☆ Editable — your in-house data (seeded from Men's Soccer)"
+   },
+   "Add : Abd Ratio": {
+    "dir": "Band",
+    "green": 0.9,
+    "gmax": 1.1,
+    "amber": 0.8,
+    "amax": 1.3,
+    "source": "★★☆ Evidence-based band · target ~1.0 (O'Brien 2019); flag <0.80 (Tyler 2001) or >1.30 (VALD youth academy). Ratio monitors balance — adductor strength is the primary predictor (2024 meta-analysis)."
+   },
+   "DSI (CMJ ÷ IMTP)": {
+    "dir": "Band",
+    "green": 0.6,
+    "gmax": 0.8,
+    "amber": 0.5,
+    "amax": 0.9,
+    "source": "★★★ Lit: Suchomel 2020 / Comfort 2018 · 0.60–0.80 balanced (applies to all populations)"
+   },
+   "Quad ISO @ 60° — Left": {
+    "dir": "Higher",
+    "green": 0.75,
+    "amber": 0.6,
+    "gmax": null,
+    "amax": null,
+    "source": "★★★ Šarabon et al. · iso knee-ext reference (× BW), per leg · active general"
+   },
+   "Quad ISO @ 60° — Right": {
+    "dir": "Higher",
+    "green": 0.75,
+    "amber": 0.6,
+    "gmax": null,
+    "amax": null,
+    "source": "★★★ Šarabon et al. · iso knee-ext reference (× BW), per leg · active general"
+   },
+   "10 m sprint": {
+    "dir": "Lower",
+    "green": 1.85,
+    "amber": 2.0,
+    "gmax": null,
+    "amax": null,
+    "source": "★☆☆ Placeholder · replace with your in-house SmartSpeed norms"
+   },
+   "20 m sprint": {
+    "dir": "Lower",
+    "green": 3.2,
+    "amber": 3.5,
+    "gmax": null,
+    "amax": null,
+    "source": "★☆☆ Placeholder · replace with your in-house SmartSpeed norms"
+   },
+   "30 m sprint": {
+    "dir": "Lower",
+    "green": 4.2,
+    "amber": 4.6,
+    "gmax": null,
+    "amax": null,
+    "source": "★☆☆ Placeholder · replace with your in-house SmartSpeed norms"
+   },
+   "5-10-5 (pro-agility)": {
+    "dir": "Lower",
+    "green": 4.8,
+    "amber": 5.2,
+    "gmax": null,
+    "amax": null,
+    "source": "☆☆☆ Editable — replace with your in-house 5-10-5 (pro-agility) data"
+   }
+  }
+ },
+ "age_bands": [
+  "10-20 years",
+  "20-30 years",
+  "30-40 years",
+  "40-50 years",
+  "50-60 years"
+ ],
+ "age_norms": {
+  "General Clinical — Male (all ages)": {
+   "10-20 years": {
+    "Jump Height": {
+     "dir": "Higher",
+     "green": 31,
+     "amber": 25.9,
+     "gmax": null,
+     "amax": null,
+     "source": "★★★ VALD percentile · General male 10-20 yr"
+    },
+    "Peak Power": {
+     "dir": "Higher",
+     "green": 49,
+     "amber": 42,
+     "gmax": null,
+     "amax": null,
+     "source": "★★★ VALD percentile · General male 10-20 yr"
+    },
+    "Concentric Asymmetry": {
+     "dir": "Lower",
+     "green": 5.8,
+     "amber": 9.9,
+     "gmax": null,
+     "amax": null,
+     "source": "★★★ VALD percentile · General male 10-20 yr"
+    },
+    "Landing Asymmetry": {
+     "dir": "Lower",
+     "green": 12.03,
+     "amber": 18.9,
+     "gmax": null,
+     "amax": null,
+     "source": "★★★ VALD percentile · General male 10-20 yr"
+    },
+    "Hop RSI (best)": {
+     "dir": "Higher",
+     "green": 1.65,
+     "amber": 1.17,
+     "gmax": null,
+     "amax": null,
+     "source": "★★★ VALD percentile · General male 10-20 yr"
+    },
+    "Hop Contact Time": {
+     "dir": "Lower",
+     "green": 0.39,
+     "amber": 0.51,
+     "gmax": null,
+     "amax": null,
+     "source": "★★★ VALD percentile · General male 10-20 yr"
+    },
+    "Nordic Peak Force — Left": {
+     "dir": "Higher",
+     "green": 298,
+     "amber": 234,
+     "gmax": null,
+     "amax": null,
+     "source": "★★★ VALD percentile · General male 10-20 yr"
+    },
+    "Nordic Peak Force — Right": {
+     "dir": "Higher",
+     "green": 298,
+     "amber": 234,
+     "gmax": null,
+     "amax": null,
+     "source": "★★★ VALD percentile · General male 10-20 yr"
+    },
+    "Nordic L/R Imbalance": {
+     "dir": "Lower",
+     "green": 9,
+     "amber": 15,
+     "gmax": null,
+     "amax": null,
+     "source": "★★★ VALD percentile · General male 10-20 yr"
+    },
+    "Adductor Peak Force": {
+     "dir": "Higher",
+     "green": 356,
+     "amber": 283,
+     "gmax": null,
+     "amax": null,
+     "source": "★★★ VALD percentile · General male 10-20 yr"
+    },
+    "Adduction Asymmetry": {
+     "dir": "Lower",
+     "green": 4,
+     "amber": 7,
+     "gmax": null,
+     "amax": null,
+     "source": "★★★ VALD percentile · General male 10-20 yr"
+    },
+    "Add : Abd Ratio": {
+     "dir": "Band",
+     "green": 0.93,
+     "gmax": 1.15,
+     "amber": 0.67,
+     "amax": 1.44,
+     "source": "★★★ VALD percentile · General male 10-20 yr"
+    },
+    "Abductor Peak Force": {
+     "dir": "Higher",
+     "green": 348,
+     "amber": 282,
+     "gmax": null,
+     "amax": null,
+     "source": "★★★ VALD percentile · General male 10-20 yr"
+    }
+   },
+   "20-30 years": {
+    "Jump Height": {
+     "dir": "Higher",
+     "green": 36.5,
+     "amber": 31,
+     "gmax": null,
+     "amax": null,
+     "source": "★★★ VALD percentile · General male 20-30 yr"
+    },
+    "Peak Power": {
+     "dir": "Higher",
+     "green": 53,
+     "amber": 47,
+     "gmax": null,
+     "amax": null,
+     "source": "★★★ VALD percentile · General male 20-30 yr"
+    },
+    "Concentric Asymmetry": {
+     "dir": "Lower",
+     "green": 5.7,
+     "amber": 9.9,
+     "gmax": null,
+     "amax": null,
+     "source": "★★★ VALD percentile · General male 20-30 yr"
+    },
+    "Landing Asymmetry": {
+     "dir": "Lower",
+     "green": 9.73,
+     "amber": 16.12,
+     "gmax": null,
+     "amax": null,
+     "source": "★★★ VALD percentile · General male 20-30 yr"
+    },
+    "Hop RSI (best)": {
+     "dir": "Higher",
+     "green": 1.79,
+     "amber": 1.4,
+     "gmax": null,
+     "amax": null,
+     "source": "★★★ VALD percentile · General male 20-30 yr"
+    },
+    "Hop Contact Time": {
+     "dir": "Lower",
+     "green": 0.35,
+     "amber": 0.47,
+     "gmax": null,
+     "amax": null,
+     "source": "★★★ VALD percentile · General male 20-30 yr"
+    },
+    "Nordic Peak Force — Left": {
+     "dir": "Higher",
+     "green": 351,
+     "amber": 291,
+     "gmax": null,
+     "amax": null,
+     "source": "★★★ VALD percentile · General male 20-30 yr"
+    },
+    "Nordic Peak Force — Right": {
+     "dir": "Higher",
+     "green": 351,
+     "amber": 291,
+     "gmax": null,
+     "amax": null,
+     "source": "★★★ VALD percentile · General male 20-30 yr"
+    },
+    "Nordic L/R Imbalance": {
+     "dir": "Lower",
+     "green": 9,
+     "amber": 16,
+     "gmax": null,
+     "amax": null,
+     "source": "★★★ VALD percentile · General male 20-30 yr"
+    },
+    "Adductor Peak Force": {
+     "dir": "Higher",
+     "green": 346,
+     "amber": 287,
+     "gmax": null,
+     "amax": null,
+     "source": "★★★ VALD percentile · General male 20-30 yr"
+    },
+    "Adduction Asymmetry": {
+     "dir": "Lower",
+     "green": 5,
+     "amber": 7,
+     "gmax": null,
+     "amax": null,
+     "source": "★★★ VALD percentile · General male 20-30 yr"
+    },
+    "Add : Abd Ratio": {
+     "dir": "Band",
+     "green": 0.85,
+     "gmax": 1.08,
+     "amber": 0.56,
+     "amax": 1.4,
+     "source": "★★★ VALD percentile · General male 20-30 yr"
+    },
+    "Abductor Peak Force": {
+     "dir": "Higher",
+     "green": 370,
+     "amber": 317,
+     "gmax": null,
+     "amax": null,
+     "source": "★★★ VALD percentile · General male 20-30 yr"
+    }
+   },
+   "30-40 years": {
+    "Jump Height": {
+     "dir": "Higher",
+     "green": 32.6,
+     "amber": 27.2,
+     "gmax": null,
+     "amax": null,
+     "source": "★★★ VALD percentile · General male 30-40 yr"
+    },
+    "Peak Power": {
+     "dir": "Higher",
+     "green": 49,
+     "amber": 43,
+     "gmax": null,
+     "amax": null,
+     "source": "★★★ VALD percentile · General male 30-40 yr"
+    },
+    "Concentric Asymmetry": {
+     "dir": "Lower",
+     "green": 5.9,
+     "amber": 10,
+     "gmax": null,
+     "amax": null,
+     "source": "★★★ VALD percentile · General male 30-40 yr"
+    },
+    "Landing Asymmetry": {
+     "dir": "Lower",
+     "green": 9.76,
+     "amber": 16.92,
+     "gmax": null,
+     "amax": null,
+     "source": "★★★ VALD percentile · General male 30-40 yr"
+    },
+    "Hop RSI (best)": {
+     "dir": "Higher",
+     "green": 1.51,
+     "amber": 1.18,
+     "gmax": null,
+     "amax": null,
+     "source": "★★★ VALD percentile · General male 30-40 yr"
+    },
+    "Hop Contact Time": {
+     "dir": "Lower",
+     "green": 0.4,
+     "amber": 0.52,
+     "gmax": null,
+     "amax": null,
+     "source": "★★★ VALD percentile · General male 30-40 yr"
+    },
+    "Nordic Peak Force — Left": {
+     "dir": "Higher",
+     "green": 322,
+     "amber": 260,
+     "gmax": null,
+     "amax": null,
+     "source": "★★★ VALD percentile · General male 30-40 yr"
+    },
+    "Nordic Peak Force — Right": {
+     "dir": "Higher",
+     "green": 322,
+     "amber": 260,
+     "gmax": null,
+     "amax": null,
+     "source": "★★★ VALD percentile · General male 30-40 yr"
+    },
+    "Nordic L/R Imbalance": {
+     "dir": "Lower",
+     "green": 10,
+     "amber": 17,
+     "gmax": null,
+     "amax": null,
+     "source": "★★★ VALD percentile · General male 30-40 yr"
+    },
+    "Adductor Peak Force": {
+     "dir": "Higher",
+     "green": 322,
+     "amber": 266,
+     "gmax": null,
+     "amax": null,
+     "source": "★★★ VALD percentile · General male 30-40 yr"
+    },
+    "Adduction Asymmetry": {
+     "dir": "Lower",
+     "green": 4,
+     "amber": 7,
+     "gmax": null,
+     "amax": null,
+     "source": "★★★ VALD percentile · General male 30-40 yr"
+    },
+    "Add : Abd Ratio": {
+     "dir": "Band",
+     "green": 0.85,
+     "gmax": 1.08,
+     "amber": 0.58,
+     "amax": 1.43,
+     "source": "★★★ VALD percentile · General male 30-40 yr"
+    },
+    "Abductor Peak Force": {
+     "dir": "Higher",
+     "green": 344,
+     "amber": 288,
+     "gmax": null,
+     "amax": null,
+     "source": "★★★ VALD percentile · General male 30-40 yr"
+    }
+   },
+   "40-50 years": {
+    "Jump Height": {
+     "dir": "Higher",
+     "green": 26.5,
+     "amber": 22.9,
+     "gmax": null,
+     "amax": null,
+     "source": "★★☆ VALD percentile · General male 40-50 yr"
+    },
+    "Peak Power": {
+     "dir": "Higher",
+     "green": 42,
+     "amber": 38,
+     "gmax": null,
+     "amax": null,
+     "source": "★★☆ VALD percentile · General male 40-50 yr"
+    },
+    "Concentric Asymmetry": {
+     "dir": "Lower",
+     "green": 7.3,
+     "amber": 11.1,
+     "gmax": null,
+     "amax": null,
+     "source": "★★☆ VALD percentile · General male 40-50 yr"
+    },
+    "Landing Asymmetry": {
+     "dir": "Lower",
+     "green": 10.72,
+     "amber": 18.18,
+     "gmax": null,
+     "amax": null,
+     "source": "★★☆ VALD percentile · General male 40-50 yr"
+    },
+    "Hop RSI (best)": {
+     "dir": "Higher",
+     "green": 1.45,
+     "amber": 1.08,
+     "gmax": null,
+     "amax": null,
+     "source": "★★☆ VALD percentile · General male 40-50 yr"
+    },
+    "Hop Contact Time": {
+     "dir": "Lower",
+     "green": 0.41,
+     "amber": 0.47,
+     "gmax": null,
+     "amax": null,
+     "source": "★★☆ VALD percentile · General male 40-50 yr"
+    },
+    "Nordic Peak Force — Left": {
+     "dir": "Higher",
+     "green": 290,
+     "amber": 225,
+     "gmax": null,
+     "amax": null,
+     "source": "★★☆ VALD percentile · General male 40-50 yr"
+    },
+    "Nordic Peak Force — Right": {
+     "dir": "Higher",
+     "green": 290,
+     "amber": 225,
+     "gmax": null,
+     "amax": null,
+     "source": "★★☆ VALD percentile · General male 40-50 yr"
+    },
+    "Nordic L/R Imbalance": {
+     "dir": "Lower",
+     "green": 10,
+     "amber": 19,
+     "gmax": null,
+     "amax": null,
+     "source": "★★☆ VALD percentile · General male 40-50 yr"
+    },
+    "Adductor Peak Force": {
+     "dir": "Higher",
+     "green": 318,
+     "amber": 279,
+     "gmax": null,
+     "amax": null,
+     "source": "★★☆ VALD percentile · General male 40-50 yr"
+    },
+    "Adduction Asymmetry": {
+     "dir": "Lower",
+     "green": 4,
+     "amber": 7,
+     "gmax": null,
+     "amax": null,
+     "source": "★★☆ VALD percentile · General male 40-50 yr"
+    },
+    "Add : Abd Ratio": {
+     "dir": "Band",
+     "green": 0.85,
+     "gmax": 1.04,
+     "amber": 0.58,
+     "amax": 1.37,
+     "source": "★★☆ VALD percentile · General male 40-50 yr"
+    },
+    "Abductor Peak Force": {
+     "dir": "Higher",
+     "green": 341,
+     "amber": 299,
+     "gmax": null,
+     "amax": null,
+     "source": "★★☆ VALD percentile · General male 40-50 yr"
+    }
+   },
+   "50-60 years": {
+    "Jump Height": {
+     "dir": "Higher",
+     "green": 21.7,
+     "amber": 18.6,
+     "gmax": null,
+     "amax": null,
+     "source": "★★☆ VALD percentile · General male 50-60 yr"
+    },
+    "Peak Power": {
+     "dir": "Higher",
+     "green": 37,
+     "amber": 33,
+     "gmax": null,
+     "amax": null,
+     "source": "★★☆ VALD percentile · General male 50-60 yr"
+    },
+    "Concentric Asymmetry": {
+     "dir": "Lower",
+     "green": 7.8,
+     "amber": 12.5,
+     "gmax": null,
+     "amax": null,
+     "source": "★★☆ VALD percentile · General male 50-60 yr"
+    },
+    "Landing Asymmetry": {
+     "dir": "Lower",
+     "green": 11.2,
+     "amber": 17.09,
+     "gmax": null,
+     "amax": null,
+     "source": "★★☆ VALD percentile · General male 50-60 yr"
+    },
+    "Nordic Peak Force — Left": {
+     "dir": "Higher",
+     "green": 307,
+     "amber": 244,
+     "gmax": null,
+     "amax": null,
+     "source": "★★☆ VALD percentile · General male 50-60 yr"
+    },
+    "Nordic Peak Force — Right": {
+     "dir": "Higher",
+     "green": 307,
+     "amber": 244,
+     "gmax": null,
+     "amax": null,
+     "source": "★★☆ VALD percentile · General male 50-60 yr"
+    },
+    "Nordic L/R Imbalance": {
+     "dir": "Lower",
+     "green": 8,
+     "amber": 14,
+     "gmax": null,
+     "amax": null,
+     "source": "★★☆ VALD percentile · General male 50-60 yr"
+    }
+   }
+  },
+  "General Clinical — Female (all ages)": {
+   "10-20 years": {
+    "Jump Height": {
+     "dir": "Higher",
+     "green": 24.4,
+     "amber": 21,
+     "gmax": null,
+     "amax": null,
+     "source": "★★★ VALD percentile · General female 10-20 yr"
+    },
+    "Peak Power": {
+     "dir": "Higher",
+     "green": 41,
+     "amber": 37,
+     "gmax": null,
+     "amax": null,
+     "source": "★★★ VALD percentile · General female 10-20 yr"
+    },
+    "Concentric Asymmetry": {
+     "dir": "Lower",
+     "green": 6.2,
+     "amber": 10.8,
+     "gmax": null,
+     "amax": null,
+     "source": "★★★ VALD percentile · General female 10-20 yr"
+    },
+    "Landing Asymmetry": {
+     "dir": "Lower",
+     "green": 10.52,
+     "amber": 17.13,
+     "gmax": null,
+     "amax": null,
+     "source": "★★★ VALD percentile · General female 10-20 yr"
+    },
+    "Hop RSI (best)": {
+     "dir": "Higher",
+     "green": 1.43,
+     "amber": 1.08,
+     "gmax": null,
+     "amax": null,
+     "source": "★★★ VALD percentile · General female 10-20 yr"
+    },
+    "Hop Contact Time": {
+     "dir": "Lower",
+     "green": 0.4,
+     "amber": 0.52,
+     "gmax": null,
+     "amax": null,
+     "source": "★★★ VALD percentile · General female 10-20 yr"
+    },
+    "Nordic Peak Force — Left": {
+     "dir": "Higher",
+     "green": 232,
+     "amber": 187,
+     "gmax": null,
+     "amax": null,
+     "source": "★★★ VALD percentile · General female 10-20 yr"
+    },
+    "Nordic Peak Force — Right": {
+     "dir": "Higher",
+     "green": 232,
+     "amber": 187,
+     "gmax": null,
+     "amax": null,
+     "source": "★★★ VALD percentile · General female 10-20 yr"
+    },
+    "Nordic L/R Imbalance": {
+     "dir": "Lower",
+     "green": 8,
+     "amber": 15,
+     "gmax": null,
+     "amax": null,
+     "source": "★★★ VALD percentile · General female 10-20 yr"
+    },
+    "Adductor Peak Force": {
+     "dir": "Higher",
+     "green": 269,
+     "amber": 227,
+     "gmax": null,
+     "amax": null,
+     "source": "★★★ VALD percentile · General female 10-20 yr"
+    },
+    "Adduction Asymmetry": {
+     "dir": "Lower",
+     "green": 4,
+     "amber": 6,
+     "gmax": null,
+     "amax": null,
+     "source": "★★★ VALD percentile · General female 10-20 yr"
+    },
+    "Add : Abd Ratio": {
+     "dir": "Band",
+     "green": 0.93,
+     "gmax": 1.11,
+     "amber": 0.68,
+     "amax": 1.35,
+     "source": "★★★ VALD percentile · General female 10-20 yr"
+    },
+    "Abductor Peak Force": {
+     "dir": "Higher",
+     "green": 264,
+     "amber": 226,
+     "gmax": null,
+     "amax": null,
+     "source": "★★★ VALD percentile · General female 10-20 yr"
+    }
+   },
+   "20-30 years": {
+    "Jump Height": {
+     "dir": "Higher",
+     "green": 25.5,
+     "amber": 21.2,
+     "gmax": null,
+     "amax": null,
+     "source": "★★★ VALD percentile · General female 20-30 yr"
+    },
+    "Peak Power": {
+     "dir": "Higher",
+     "green": 41,
+     "amber": 37,
+     "gmax": null,
+     "amax": null,
+     "source": "★★★ VALD percentile · General female 20-30 yr"
+    },
+    "Concentric Asymmetry": {
+     "dir": "Lower",
+     "green": 6.6,
+     "amber": 10.9,
+     "gmax": null,
+     "amax": null,
+     "source": "★★★ VALD percentile · General female 20-30 yr"
+    },
+    "Landing Asymmetry": {
+     "dir": "Lower",
+     "green": 9.84,
+     "amber": 16.42,
+     "gmax": null,
+     "amax": null,
+     "source": "★★★ VALD percentile · General female 20-30 yr"
+    },
+    "Hop RSI (best)": {
+     "dir": "Higher",
+     "green": 1.53,
+     "amber": 1.19,
+     "gmax": null,
+     "amax": null,
+     "source": "★★★ VALD percentile · General female 20-30 yr"
+    },
+    "Hop Contact Time": {
+     "dir": "Lower",
+     "green": 0.35,
+     "amber": 0.45,
+     "gmax": null,
+     "amax": null,
+     "source": "★★★ VALD percentile · General female 20-30 yr"
+    },
+    "Nordic Peak Force — Left": {
+     "dir": "Higher",
+     "green": 233,
+     "amber": 191,
+     "gmax": null,
+     "amax": null,
+     "source": "★★★ VALD percentile · General female 20-30 yr"
+    },
+    "Nordic Peak Force — Right": {
+     "dir": "Higher",
+     "green": 233,
+     "amber": 191,
+     "gmax": null,
+     "amax": null,
+     "source": "★★★ VALD percentile · General female 20-30 yr"
+    },
+    "Nordic L/R Imbalance": {
+     "dir": "Lower",
+     "green": 7,
+     "amber": 12,
+     "gmax": null,
+     "amax": null,
+     "source": "★★★ VALD percentile · General female 20-30 yr"
+    },
+    "Adductor Peak Force": {
+     "dir": "Higher",
+     "green": 264,
+     "amber": 219,
+     "gmax": null,
+     "amax": null,
+     "source": "★★★ VALD percentile · General female 20-30 yr"
+    },
+    "Adduction Asymmetry": {
+     "dir": "Lower",
+     "green": 4,
+     "amber": 7,
+     "gmax": null,
+     "amax": null,
+     "source": "★★★ VALD percentile · General female 20-30 yr"
+    },
+    "Add : Abd Ratio": {
+     "dir": "Band",
+     "green": 0.87,
+     "gmax": 1.08,
+     "amber": 0.62,
+     "amax": 1.34,
+     "source": "★★★ VALD percentile · General female 20-30 yr"
+    },
+    "Abductor Peak Force": {
+     "dir": "Higher",
+     "green": 270,
+     "amber": 235,
+     "gmax": null,
+     "amax": null,
+     "source": "★★★ VALD percentile · General female 20-30 yr"
+    }
+   },
+   "30-40 years": {
+    "Jump Height": {
+     "dir": "Higher",
+     "green": 23.3,
+     "amber": 18.7,
+     "gmax": null,
+     "amax": null,
+     "source": "★★★ VALD percentile · General female 30-40 yr"
+    },
+    "Peak Power": {
+     "dir": "Higher",
+     "green": 38,
+     "amber": 33,
+     "gmax": null,
+     "amax": null,
+     "source": "★★★ VALD percentile · General female 30-40 yr"
+    },
+    "Concentric Asymmetry": {
+     "dir": "Lower",
+     "green": 6,
+     "amber": 10.5,
+     "gmax": null,
+     "amax": null,
+     "source": "★★★ VALD percentile · General female 30-40 yr"
+    },
+    "Landing Asymmetry": {
+     "dir": "Lower",
+     "green": 10.26,
+     "amber": 18.28,
+     "gmax": null,
+     "amax": null,
+     "source": "★★★ VALD percentile · General female 30-40 yr"
+    },
+    "Hop RSI (best)": {
+     "dir": "Higher",
+     "green": 1.29,
+     "amber": 1.09,
+     "gmax": null,
+     "amax": null,
+     "source": "★★★ VALD percentile · General female 30-40 yr"
+    },
+    "Hop Contact Time": {
+     "dir": "Lower",
+     "green": 0.37,
+     "amber": 0.45,
+     "gmax": null,
+     "amax": null,
+     "source": "★★★ VALD percentile · General female 30-40 yr"
+    },
+    "Nordic Peak Force — Left": {
+     "dir": "Higher",
+     "green": 212,
+     "amber": 164,
+     "gmax": null,
+     "amax": null,
+     "source": "★★★ VALD percentile · General female 30-40 yr"
+    },
+    "Nordic Peak Force — Right": {
+     "dir": "Higher",
+     "green": 212,
+     "amber": 164,
+     "gmax": null,
+     "amax": null,
+     "source": "★★★ VALD percentile · General female 30-40 yr"
+    },
+    "Nordic L/R Imbalance": {
+     "dir": "Lower",
+     "green": 8,
+     "amber": 14,
+     "gmax": null,
+     "amax": null,
+     "source": "★★★ VALD percentile · General female 30-40 yr"
+    },
+    "Adductor Peak Force": {
+     "dir": "Higher",
+     "green": 226,
+     "amber": 183,
+     "gmax": null,
+     "amax": null,
+     "source": "★★★ VALD percentile · General female 30-40 yr"
+    },
+    "Adduction Asymmetry": {
+     "dir": "Lower",
+     "green": 4,
+     "amber": 6,
+     "gmax": null,
+     "amax": null,
+     "source": "★★★ VALD percentile · General female 30-40 yr"
+    },
+    "Add : Abd Ratio": {
+     "dir": "Band",
+     "green": 0.87,
+     "gmax": 1.12,
+     "amber": 0.62,
+     "amax": 1.31,
+     "source": "★★★ VALD percentile · General female 30-40 yr"
+    },
+    "Abductor Peak Force": {
+     "dir": "Higher",
+     "green": 236,
+     "amber": 201,
+     "gmax": null,
+     "amax": null,
+     "source": "★★★ VALD percentile · General female 30-40 yr"
+    }
+   },
+   "40-50 years": {
+    "Jump Height": {
+     "dir": "Higher",
+     "green": 18.2,
+     "amber": 14.2,
+     "gmax": null,
+     "amax": null,
+     "source": "★★☆ VALD percentile · General female 40-50 yr"
+    },
+    "Peak Power": {
+     "dir": "Higher",
+     "green": 34,
+     "amber": 30,
+     "gmax": null,
+     "amax": null,
+     "source": "★★☆ VALD percentile · General female 40-50 yr"
+    },
+    "Concentric Asymmetry": {
+     "dir": "Lower",
+     "green": 6.8,
+     "amber": 10.9,
+     "gmax": null,
+     "amax": null,
+     "source": "★★☆ VALD percentile · General female 40-50 yr"
+    },
+    "Landing Asymmetry": {
+     "dir": "Lower",
+     "green": 11.16,
+     "amber": 17.3,
+     "gmax": null,
+     "amax": null,
+     "source": "★★☆ VALD percentile · General female 40-50 yr"
+    },
+    "Nordic Peak Force — Left": {
+     "dir": "Higher",
+     "green": 207,
+     "amber": 176,
+     "gmax": null,
+     "amax": null,
+     "source": "★★☆ VALD percentile · General female 40-50 yr"
+    },
+    "Nordic Peak Force — Right": {
+     "dir": "Higher",
+     "green": 207,
+     "amber": 176,
+     "gmax": null,
+     "amax": null,
+     "source": "★★☆ VALD percentile · General female 40-50 yr"
+    },
+    "Nordic L/R Imbalance": {
+     "dir": "Lower",
+     "green": 8,
+     "amber": 14,
+     "gmax": null,
+     "amax": null,
+     "source": "★★☆ VALD percentile · General female 40-50 yr"
+    }
+   },
+   "50-60 years": {
+    "Jump Height": {
+     "dir": "Higher",
+     "green": 14.8,
+     "amber": 13.2,
+     "gmax": null,
+     "amax": null,
+     "source": "★★☆ VALD percentile · General female 50-60 yr"
+    },
+    "Peak Power": {
+     "dir": "Higher",
+     "green": 30,
+     "amber": 27,
+     "gmax": null,
+     "amax": null,
+     "source": "★★☆ VALD percentile · General female 50-60 yr"
+    },
+    "Concentric Asymmetry": {
+     "dir": "Lower",
+     "green": 6.8,
+     "amber": 14.8,
+     "gmax": null,
+     "amax": null,
+     "source": "★★☆ VALD percentile · General female 50-60 yr"
+    },
+    "Landing Asymmetry": {
+     "dir": "Lower",
+     "green": 10.3,
+     "amber": 21.4,
+     "gmax": null,
+     "amax": null,
+     "source": "★★☆ VALD percentile · General female 50-60 yr"
+    }
+   }
+  }
+ }
+}
