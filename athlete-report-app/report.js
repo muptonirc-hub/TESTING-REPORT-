@@ -320,19 +320,19 @@
     return true;
   }
 
-  function priorities(doc, prios) {
+  function priorities(doc, prios, emptyText) {
     if (!prios.length) {
       var h0 = lineH(10) + px(9);
       doc.ensure(h0);
-      doc.text('✓ Nothing flagged — all tested metrics on target.', ML + px(6), baseline(doc.y + px(4), 10), { style: 'regular', size: fs(10), color: C.G });
+      doc.text(emptyText || '✓ Nothing flagged — all tested metrics on target.', ML + px(6), baseline(doc.y + px(4), 10), { style: 'regular', size: fs(10), color: C.G });
       doc.line(ML, doc.y + h0 - px(0.5), ML + CW, doc.y + h0 - px(0.5), { stroke: C.LINE, lw: px(1) });
       doc.y += h0;
       return;
     }
     prios.forEach(function (r) {
       var name = r.name;
-      var detail = '= ' + E.fmt(r.result) + ' ' + r.unit + (r.side ? ' (' + r.side + ' higher)' : '') +
-        ' · needs ' + r.target + ' · ' + (r.source || '—');
+      var detail = r.detail || ('= ' + E.fmt(r.result) + ' ' + r.unit + (r.side ? ' (' + r.side + ' higher)' : '') +
+        ' · needs ' + r.target + ' · ' + (r.source || '—'));
       var chipW = width(r.status, 'bold', fs(9)) + px(14);
       var nameW = width(name, 'bold', fs(10));
       var detW = CW - px(12) - chipW - px(8) - nameW - px(8);
@@ -539,6 +539,89 @@
     return finish(doc, acl ? 'ACL Rehab & Return-to-Play' : 'Hamstring Rehab & Return-to-Play', m.name);
   }
 
+
+  // ------------------------------------------------------------------ strength battery: left vs right table
+  function strengthTable(doc, tests) {
+    var pad = px(6), gap = px(10);
+    var c1 = px(200), c2 = px(190), c3 = px(190);
+    var c4 = CW - 2 * pad - c1 - c2 - c3 - 3 * gap;
+    var x1 = ML + pad, x2 = x1 + c1 + gap, x3 = x2 + c2 + gap, x4 = x3 + c3 + gap;
+    var bandH = lineH(9.5) + px(6), headH = px(4) + lineH(7.5) + px(3);
+    var cellH = lineH(11) + px(4) + px(9) + px(4) + lineH(7.5);
+    function head() {
+      var top = doc.y;
+      doc.rect(ML, top, CW, bandH, { r: px(3), fill: C.GBAND });
+      var bl = baseline(top + px(3), 9.5);
+      doc.rect(ML + px(8), bl - px(7), px(7), px(7), { r: px(2), fill: C.BLUE });
+      doc.text('LOWER-LIMB STRENGTH & CAPACITY', ML + px(8 + 7 + 7), bl, { style: 'bold', size: fs(9.5), color: C.WHITE, cs: px(0.4) });
+      var hy = baseline(top + bandH + px(4), 7.5), o = { style: 'bold', size: fs(7.5), color: C.MUTE, cs: px(0.5) };
+      doc.text('TEST & TARGET', x1, hy, o);
+      doc.text('LEFT', x2, hy, o);
+      doc.text('RIGHT', x3, hy, o);
+      doc.text('L/R DIFF', x4 + c4, hy, Object.assign({ align: 'right' }, o));
+      doc.y = top + bandH + headH;
+    }
+    doc.ensure(px(7) + bandH + headH + cellH + px(11));
+    doc.y += px(7);
+    head();
+    tests.forEach(function (t) {
+      var nameLines = wrap(t.name, 'bold', fs(10), c1);
+      var sub = 'target ' + t.target + (t.rawTarget ? ' = ' + E.fmt(t.rawTarget.value) + ' ' + t.rawTarget.unit : '') + (t.detail ? ' · ' + t.detail : '');
+      var subLines = wrap(sub, 'regular', fs(8), c1);
+      var h1 = nameLines.length * lineH(10) + px(2) + subLines.length * lineH(8);
+      var h = Math.max(h1, cellH) + px(10) + px(1);
+      if (!doc.fits(h)) { doc.newPage(); head(); }
+      var top = doc.y, inner = top + px(5);
+      nameLines.forEach(function (l, i) {
+        doc.text(l, x1, baseline(inner + i * lineH(10), 10), { style: 'bold', size: fs(10), color: C.INK });
+      });
+      var sy = inner + nameLines.length * lineH(10) + px(2);
+      subLines.forEach(function (l, i) {
+        doc.text(l, x1, baseline(sy + i * lineH(8), 8), { style: 'regular', size: fs(8), color: C.MUTE });
+      });
+      [['L', x2, c2], ['R', x3, c3]].forEach(function (s) {
+        var cell = t.sides[s[0]], x = s[1], w = s[2];
+        if (!cell || cell.value === null) {
+          doc.text(cell && cell.needsMass ? 'needs body mass' : '—', x, baseline(inner, 11), { style: 'regular', size: fs(9), color: C.MUTE });
+          return;
+        }
+        doc.text(cell.text, x, baseline(inner, 11), { style: 'bold', size: fs(11), color: C.BLACK });
+        chip(doc, cell.status, x + w, inner + lineH(11) / 2, COL[cell.status] || C.NA, { right: true, size: 8.5, padX: 6, padY: 1 });
+        var my = inner + lineH(11) + px(4);
+        meterBar(doc, x, my, w, cell.value, t.norm);
+        var raw;
+        if (t.input === 'calc') raw = 'ADD ' + E.fmt(cell.parts[0]) + ' N ÷ ABD ' + E.fmt(cell.parts[1]) + ' N';
+        else raw = E.fmt(cell.input) + ' ' + (t.input === 'reps' ? 'reps' : t.input) + (cell.also != null ? ' · ' + E.fmt(cell.also) + ' × BW' : '');
+        doc.text(raw, x, baseline(my + px(9) + px(4), 7.5), { style: 'regular', size: fs(7.5), color: C.MUTE });
+      });
+      var mid = inner + (h - px(11)) / 2;
+      var dt = E.diffText(t.diff);
+      doc.text(dt || '—', x4 + c4, baseline(mid - lineH(9) / 2, 9), { style: dt ? 'bold' : 'regular', size: fs(9), color: dt ? C.INK : C.MUTE, align: 'right' });
+      doc.line(ML, top + h - px(0.5), ML + CW, top + h - px(0.5), { stroke: C.LINE, lw: px(1) });
+      doc.y = top + h;
+    });
+  }
+
+  function strength(d) {
+    var doc = new Doc(), m = d.meta || {}, c = d.counts;
+    header(doc, 'Lower-Limb Strength & Capacity', 'Strength battery • targets relative to body weight');
+    meta(doc, [['Athlete', m.name], ['Date', m.date], ['Mass', clean(m.mass).trim() ? clean(m.mass).trim() + ' kg' : ''],
+      ['Sport', m.sport], ['Tester', m.tester], ['Notes', m.notes]]);
+    band(doc, 'Scored against', 'BASE Health strength targets', [['Green: ' + c.Green, C.G], ['Amber: ' + c.Amber, C.A], ['Red: ' + c.Red, C.R]]);
+    section(doc, 'Below target — worst first', { keep: px(22) });
+    priorities(doc, d.prios.map(function (r) {
+      return { status: r.status, name: r.name, detail: '= ' + r.text + ' · needs ' + r.target };
+    }), '✓ Nothing below target — every tested result is on target.');
+    section(doc, 'Results — left vs right', { keep: px(90) });
+    strengthTable(doc, d.tests.filter(function (t) { return t.any || t.sides.L.needsMass || t.sides.R.needsMass; }));
+    var pct = d.amberPct == null ? 5 : d.amberPct;
+    footer(doc, 'Green = at or above target · Amber = within ' + pct + '% of target · Red = further away. ' +
+      'Loads are divided by body mass; forces are converted to N/kg (N ÷ kg) or × body weight (N ÷ (kg × 9.81)). ' +
+      'Hip ratio = adduction ÷ abduction. L/R diff = gap between legs as a % of the stronger leg. ' +
+      'BW = body weight · RM = repetition maximum. This report organises and displays testing data and is not medical advice.');
+    return finish(doc, 'Lower-Limb Strength & Capacity', m.name);
+  }
+
   function finish(doc, title, name) {
     return { pages: doc.pages, title: title + (clean(name).trim() ? ' — ' + clean(name).trim() : '') };
   }
@@ -677,5 +760,5 @@
     });
   }
 
-  return { screening: screening, rehab: rehab, toPdf: toPdf, toSvg: toSvg, fontFaces: fontFaces, _width: width, _wrap: wrap };
+  return { screening: screening, rehab: rehab, strength: strength, toPdf: toPdf, toSvg: toSvg, fontFaces: fontFaces, _width: width, _wrap: wrap };
 });

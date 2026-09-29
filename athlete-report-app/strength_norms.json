@@ -1,0 +1,134 @@
+{
+  "title": "Lower-Limb Strength & Capacity",
+  "source": "BASE Health lower-limb strength & capacity battery (testing sheet)",
+  "amber_pct": 5,
+  "rule": "Green = at or above target. Amber = within 5% of target. Red = further away.",
+  "input_units": {
+    "kg": "load in kg",
+    "N": "force in N",
+    "reps": "repetitions"
+  },
+  "score_units": {
+    "xBW": "× BW from a load: kg ÷ body mass",
+    "pctBW": "% BW from a load: kg ÷ body mass × 100",
+    "Nkg": "N/kg from a force: N ÷ body mass",
+    "xBWf": "× BW from a force: N ÷ (body mass × 9.81)",
+    "reps": "repetitions as entered",
+    "ratio": "calculated from two other tests"
+  },
+  "tests": [
+    {
+      "id": "split_squat",
+      "name": "Split squat (rear leg)",
+      "detail": "8RM",
+      "input": "kg",
+      "score": "xBW",
+      "dir": "Higher",
+      "green": 0.3333,
+      "target_text": "≥ 1/3 × BW"
+    },
+    {
+      "id": "sl_seated_calf_vald",
+      "name": "Single-leg seated calf raise (VALD)",
+      "detail": "amateur 1.8 × BW · elite 2.2 × BW",
+      "input": "N",
+      "score": "Nkg",
+      "also": "xBWf",
+      "dir": "Higher",
+      "green": 20,
+      "target_text": "≥ 20 N/kg (≈ 2 × BW)"
+    },
+    {
+      "id": "sl_seated_calf_smith",
+      "name": "Single-leg seated calf raise (Smith machine)",
+      "detail": "8RM",
+      "input": "kg",
+      "score": "xBW",
+      "dir": "Higher",
+      "green": 1.5,
+      "target_text": "≥ 1.5 × BW"
+    },
+    {
+      "id": "sl_knee_extension",
+      "name": "Single-leg knee extension",
+      "detail": "dynamometer",
+      "input": "N",
+      "score": "xBWf",
+      "dir": "Higher",
+      "green": 1.0,
+      "target_text": "≥ 1 × BW"
+    },
+    {
+      "id": "sl_bridge",
+      "name": "Single-leg bridge",
+      "detail": "8RM, knee at 30° flexion",
+      "input": "kg",
+      "score": "pctBW",
+      "dir": "Higher",
+      "green": 20,
+      "target_text": "≥ 20% BW"
+    },
+    {
+      "id": "sl_calf_raise_reps",
+      "name": "Single-leg calf raise",
+      "detail": "25RM, body weight",
+      "input": "reps",
+      "score": "reps",
+      "dir": "Higher",
+      "green": 25,
+      "target_text": "≥ 25 reps"
+    },
+    {
+      "id": "sl_calf_raise_loaded",
+      "name": "Single-leg calf raise (loaded)",
+      "detail": "8RM",
+      "input": "kg",
+      "score": "xBW",
+      "dir": "Higher",
+      "green": 1.2,
+      "target_text": "≥ 1.2 × BW"
+    },
+    {
+      "id": "prone_hamstring_curl",
+      "name": "Prone hamstring curl",
+      "detail": "",
+      "input": "N",
+      "score": "Nkg",
+      "dir": "Higher",
+      "green": 5,
+      "target_text": "≥ 5 N/kg"
+    },
+    {
+      "id": "hip_abduction",
+      "name": "Hip abduction",
+      "detail": "",
+      "input": "N",
+      "score": "Nkg",
+      "dir": "Higher",
+      "green": 4.5,
+      "target_text": "> 4.5 N/kg"
+    },
+    {
+      "id": "hip_adduction",
+      "name": "Hip adduction",
+      "detail": "",
+      "input": "N",
+      "score": "Nkg",
+      "dir": "Higher",
+      "green": 4.5,
+      "target_text": "> 4.5 N/kg"
+    },
+    {
+      "id": "hip_add_abd_ratio",
+      "name": "Hip adduction : abduction ratio",
+      "detail": "adduction ÷ abduction, calculated",
+      "input": "calc",
+      "score": "ratio",
+      "from": ["hip_adduction", "hip_abduction"],
+      "dir": "Band",
+      "green": 1.0,
+      "gmax": 1.2,
+      "target_text": "1.0 – 1.2"
+    }
+  ]
+}

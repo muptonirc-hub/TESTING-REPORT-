@@ -224,6 +224,21 @@ button { cursor: pointer; }
 .chip.value::before { display: none; }
 .m-wait { font-size: 12.5px; color: var(--muted); text-align: right; }
 
+/* strength battery: one row per test, left and right legs side by side */
+.metric.lr, .cols.lr { grid-template-columns: minmax(0, 1fr) 104px 104px 200px; grid-template-areas: "label left right out"; }
+.cols.lr .c-left { grid-area: left; text-align: center; }
+.cols.lr .c-right { grid-area: right; text-align: center; }
+.cols.lr .c-out { grid-area: out; text-align: right; }
+.metric.lr .m-left { grid-area: left; }
+.metric.lr .m-right { grid-area: right; }
+.metric.lr .m-auto { grid-column: left / right; }
+.lr-line { display: flex; align-items: center; justify-content: flex-end; gap: 8px; min-height: 26px; }
+.lr-sd { font-size: 12px; font-weight: 800; color: var(--muted); }
+.lr-v { font-weight: 650; font-size: 14px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.lr-line .chip { height: 22px; font-size: 12px; padding: 0 8px; }
+.lr-wait { font-size: 12.5px; color: var(--amber-ink); }
+.lr-diff { font-size: 12px; color: var(--muted); font-weight: 600; text-align: right; }
+
 /* ---------- summary */
 .summary { position: sticky; top: calc(76px + env(safe-area-inset-top, 0px)); display: flex; flex-direction: column; max-height: calc(100vh - 96px - env(safe-area-inset-top, 0px)); }
 .sum-scroll { overflow-y: auto; min-height: 0; -webkit-overflow-scrolling: touch; margin: -4px -6px 0; padding: 4px 6px 2px; }
@@ -305,12 +320,15 @@ button { cursor: pointer; }
   .toast { bottom: calc(92px + env(safe-area-inset-bottom, 0px)); }
   html { scroll-padding-bottom: 96px; }
 }
+@media (max-width: 1100px) {
+  .tools { margin-left: 0; order: 3; width: 100%; }
+  .tools button { flex: 1; padding-inline: 8px; }
+  .appbar .ghost { margin-left: auto; }
+}
 @media (max-width: 760px) {
   .fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .f.span3 { grid-column: 1 / -1; }
-  .tools { margin-left: 0; order: 3; width: 100%; }
-  .tools button { flex: 1; padding-inline: 8px; font-size: 14px; }
-  .appbar .ghost { margin-left: auto; }
+  .tools button { font-size: 14px; }
 }
 @media (max-width: 640px) {
   .metric {
@@ -323,6 +341,12 @@ button { cursor: pointer; }
     grid-template-areas: "label label label label" "result side prev out";
   }
   .cols { display: none; }
+  .tab-extra { display: none; }
+  .tools button { padding-inline: 4px; }
+  .metric.lr { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-areas: "label label" "left right" "out out"; }
+  .metric.lr .m-out { align-items: stretch; }
+  .metric.lr .lr-line { justify-content: flex-start; }
+  .metric.lr .lr-diff { text-align: left; }
   .metric input::placeholder { font-size: 13px; }
   .pagehead h1 { font-size: 22px; }
   .dock .dt a { padding: 0 8px; }
@@ -341,8 +365,9 @@ button { cursor: pointer; }
   </div>
   <nav class="tools" role="tablist" aria-label="Report type">
     <button role="tab" id="tab-screen" data-tool="screen" aria-selected="true">Screening</button>
-    <button role="tab" id="tab-ham" data-tool="ham" aria-selected="false">Hamstring rehab</button>
-    <button role="tab" id="tab-acl" data-tool="acl" aria-selected="false">ACL rehab</button>
+    <button role="tab" id="tab-str" data-tool="str" aria-selected="false">Strength</button>
+    <button role="tab" id="tab-ham" data-tool="ham" aria-selected="false">Hamstring<span class="tab-extra"> rehab</span></button>
+    <button role="tab" id="tab-acl" data-tool="acl" aria-selected="false">ACL<span class="tab-extra"> rehab</span></button>
   </nav>
   <button class="ghost" id="newAthlete" type="button">New athlete</button>
 </header>

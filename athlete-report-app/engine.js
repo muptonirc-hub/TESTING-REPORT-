@@ -394,6 +394,104 @@
     };
   }
 
+  // ---------------------------------------------------------------- strength battery (strength_norms.json)
+  // Each test is entered per leg as a load (kg), a force (N) or reps, then scored relative to body mass.
+  var SIDES = [['L', 'Left'], ['R', 'Right']];
+  var SCORE_UNIT = { xBW: '× BW', xBWf: '× BW', pctBW: '% BW', Nkg: 'N/kg', reps: 'reps', ratio: '' };
+
+  // Target with its amber zone: Amber is within amber_pct % of the target (outside the band for ratios)
+  function strengthNorm(t, pct) {
+    var p = (pct == null ? 5 : pct) / 100;
+    if (t.dir === 'Band') return { dir: 'Band', green: t.green, gmax: t.gmax, amber: t.green * (1 - p), amax: t.gmax * (1 + p) };
+    if (t.dir === 'Lower') return { dir: 'Lower', green: t.green, amber: t.green * (1 + p) };
+    return { dir: 'Higher', green: t.green, amber: t.green * (1 - p) };
+  }
+
+  // What you enter -> what is scored (null until it can be scored)
+  function strengthScore(kind, raw, mass) {
+    if (raw === null || raw === undefined) return null;
+    if (kind === 'reps') return raw;
+    if (!mass) return null;
+    if (kind === 'xBW' || kind === 'Nkg') return raw / mass;
+    if (kind === 'pctBW') return raw / mass * 100;
+    if (kind === 'xBWf') return raw / (mass * 9.81);
+    return null;
+  }
+
+  // The target in the units you enter, for this athlete (e.g. 26.7 kg for an 80 kg athlete)
+  function strengthRawTarget(t, mass) {
+    if (!mass || t.dir === 'Band' || t.score === 'reps' || t.input === 'calc') return null;
+    var v = t.score === 'xBW' || t.score === 'Nkg' ? t.green * mass
+      : t.score === 'pctBW' ? t.green / 100 * mass
+        : t.score === 'xBWf' ? t.green * mass * 9.81 : null;
+    return v === null ? null : { value: v, unit: t.input === 'kg' ? 'kg' : 'N' };
+  }
+
+  function formatScore(v, score) {
+    if (v === null || v === undefined) return '';
+    if (score === 'pctBW') return fmt(v) + '% BW';
+    return fmt(v) + (SCORE_UNIT[score] ? ' ' + SCORE_UNIT[score] : '');
+  }
+
+  // values: {testId: {left, right}} as typed. Returns the tests with results, one row per scored leg,
+  // traffic-light counts and the flagged legs (Red first, then Amber).
+  function buildStrength(values, set, mass) {
+    var m = num(mass);
+    if (m !== null && m <= 0) m = null;
+    var pct = set.amber_pct == null ? 5 : set.amber_pct;
+    var raw = {};
+    set.tests.forEach(function (t) {
+      var v = values[t.id] || {};
+      raw[t.id] = { L: parseInput(v.left), R: parseInput(v.right) };
+    });
+    var tests = [], rows = [];
+    set.tests.forEach(function (t) {
+      var norm = strengthNorm(t, pct), sides = {}, any = false, waiting = false;
+      SIDES.forEach(function (sd) {
+        var k = sd[0], cell;
+        if (t.input === 'calc') {
+          var a = (raw[t.from[0]] || {})[k], b = (raw[t.from[1]] || {})[k];
+          var r = (a && b) ? a / b : null;
+          cell = { input: null, parts: [a === undefined ? null : a, b === undefined ? null : b], value: r, needsMass: false };
+        } else {
+          var input = raw[t.id][k], value = strengthScore(t.score, input, m);
+          cell = { input: input, value: value, needsMass: value === null && input !== null };
+          if (t.also && value !== null) cell.also = strengthScore(t.also, input, m);
+        }
+        cell.status = cell.value === null ? '' : status(cell.value, norm);
+        cell.text = formatScore(cell.value, t.score);
+        sides[k] = cell;
+        if (cell.needsMass) waiting = true;
+        if (cell.value !== null) {
+          any = true;
+          rows.push({ id: t.id, test: t.name, side: sd[1], name: t.name + ' — ' + sd[1], status: cell.status, result: cell.value, text: cell.text, target: t.target_text });
+        }
+      });
+      var diff = null;
+      if (t.input !== 'calc' && sides.L.value !== null && sides.R.value !== null) {
+        var hi = Math.max(sides.L.value, sides.R.value), lo = Math.min(sides.L.value, sides.R.value);
+        if (hi > 0) diff = { pct: (hi - lo) / hi * 100, lower: sides.L.value < sides.R.value ? 'L' : (sides.R.value < sides.L.value ? 'R' : '') };
+      }
+      if (any || waiting) {
+        tests.push({ id: t.id, name: t.name, detail: t.detail || '', target: t.target_text, score: t.score, input: t.input,
+          norm: norm, sides: sides, diff: diff, rawTarget: strengthRawTarget(t, m), any: any });
+      }
+    });
+    var c = { Green: 0, Amber: 0, Red: 0 };
+    rows.forEach(function (r) { if (r.status in c) c[r.status] += 1; });
+    var order = { Red: 0, Amber: 1 };
+    var prios = rows.filter(function (r) { return r.status in order; });
+    prios.sort(function (a, b) { return order[a.status] - order[b.status]; });
+    return { tests: tests, rows: rows, counts: c, prios: prios, mass: m };
+  }
+
+  function diffText(d) {
+    if (!d) return '';
+    var p = pyFixed(d.pct, 0);
+    if (!d.lower || p === '0') return 'even';
+    return (d.lower === 'L' ? 'Left' : 'Right') + ' ' + p + '% lower';
+  }
+
   // ---------------------------------------------------------------- dates
   var MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
   function validDate(y, m, d) {
@@ -582,6 +680,8 @@
     isAsym: isAsym, GEN_M: GEN_M, GEN_F: GEN_F,
     radarOptions: radarOptions, radarDefault: radarDefault, radarSpokes: radarSpokes, SHORT_LABEL: SHORT_LABEL,
     scorecard: scorecard, shortDomain: shortDomain, meter: meter,
+    buildStrength: buildStrength, strengthNorm: strengthNorm, strengthScore: strengthScore,
+    strengthRawTarget: strengthRawTarget, formatScore: formatScore, diffText: diffText,
     displayIso: displayIso, parseDate: parseDate, isoOf: isoOf, displayDate: displayDate,
     parseCsv: parseCsv, parseValdFiles: parseValdFiles, normCol: normCol
   };

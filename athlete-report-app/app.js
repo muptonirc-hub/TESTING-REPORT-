@@ -44,12 +44,13 @@
     keep = keep || {};
     if (tool === 'screen') return { meta: { name: '', date: todayIso(), sex: '', age: '', sport: '', tester: keep.tester || '', mass: '', notes: '' }, pop: 'general', values: {}, radar: null, collapsed: {}, importLog: null };
     if (tool === 'ham') return { meta: { name: '', date: todayIso(), injured: '', clinician: keep.clinician || '', doi: '', weeks: '', sport: '', notes: '' }, phase: null, values: {}, collapsed: {} };
+    if (tool === 'str') return { meta: { name: '', date: todayIso(), mass: '', sport: '', tester: keep.tester || '', notes: '' }, values: {}, collapsed: {} };
     return { meta: { name: '', date: todayIso(), injured: '', surgeon: keep.surgeon || '', graft: '', dos: '', months: '', sport: '', notes: '' }, phase: null, sex: null, values: {}, collapsed: {} };
   }
   function loadDraft() {
     try {
       var s = JSON.parse(localStorage.getItem(STORE));
-      if (s && s.v === 1 && s.screen && s.ham && s.acl) return s;
+      if (s && s.v === 1 && s.screen && s.ham && s.acl) { if (!s.str) s.str = freshTool('str'); return s; }
     } catch (e) { /* no stored draft */ }
     return null;
   }
@@ -67,7 +68,8 @@
     if (A.sexes.indexOf(state.acl.sex) < 0) state.acl.sex = A.sexes[0];
     var pops = E.sportPopulations(DATA.screen);
     if (state.screen.pop !== 'general' && pops.indexOf(state.screen.pop) < 0) state.screen.pop = 'general';
-    if (['screen', 'ham', 'acl'].indexOf(state.tool) < 0) state.tool = 'screen';
+    if (!state.str) state.str = freshTool('str');
+    if (['screen', 'str', 'ham', 'acl'].indexOf(state.tool) < 0) state.tool = 'screen';
   }
   function val(tool, name) {
     var v = state[tool].values;
@@ -119,11 +121,22 @@
     E.flatten(groups).forEach(function (r) { byName[r.name] = r; });
     return { key: key, pnorms: S.norms[key] || {}, groups: groups, byName: byName, counts: E.counts(groups), prios: E.priorities(groups, 5), inputs: inputs };
   }
-  function compute() { return state.tool === 'screen' ? computeScreen() : computeRehab(state.tool); }
+  function computeStrength() {
+    var r = E.buildStrength(state.str.values, DATA.str, E.parseInput(state.str.meta.mass));
+    r.byId = {};
+    r.tests.forEach(function (t) { r.byId[t.id] = t; });
+    return r;
+  }
+  function compute() {
+    if (state.tool === 'screen') return computeScreen();
+    if (state.tool === 'str') return computeStrength();
+    return computeRehab(state.tool);
+  }
 
   // ------------------------------------------------------------------ rendering: entry column
   var HEAD = {
     screen: ['Performance & readiness screen', 'Type this session’s results. Leave a metric blank to skip it; add the previous result to see real change versus noise.'],
+    str: ['Lower-limb strength & capacity', 'Enter each leg\u2019s result as the load, force or reps you measured. Only the tests you fill in are scored and reported.'],
     ham: ['Hamstring rehab & return to play', 'Injured-limb results against the targets for the chosen rehab phase.'],
     acl: ['ACL rehab & return to play', 'Injured-limb and symmetry results against ACLR research norms for the chosen phase and sex.']
   };
@@ -166,6 +179,11 @@
         field(t, 'notes', 'Notes', { cls: 'full' });
       var pops = [['general', 'General population (auto by age & sex)']].concat(E.sportPopulations(DATA.screen).map(function (p) { return [p, p]; }));
       out += select('screen-pop', 'Compare against', pops, s.pop, 'data-choice="pop"', 'wide');
+    } else if (t === 'str') {
+      out += field(t, 'name', 'Athlete name', { cls: 'wide', words: true }) + field(t, 'date', 'Test date', { type: 'date' }) +
+        field(t, 'mass', 'Body mass (kg)', { mode: 'decimal' }) +
+        field(t, 'sport', 'Sport', { words: true }) + field(t, 'tester', 'Tester', { words: true }) +
+        field(t, 'notes', 'Notes', { cls: 'wide' });
     } else if (t === 'ham') {
       out += field(t, 'name', 'Athlete name', { cls: 'wide', words: true }) + field(t, 'date', 'Test date', { type: 'date' }) +
         seg(t, 'injured', 'Injured side', ['Left', 'Right']) +
@@ -227,10 +245,36 @@
     }).join('');
   }
 
+  var INPUT_WORD = { kg: 'load in kg', N: 'force in N', reps: 'reps' };
+  function strengthRowHtml(t, i) {
+    var v = val('str', t.id), id = 'str-' + i, nm = esc(t.name);
+    var how = t.input === 'calc' ? 'adduction \u00f7 abduction, each leg' : ((t.detail ? t.detail + ' \u00b7 ' : '') + INPUT_WORD[t.input]);
+    var html = '<div class="metric lr" data-metric="' + esc(t.id) + '" data-status="">' +
+      '<div class="m-label"><div class="m-name">' + nm + '</div><div class="m-hint"><span class="m-unit">' + esc(how) + '</span>' +
+      '<span class="m-target"></span></div></div>';
+    if (t.input === 'calc') {
+      html += '<div class="m-auto" data-auto>Worked out from the hip adduction and abduction results</div>';
+    } else {
+      var unit = t.input === 'reps' ? 'reps' : t.input;
+      ['left', 'right'].forEach(function (f) {
+        html += '<input class="m-in m-' + f + '" id="' + id + '-' + f + '" data-field="' + f + '" value="' + esc(v[f]) + '" type="text" inputmode="decimal" enterkeyhint="next" autocomplete="off" placeholder="' +
+          (f === 'left' ? 'Left' : 'Right') + ' ' + unit + '" aria-label="' + nm + ', ' + f + ' leg, ' + INPUT_WORD[t.input] + '">';
+      });
+    }
+    return html + '<div class="m-out" aria-live="off"></div></div>';
+  }
+  function strengthGroupHtml() {
+    var collapsed = !!state.str.collapsed[0];
+    return '<section class="group' + (collapsed ? ' collapsed' : '') + '" data-group="0">' +
+      '<button type="button" class="group-head" aria-expanded="' + !collapsed + '"><span class="gt">' + esc(String(DATA.str.title || 'Strength battery').toUpperCase()) + '</span><span class="gc" data-count></span><span class="chev" aria-hidden="true"></span></button>' +
+      '<div class="cols lr" aria-hidden="true"><span class="c-left">Left</span><span class="c-right">Right</span><span class="c-out">Result</span></div>' +
+      '<div class="group-body">' + DATA.str.tests.map(strengthRowHtml).join('') + '</div></section>';
+  }
+
   function render() {
     var t = state.tool;
     document.querySelectorAll('.tools button').forEach(function (b) { b.setAttribute('aria-selected', String(b.dataset.tool === t)); });
-    els.entry.innerHTML = '<div class="pagehead"><h1>' + esc(HEAD[t][0]) + '</h1><p>' + esc(HEAD[t][1]) + '</p></div>' + athleteCard() + groupsHtml(t);
+    els.entry.innerHTML = '<div class="pagehead"><h1>' + esc(HEAD[t][0]) + '</h1><p>' + esc(HEAD[t][1]) + '</p></div>' + athleteCard() + (t === 'str' ? strengthGroupHtml() : groupsHtml(t));
     if (t === 'screen' && state.screen.importLog) showImportLog(state.screen.importLog);
     refresh();
   }
@@ -244,8 +288,56 @@
       '<i style="left:' + m.marker.toFixed(1) + '%"></i>';
   }
 
+  function refreshStrength(c) {
+    var mass = E.parseInput(state.str.meta.mass), note = $('ctxNote');
+    if (mass !== null && mass <= 0) mass = null;
+    var waiting = c.tests.some(function (t) { return t.sides.L.needsMass || t.sides.R.needsMass; });
+    var pct = DATA.str.amber_pct == null ? 5 : DATA.str.amber_pct;
+    note.hidden = false;
+    if (!mass) {
+      note.className = 'note' + (waiting ? ' warn' : '');
+      note.textContent = waiting ? 'Add body mass (kg) to score the load and force tests. Reps are scored straight away.'
+        : 'Add body mass (kg) first: loads and forces are scored relative to it.';
+    } else {
+      note.className = 'note';
+      note.textContent = 'Green = at or above target, Amber = within ' + pct + '%, Red = further away. Each target also shows what it means for this athlete.';
+    }
+    var tested = 0;
+    els.entry.querySelectorAll('.metric.lr').forEach(function (el) {
+      var id = el.dataset.metric, def = null;
+      DATA.str.tests.forEach(function (x) { if (x.id === id) def = x; });
+      if (!def) return;
+      var res = c.byId[id], rt = E.strengthRawTarget(def, mass);
+      el.querySelector('.m-target').textContent = 'target ' + def.target_text + (rt ? ' = ' + E.fmt(rt.value) + ' ' + rt.unit : '');
+      var html = '';
+      if (res) {
+        ['L', 'R'].forEach(function (k) {
+          var cell = res.sides[k];
+          if (cell.value !== null) html += '<div class="lr-line"><span class="lr-sd">' + k + '</span><span class="lr-v">' + esc(cell.text) + '</span>' + chip(cell.status) + '</div>';
+          else if (cell.needsMass) html += '<div class="lr-line lr-wait"><span class="lr-sd">' + k + '</span>needs body mass</div>';
+        });
+        var d = E.diffText(res.diff);
+        if (d) html += '<div class="lr-diff">' + esc(d) + '</div>';
+        if (res.any) tested++;
+      }
+      if (def.input === 'calc') {
+        el.querySelector('[data-auto]').innerHTML = res && res.any
+          ? 'ADD \u00f7 ABD \u2002' + ['L', 'R'].map(function (k) { return k + ' <b>' + (res.sides[k].value === null ? '\u2013' : esc(E.fmt(res.sides[k].value))) + '</b>'; }).join(' \u00b7 ')
+          : 'Worked out from the hip adduction and abduction results';
+      } else if (!html) {
+        var v = state.str.values[id] || {};
+        if (!blank(v.left) || !blank(v.right)) html = '<span class="m-wait">not a number</span>';
+      }
+      el.querySelector('.m-out').innerHTML = html;
+      el.dataset.status = res && res.any ? 'set' : '';
+    });
+    var cnt = els.entry.querySelector('.group [data-count]');
+    if (cnt) cnt.textContent = tested ? tested + ' of ' + DATA.str.tests.length + ' tested' : DATA.str.tests.length + ' tests';
+  }
+
   function refresh() {
     var t = state.tool, c = compute();
+    if (t === 'str') { refreshStrength(c); renderSummary(c); saveDraft(); return; }
     var S = DATA[t];
     // context note under the athlete card
     var note = $('ctxNote');
@@ -328,20 +420,37 @@
     rehab: ['On / ahead', 'Within 1 SD', '>1 SD behind']
   };
   function blocker(c) {
+    if (state.tool === 'str') {
+      if (c.rows.length) return '';
+      return c.tests.length ? 'Add body mass (kg) to score these results.' : 'Enter at least one result to create the report.';
+    }
     if (state.tool === 'screen' && !c.pop.population) return 'Choose Male or Female (or a sport population) to score the results.';
     if (!c.groups.length) return state.tool === 'screen' ? 'Enter at least one result to create the report.' : 'Enter at least one result to create the rehab report.';
     return '';
   }
   function renderSummary(c) {
-    var t = state.tool, labels = t === 'screen' ? TALLY.screen : TALLY.rehab;
+    var t = state.tool, labels = (t === 'screen' || t === 'str') ? TALLY.screen : TALLY.rehab;
     var head = t === 'screen'
       ? '<h2>Live summary</h2><p class="against">' + (c.pop.label ? 'Compared against <b>' + esc(c.pop.label) + '</b>' : 'Choose sex to pick the norms') + '</p>'
-      : '<h2>Phase progress</h2><p class="against"><b>' + esc(state[t].phase) + (t === 'acl' ? ' · ' + esc(state.acl.sex) : '') + '</b> targets</p>';
+      : t === 'str'
+        ? '<h2>Strength summary</h2><p class="against">Each leg against <b>BASE Health strength targets</b></p>'
+        : '<h2>Phase progress</h2><p class="against"><b>' + esc(state[t].phase) + (t === 'acl' ? ' · ' + esc(state.acl.sex) : '') + '</b> targets</p>';
     var tally = '<div class="tally"><div class="g"><b>' + c.counts.Green + '</b><span>' + labels[0] + '</span></div>' +
       '<div class="a"><b>' + c.counts.Amber + '</b><span>' + labels[1] + '</span></div>' +
       '<div class="r"><b>' + c.counts.Red + '</b><span>' + labels[2] + '</span></div></div>';
     var list;
-    if (!c.groups.length) {
+    if (t === 'str') {
+      if (!c.rows.length) {
+        list = '<p class="empty">Each leg is scored against its target as you type. Only the tests you fill in appear in the report.</p>' +
+          '<button type="button" class="quiet demo" data-action="demo">Fill in example results</button>';
+      } else if (!c.prios.length) {
+        list = '<p class="ok">Nothing below target \u2014 every tested result is on target.</p>';
+      } else {
+        list = '<ol class="prio">' + c.prios.slice(0, 6).map(function (r) {
+          return '<li>' + chip(r.status) + '<span class="pn">' + esc(r.name) + '</span><span class="pd">= ' + esc(r.text) + ' \u00b7 needs ' + esc(r.target) + '</span></li>';
+        }).join('') + '</ol>' + (c.prios.length > 6 ? '<p class="fine">+ ' + (c.prios.length - 6) + ' more in the report</p>' : '');
+      }
+    } else if (!c.groups.length) {
       list = '<p class="empty">Results are scored against the norms as you type. Blank metrics are left out.</p>' +
         '<button type="button" class="quiet demo" data-action="demo">Fill in example results</button>';
     } else if (!c.prios.length) {
@@ -352,7 +461,7 @@
         return '<li>' + chip(r.status) + '<span class="pn">' + esc(r.name) + '</span><span class="pd">= ' + esc(val) + ' · needs ' + esc(r.target) + '</span></li>';
       }).join('') + '</ol>';
     }
-    var html = '<div class="sum"><div class="sum-scroll">' + head + tally + '<h3>' + (t === 'screen' ? 'Top priorities <small>worst first</small>' : 'Behind target <small>worst first</small>') + '</h3>' + list;
+    var html = '<div class="sum"><div class="sum-scroll">' + head + tally + '<h3>' + (t === 'screen' ? 'Top priorities <small>worst first</small>' : (t === 'str' ? 'Below target <small>worst first</small>' : 'Behind target <small>worst first</small>')) + '</h3>' + list;
     if (t === 'screen' && c.radarOptions.length) {
       var full = c.radarPicked.length >= 6;
       html += '<h3>Radar graph <small>pick 3–6 for page 1</small></h3><div class="picks">' + c.radarOptions.map(function (o) {
@@ -474,6 +583,12 @@
       var hx = { 'AKET deficit vs uninjured': ['4', '9'], 'SLR % of uninjured side': ['96', '88'], 'HHD 90° knee-flex % of uninjured': ['91', '80'],
         'Nordic peak force — injured': ['290', '245'], 'Nordic peak-force imbalance': ['22', '41'], '10 m sprint time': ['1.86', '1.95'], 'HaOS score': ['84', '70'] };
       Object.keys(hx).forEach(function (k) { var v = val('ham', k); v.result = hx[k][0]; v.previous = hx[k][1]; });
+    } else if (t === 'str') {
+      Object.assign(s.meta, { name: 'Example Athlete', mass: '80', sport: 'AFL', notes: 'Example data \u2014 not a real athlete' });
+      var sx = { split_squat: ['28', '25'], sl_seated_calf_vald: ['1650', '1540'], sl_seated_calf_smith: ['125', '118'],
+        sl_knee_extension: ['820', '700'], sl_bridge: ['17', '16'], sl_calf_raise_reps: ['27', '22'],
+        prone_hamstring_curl: ['420', '385'], hip_abduction: ['350', '372'], hip_adduction: ['395', '380'] };
+      Object.keys(sx).forEach(function (k) { var v = val('str', k); v.left = sx[k][0]; v.right = sx[k][1]; });
     } else {
       Object.assign(s.meta, { name: 'Example Athlete', injured: 'Right', graft: 'Hamstring', sport: 'Netball', notes: 'Example data — not a real athlete' });
       var ax = { 'IKDC': ['78', '70'], 'ACL-RSI': ['61', '52'], 'KOOS — Sport & Rec': ['75', '65'], 'Knee extension LSI': ['84', '76'],
@@ -507,6 +622,15 @@
   function buildReport() {
     var t = state.tool, c = compute(), m = state[t].meta;
     if (blocker(c)) return null;
+    if (t === 'str') {
+      return {
+        file: fileName('_strength.pdf'),
+        rep: window.BHReport.strength({
+          meta: { name: m.name, date: E.displayIso(m.date), mass: m.mass, sport: m.sport, tester: m.tester, notes: m.notes },
+          tests: c.tests, counts: c.counts, prios: c.prios, amberPct: DATA.str.amber_pct
+        })
+      };
+    }
     if (t === 'screen') {
       var labels = {};
       c.radarOptions.forEach(function (o) { labels[o[0]] = o[1]; });
@@ -621,9 +745,9 @@
     });
   }
   function start() {
-    Promise.all([fetchJson('norms.json'), fetchJson('hamstring_norms.json'), fetchJson('acl_norms.json')]).then(function (r) {
-      DATA.screen = r[0]; DATA.ham = r[1]; DATA.acl = r[2];
-      state = loadDraft() || { v: 1, tool: 'screen', screen: freshTool('screen'), ham: freshTool('ham'), acl: freshTool('acl') };
+    Promise.all([fetchJson('norms.json'), fetchJson('hamstring_norms.json'), fetchJson('acl_norms.json'), fetchJson('strength_norms.json')]).then(function (r) {
+      DATA.screen = r[0]; DATA.ham = r[1]; DATA.acl = r[2]; DATA.str = r[3];
+      state = loadDraft() || { v: 1, tool: 'screen', screen: freshTool('screen'), str: freshTool('str'), ham: freshTool('ham'), acl: freshTool('acl') };
       tidyState();
       els.entry.addEventListener('input', onInput);
       els.entry.addEventListener('change', onChange);
@@ -643,7 +767,7 @@
       render();
     }).catch(function (err) {
       els.entry.innerHTML = '<section class="card error-card"><div class="card-head"><h2>Norms not found</h2></div>' +
-        '<p>The app couldn’t load its norms files (' + esc(err.message) + '). Check that norms.json, hamstring_norms.json and acl_norms.json sit next to index.html, then reload. ' +
+        '<p>The app couldn’t load its norms files (' + esc(err.message) + '). Check that norms.json, strength_norms.json, hamstring_norms.json and acl_norms.json sit next to index.html, then reload. ' +
         'If you are offline, open the app once while online so it can save a copy.</p></section>';
     });
   }
