@@ -2,7 +2,8 @@
    Four tools (screening, LL strength, hamstring rehab, ACL rehab). Everything runs on the device: results are
    scored as they are typed, the PDF is built locally, and a draft is kept in this browser only until
    "Clear all data" wipes it. Creating a PDF also saves the session to the client's record on this device,
-   so the next test can load their previous results and the report can show progress. */
+   so the next test can load their previous results and the report can show progress. "Scan notes" reads a photo
+   of handwritten results with Claude and fills the boxes for checking. */
 (function () {
   'use strict';
   var E = window.BHEngine;
@@ -84,6 +85,9 @@
       if (!it || typeof it !== 'object') state[t].interp = freshInterp();
       else { it.text = String(it.text || ''); it.ai = !!it.ai; it.basis = String(it.basis || ''); }
       if (state[t].hist && typeof state[t].hist !== 'object') state[t].hist = null;
+      // boxes filled from scanned notes and not yet checked (kept with the draft so the highlight survives a reload)
+      var sc = state[t].scanned;
+      if (!sc || typeof sc !== 'object' || Array.isArray(sc)) state[t].scanned = {};
     });
     if (TOOLS.indexOf(state.tool) < 0) state.tool = 'screen';
   }
@@ -185,11 +189,13 @@
 
   function athleteCard() {
     var t = state.tool, s = state[t];
-    var out = '<section class="card athlete"><div class="card-head"><h2>Athlete</h2>';
+    var out = '<section class="card athlete"><div class="card-head"><h2>Athlete</h2><div class="head-actions">';
+    out += '<label class="ghost file-btn scan-btn" id="scanBtn" for="scanFiles">' + CAMERA + '<span data-label>Scan notes</span>' +
+      '<input id="scanFiles" type="file" accept="image/*" multiple aria-label="Scan notes: photo of handwritten results"></label>';
     if (t === 'screen') {
       out += '<label class="ghost file-btn" for="valdFiles">Import VALD CSV<input id="valdFiles" type="file" accept=".csv,text/csv" multiple></label>';
     }
-    out += '</div><div class="fields">';
+    out += '</div></div><div class="fields">';
     if (t === 'screen') {
       out += field(t, 'name', 'Athlete name', { cls: 'wide', words: true }) + field(t, 'date', 'Test date', { type: 'date' }) +
         seg(t, 'sex', 'Sex', ['Male', 'Female']) +
@@ -220,7 +226,7 @@
       out += '<div class="f wide"><span id="acl-sex-l">Norm set</span><div class="seg" role="group" aria-labelledby="acl-sex-l">' +
         DATA.acl.sexes.map(function (x) { return '<button type="button" data-choice-seg="sex" data-value="' + esc(x) + '" aria-pressed="' + (s.sex === x) + '">' + esc(x) + '</button>'; }).join('') + '</div></div>';
     }
-    out += '</div><div class="client-bar" id="clientBar" hidden></div><p class="note" id="ctxNote" hidden></p>';
+    out += '</div><div class="scan-bar" id="scanBar" role="status" aria-live="polite" hidden></div><div class="client-bar" id="clientBar" hidden></div><p class="note" id="ctxNote" hidden></p>';
     if (t === 'screen') out += '<div class="import-log" id="importLog" hidden></div>';
     return out + '</section>';
   }
@@ -298,6 +304,8 @@
     if (t === 'screen' && state.screen.importLog) showImportLog(state.screen.importLog);
     refresh();
     fitInterp();
+    applyScanMarks();
+    renderScanBar();
   }
 
   // ------------------------------------------------------------------ live updates
@@ -516,6 +524,7 @@
   function onInput(e) {
     var el = e.target, t = state.tool;
     if (el.id === 'interpText') { onInterpInput(el); return; }
+    unmarkScanned(el);
     if (el.dataset.meta) {
       state[t].meta[el.dataset.meta] = el.value;
       refresh();
@@ -531,6 +540,7 @@
     if (el.dataset.choice === 'pop') { state.screen.pop = el.value; refresh(); }
     else if (el.dataset.choice === 'phase') { state[t].phase = el.value; refresh(); }
     else if (el.id === 'valdFiles') importVald(el.files);
+    else if (el.id === 'scanFiles') { var picked = Array.prototype.slice.call(el.files || []); el.value = ''; startScan(picked); }
   }
   function onClick(e) {
     var b = e.target.closest('button');
@@ -546,6 +556,7 @@
       b.parentNode.querySelectorAll('button').forEach(function (x) { x.setAttribute('aria-pressed', String(state.acl.sex === x.dataset.value)); });
       refresh();
     } else if (b.dataset.side) {
+      unmarkScanned(b.parentNode);
       var v = val(t, b.closest('.metric').dataset.metric);
       v.side = v.side === b.dataset.side ? '' : b.dataset.side;
       b.parentNode.querySelectorAll('button').forEach(function (x) { x.setAttribute('aria-pressed', String(v.side === x.dataset.side)); });
@@ -560,10 +571,14 @@
       pickClient(b.dataset.client);
     } else if (b.dataset.action === 'load-history' || b.dataset.action === 'reload-history') {
       loadHistory(t, b.dataset.client || E.nameKey(state[t].meta.name));
+    } else if (b.dataset.action === 'scan-undo') {
+      undoScan();
+    } else if (b.dataset.action === 'scan-close') {
+      scanInfo = null; renderScanBar();
     } else if (b.dataset.action === 'ai-draft') {
       draftInterp();
     } else if (b.dataset.action === 'ai-settings') {
-      openAiSettings(false);
+      openAiSettings(null);
     } else if (b.dataset.action === 'ai-undo') {
       undoInterp();
     } else if (b.dataset.action === 'goto-interp') {
@@ -850,6 +865,7 @@
     // an AI draft still on its way belongs to the athlete just cleared: drop it when it arrives
     aiGen++;
     aiBusy = null; interpMsg = { tool: null, kind: '', text: '' }; interpUndo = null;
+    scanBusy = null; scanInfo = null; scanGen++;
     // drop the last report built (it holds the athlete's details) and its preview
     current = { file: null, blob: null, title: '' };
     els.pages.innerHTML = '';
@@ -871,7 +887,7 @@
   // rehab phase, time since injury). Never the athlete's name, notes, tester/clinician/surgeon or dates.
   var AI_KEY_STORE = 'bh-athlete-report-ai-key';
   var SPARKLE = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="currentColor"><path d="M10 2.5l1.8 5.2 5.2 1.8-5.2 1.8L10 16.5l-1.8-5.2L3 9.5l5.2-1.8zM18.5 13l.95 2.55 2.55.95-2.55.95-.95 2.55-.95-2.55L15 16.5l2.55-.95z"/></svg>';
-  var aiBusy = null, aiGen = 0, aiThenDraft = false;
+  var aiBusy = null, aiGen = 0, aiThen = null;
   var interpMsg = { tool: null, kind: '', text: '' };
   var interpUndo = null;
 
@@ -1051,7 +1067,7 @@
     s = s.replace(/[ \t]+/g, ' ').replace(/ *\n */g, '\n').replace(/\n{3,}/g, '\n\n').trim();
     return s;
   }
-  function aiErrorText(status, j) {
+  function aiErrorText(status, j, what) {
     var e = (j && j.error) || {}, msg = clean1(e.message), type = e.type || '';
     var code = e.details && e.details.error_code;
     if (status === 401 || type === 'authentication_error') return 'Claude didn’t accept the API key. Check it in AI settings.';
@@ -1061,18 +1077,14 @@
     if (status === 429 || type === 'rate_limit_error') return 'Too many requests just now. Wait a moment and try again.';
     if (status === 529 || status >= 500 || type === 'overloaded_error' || type === 'api_error') return 'Claude is busy right now. Try again in a moment.';
     if (status === 404 || type === 'not_found_error') return 'The AI model named in interpretation.json wasn’t found' + (msg ? ' (' + msg + ')' : '') + '.';
-    return 'Claude couldn’t draft this' + (msg ? ': ' + msg : ' (error ' + status + ')') + '.';
+    if (status === 413 || type === 'request_too_large') return 'That’s too much to send in one go. Try fewer photos at a time.';
+    return 'Claude couldn’t ' + (what || 'draft this') + (msg ? ': ' + msg : ' (error ' + status + ')') + '.';
   }
-  function callClaude(key, payload) {
-    var cfg = DATA.ai;
-    var body = {
-      model: cfg.model, max_tokens: cfg.max_tokens || 2000, system: [].concat(cfg.system || []).join('\n'),
-      messages: [{ role: 'user', content: (cfg.request || 'Write the interpretation for these test results.') + '\n\n' + payload }]
-    };
-    if (cfg.effort) body.output_config = { effort: cfg.effort };
+  // one request to the Messages API; resolves with the parsed reply, rejects with a plain-English message
+  function claudeRequest(key, body, endpoint, timeoutS, what) {
     var ctrl = window.AbortController ? new AbortController() : null;
-    var timer = setTimeout(function () { if (ctrl) ctrl.abort(); }, (cfg.timeout_s || 60) * 1000);
-    return fetch(cfg.endpoint || 'https://api.anthropic.com/v1/messages', {
+    var timer = setTimeout(function () { if (ctrl) ctrl.abort(); }, (timeoutS || 60) * 1000);
+    return fetch(endpoint || 'https://api.anthropic.com/v1/messages', {
       method: 'POST', cache: 'no-store', signal: ctrl ? ctrl.signal : undefined,
       headers: {
         'content-type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01',
@@ -1083,16 +1095,28 @@
       return res.text().then(function (raw) {
         var j = null;
         try { j = JSON.parse(raw); } catch (e) { /* not JSON */ }
-        if (!res.ok) throw new Error(aiErrorText(res.status, j));
-        var text = ((j && j.content) || []).filter(function (b) { return b && b.type === 'text'; })
-          .map(function (b) { return b.text; }).join('\n');
-        text = tidyAiText(text);
-        if (!text) throw new Error(j && j.stop_reason === 'refusal' ? 'Claude didn’t write an interpretation for these results. Try again, or write your own.' : 'Claude sent back an empty answer. Try again.');
-        return text;
+        if (!res.ok) throw new Error(aiErrorText(res.status, j, what));
+        return j || {};
       });
     }, function (err) {
       throw new Error(err && err.name === 'AbortError' ? 'Claude took too long to answer. Try again.' : 'Couldn’t reach Claude. Check the internet connection and try again.');
     }).then(function (v) { clearTimeout(timer); return v; }, function (e) { clearTimeout(timer); throw e; });
+  }
+  function replyText(j) {
+    return ((j && j.content) || []).filter(function (b) { return b && b.type === 'text'; }).map(function (b) { return b.text; }).join('\n');
+  }
+  function callClaude(key, payload) {
+    var cfg = DATA.ai;
+    var body = {
+      model: cfg.model, max_tokens: cfg.max_tokens || 2000, system: [].concat(cfg.system || []).join('\n'),
+      messages: [{ role: 'user', content: (cfg.request || 'Write the interpretation for these test results.') + '\n\n' + payload }]
+    };
+    if (cfg.effort) body.output_config = { effort: cfg.effort };
+    return claudeRequest(key, body, cfg.endpoint, cfg.timeout_s || 60).then(function (j) {
+      var text = tidyAiText(replyText(j));
+      if (!text) throw new Error(j && j.stop_reason === 'refusal' ? 'Claude didn’t write an interpretation for these results. Try again, or write your own.' : 'Claude sent back an empty answer. Try again.');
+      return text;
+    });
   }
   function draftInterp() {
     if (aiBusy) return;
@@ -1102,7 +1126,7 @@
     if (why) return fail(why, { blocker: true });
     if (!DATA.ai || !DATA.ai.model) return fail('The AI settings file (interpretation.json) didn’t load. Reopen the app while online.');
     var key = aiKey();
-    if (!key) { openAiSettings(true); return; }
+    if (!key) { openAiSettings(draftInterp, 'To draft interpretations, the app needs a Claude API key. You only need to do this once on each device.'); return; }
     if (navigator.onLine === false) return fail('No internet connection. Connect to draft with AI, or type your own interpretation.', { offline: true });
     var payload = interpPayload(t, c), basis = hashStr(payload), gen = aiGen;
     aiBusy = t; interpUndo = null;
@@ -1127,16 +1151,16 @@
       refresh();
     });
   }
-  function openAiSettings(thenDraft) {
-    aiThenDraft = !!thenDraft;
+  var KEY_NOTE = 'The key is saved only on this device and is only sent to Anthropic when you use Draft with AI or Scan notes.';
+  // then: what to do once a key is saved (e.g. carry on drafting or scanning)
+  function openAiSettings(then, lead) {
+    aiThen = typeof then === 'function' ? then : null;
     var k = aiKey();
     els.aiKey.value = '';
     els.aiErr.hidden = true;
     els.aiRemove.hidden = !k;
-    els.aiKeyState.textContent = k ? 'A key ending in ' + k.slice(-4) + ' is saved on this device. Paste a new one to replace it.'
-      : 'The key is saved only on this device and is only sent to Anthropic when you tap Draft with AI.';
-    els.aiLead.textContent = thenDraft ? 'To draft interpretations, the app needs a Claude API key. You only need to do this once on each device.'
-      : 'Drafting uses Claude through the clinic’s own Claude API key.';
+    els.aiKeyState.textContent = k ? 'A key ending in ' + k.slice(-4) + ' is saved on this device. Paste a new one to replace it.' : KEY_NOTE;
+    els.aiLead.textContent = lead || 'Drafting interpretations and reading scanned notes use Claude through the clinic’s own Claude API key.';
     openModal(els.aiDialog, els.aiKey);
   }
   function saveAiKey() {
@@ -1152,16 +1176,327 @@
       els.aiErr.textContent = 'This device wouldn’t save the key (storage is blocked).'; els.aiErr.hidden = false; return;
     }
     els.aiKey.value = '';
-    var then = aiThenDraft;
+    var then = aiThen;
+    aiThen = null;
     closeModal();
     toast('API key saved on this device');
-    if (then) draftInterp();
+    if (then) then();
   }
   function removeAiKey() {
     try { localStorage.removeItem(AI_KEY_STORE); } catch (e) { /* storage unavailable */ }
     els.aiRemove.hidden = true;
-    els.aiKeyState.textContent = 'Key removed. The key is saved only on this device and is only sent to Anthropic when you tap Draft with AI.';
+    els.aiKeyState.textContent = 'Key removed. ' + KEY_NOTE;
     els.aiKey.focus();
+  }
+
+  // ------------------------------------------------------------------ scan notes (photo -> results)
+  // A photo of the clinician's own handwritten notes is shrunk on the device and sent to Claude with this
+  // tab's list of tests (plus the injured side on the rehab tabs). Claude answers in a fixed JSON shape and
+  // only copies what is written: it never calculates. The readings go straight into the boxes, highlighted
+  // until they are checked or edited, with an Undo. Names on the paper are never read back.
+  var CAMERA = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h3l2-3h6l2 3h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="3.5"/></svg>';
+  var scanBusy = null, scanGen = 0, scanInfo = null;
+  var SCAN_DEFAULT = {
+    effort: 'medium', max_tokens: 8000, timeout_s: 120, max_edge: 2000, max_photos: 6,
+    system: [
+      'You read handwritten results from photos of a clinician’s testing notes at BASE Health Noosa, a sports physiotherapy clinic in Queensland, Australia, and match them to the tests listed in the request.',
+      'The notes are on the clinician’s own paper, so labels may be abbreviated or shorthand (for example SS for split squat, KE for knee extension, CMJ for countermovement jump, JH for jump height, Add/Abd for hip adduction/abduction, L/R for left/right, Inj for injured). Match each written result to the listed test it clearly belongs to.',
+      'Copy each number exactly as written, as a plain number without units, using a full stop for decimals. Never calculate anything: no averages, differences, percentages, ratios or LSIs. If a listed test is a calculated value that is not written on the paper, but the numbers it would come from are, leave the test out and put those numbers in unclear so the clinician can work it out.',
+      'If several trials are written for one test and none is marked as the result, use the best one (the highest, or the lowest where lower is better) and say so in unclear.',
+      'Only return a reading when you can tell both which test it belongs to and what the number is. If a number is hard to read, or you are unsure which test or side it belongs to, give your best reading and also describe the doubt in unclear (for example: "Nordic R: 318 or 348?"). Never invent values for tests that are not on the paper.',
+      'If a result is written in a different unit from the one listed (for example lb instead of kg), do not convert it: leave it out and mention it in unclear.',
+      'Dates are written Australian style (day/month/year). Give the test date as YYYY-MM-DD if one is written, otherwise an empty string. Give body mass in kg if it is written, otherwise an empty string.',
+      'Keep each unclear note short and name the test it is about. Ignore names and any other personal details on the paper, and never include them in your answer.'
+    ]
+  };
+  function scanCfg() {
+    var cfg = Object.assign({}, SCAN_DEFAULT), ai = DATA.ai || {};
+    cfg.model = ai.model; cfg.endpoint = ai.endpoint;
+    if (ai.scan && typeof ai.scan === 'object') Object.keys(ai.scan).forEach(function (k) { cfg[k] = ai.scan[k]; });
+    return cfg;
+  }
+  var CALCULATED = /LSI|% of|deficit|imbalance|asymmetry|diff %|ratio|relative/i;
+  // what Claude should look for on the paper for one app metric (screening and rehab tabs)
+  function scanWhat(t, m) {
+    var unit = m.unit && m.unit !== 'AU' ? m.unit : (m.unit === 'AU' ? 'score' : 'number');
+    var w = m.calc === 'PERBW' || m.calc === 'PERKG' ? 'force in N (the app divides by body mass)' : 'in ' + unit;
+    if (m.calc === 'LSI') return 'left and right values in the same unit (the app works out the LSI)';
+    if (/(\u2014 injured|\(injured\))$/.test(m.name)) w += ', injured side only';
+    else if (CALCULATED.test(m.name) && m.calc !== 'PERBW' && m.calc !== 'PERKG') w += ', only if this number itself is written';
+    if (m.dir === 'Lower') w += ', lower is better';
+    if (t === 'screen' && E.isAsym(m.name)) w += '; side = the higher side, L or R';
+    return w;
+  }
+  // the tests Claude may fill on this tab: id t1..tN -> the app's own metric key and fields
+  function scanList(t) {
+    var list = [], n = 0;
+    if (t === 'str') {
+      DATA.str.tests.forEach(function (tt) {
+        if (tt.input === 'calc') return;
+        list.push({ id: 't' + (++n), key: tt.id, name: tt.name, what: INPUT_WORD[tt.input] + (tt.detail ? ' (' + tt.detail + ')' : '') + ' for each leg', fields: ['left', 'right'] });
+      });
+    } else {
+      DATA[t].groups.forEach(function (g) {
+        g.metrics.forEach(function (m) {
+          if (m.calc === 'DSI') return;
+          var fields = m.calc === 'LSI' ? ['left', 'right'] : (t === 'screen' && E.isAsym(m.name) ? ['result', 'side'] : ['result']);
+          list.push({ id: 't' + (++n), key: m.name, name: m.name, what: scanWhat(t, m), fields: fields });
+        });
+      });
+    }
+    return list;
+  }
+  function scanPrompt(t, list) {
+    var L = ['Section of the app: ' + TOOL_NAMES[t] + '.'];
+    if (t === 'ham' || t === 'acl') {
+      var inj = state[t].meta.injured;
+      L.push(inj ? 'Injured side: ' + inj + '. Where a test asks for the injured side and both sides are written, use the ' + inj.toLowerCase() + ' value.'
+        : 'Injured side: not chosen in the app yet. Where a test asks for the injured side, use it only if the notes make the injured side clear; otherwise leave it out and mention it in unclear.');
+    }
+    L.push('Tests (id: name — what to look for — fields to return):');
+    list.forEach(function (x) { L.push(x.id + ': ' + x.name + ' — ' + x.what + ' — ' + x.fields.join(', ')); });
+    L.push('');
+    L.push('Return every reading you can match. Use field "result" for a single value, "left" and "right" for each side, and "side" with the value L or R for the higher side (asymmetry tests only). Leave out tests that are not on the paper.');
+    return L.join('\n');
+  }
+  function scanSchema(list) {
+    return {
+      type: 'object',
+      properties: {
+        test_date: { type: 'string' },
+        body_mass_kg: { type: 'string' },
+        readings: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              test: { type: 'string', enum: list.map(function (x) { return x.id; }) },
+              field: { type: 'string', enum: ['result', 'left', 'right', 'side'] },
+              value: { type: 'string' }
+            },
+            required: ['test', 'field', 'value'],
+            additionalProperties: false
+          }
+        },
+        unclear: { type: 'array', items: { type: 'string' } }
+      },
+      required: ['test_date', 'body_mass_kg', 'readings', 'unclear'],
+      additionalProperties: false
+    };
+  }
+  // shrink a photo on the device (JPEG, long edge <= maxEdge) and return it as base64
+  function prepareImage(file, maxEdge) {
+    return new Promise(function (resolve, reject) {
+      var url = URL.createObjectURL(file), img = new Image();
+      img.onload = function () {
+        try {
+          var w = img.naturalWidth, h = img.naturalHeight, sc = Math.min(1, maxEdge / Math.max(w, h));
+          var cw = Math.max(1, Math.round(w * sc)), ch = Math.max(1, Math.round(h * sc));
+          var cv = document.createElement('canvas');
+          cv.width = cw; cv.height = ch;
+          var ctx = cv.getContext('2d');
+          ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, cw, ch);
+          ctx.drawImage(img, 0, 0, cw, ch);
+          var data = cv.toDataURL('image/jpeg', 0.86);
+          cv.width = cv.height = 1;   // hand the memory back straight away (iPad)
+          URL.revokeObjectURL(url);
+          if (data.indexOf('data:image/jpeg') !== 0) throw new Error('no jpeg');
+          resolve({ data: data.slice(data.indexOf(',') + 1), media_type: 'image/jpeg', w: cw, h: ch });
+        } catch (e) { URL.revokeObjectURL(url); reject(new Error('Couldn’t prepare that photo. Try taking it again.')); }
+      };
+      img.onerror = function () { URL.revokeObjectURL(url); reject(new Error('Couldn’t open that photo. Try a JPEG or PNG photo.')); };
+      img.src = url;
+    });
+  }
+  function prepareAll(files, maxEdge) {   // one at a time, so big photos don't pile up in memory
+    var out = [];
+    return files.reduce(function (p, f) {
+      return p.then(function () { return prepareImage(f, maxEdge).then(function (im) { out.push(im); }); });
+    }, Promise.resolve()).then(function () { return out; });
+  }
+  function startScan(files) {
+    var t = state.tool;
+    if (!files.length || scanBusy) return;
+    var cfg = scanCfg();
+    function fail(msg) { scanInfo = { tool: t, kind: 'error', text: msg }; renderScanBar(); }
+    if (!DATA.ai || !cfg.model) return fail('The AI settings file (interpretation.json) didn’t load. Reopen the app while online.');
+    var photos = files.filter(function (f) { return !f.type || f.type.indexOf('image/') === 0; });
+    if (!photos.length) return fail('That file isn’t a photo. Choose a photo of your notes.');
+    if (!aiKey()) {
+      openAiSettings(function () { if (state.tool === t) startScan(files); },
+        'To read photos of your notes, the app needs a Claude API key. You only need to do this once on each device.');
+      return;
+    }
+    if (navigator.onLine === false) return fail('No internet connection. Connect to scan your notes, or type the results in.');
+    var max = cfg.max_photos || 6, extra = photos.length > max ? photos.length - max : 0;
+    photos = photos.slice(0, max);
+    var gen = scanGen, list = scanList(t);
+    scanBusy = t;
+    scanInfo = { tool: t, kind: 'busy', text: 'Reading ' + (photos.length === 1 ? 'your notes' : photos.length + ' photos') + '… this can take up to a minute.' };
+    renderScanBar();
+    prepareAll(photos, cfg.max_edge || 2000).then(function (images) {
+      if (gen !== scanGen) throw null;
+      var content = [];
+      images.forEach(function (im, i) {
+        if (images.length > 1) content.push({ type: 'text', text: 'Photo ' + (i + 1) + ':' });
+        content.push({ type: 'image', source: { type: 'base64', media_type: im.media_type, data: im.data } });
+      });
+      content.push({ type: 'text', text: scanPrompt(t, list) });
+      var body = {
+        model: cfg.model, max_tokens: cfg.max_tokens || 8000, system: [].concat(cfg.system || []).join('\n'),
+        messages: [{ role: 'user', content: content }],
+        output_config: { format: { type: 'json_schema', schema: scanSchema(list) } }
+      };
+      if (cfg.effort) body.output_config.effort = cfg.effort;
+      return claudeRequest(aiKey(), body, cfg.endpoint, cfg.timeout_s || 120, 'read the photo');
+    }).then(function (j) {
+      if (gen !== scanGen) return;
+      if (j.stop_reason === 'max_tokens') throw new Error('There was too much to read in one go. Try fewer photos at a time.');
+      if (j.stop_reason === 'refusal') throw new Error('Claude couldn’t read these notes. Try a clearer photo.');
+      var out;
+      try { out = JSON.parse(replyText(j)); } catch (e) { throw new Error('Claude’s answer couldn’t be read. Try again.'); }
+      applyScan(t, out, list);
+      if (extra) scanInfo.unclear.unshift('Only the first ' + max + ' photos were read (' + extra + (extra === 1 ? ' more was' : ' more were') + ' left out). Scan the rest separately.');
+    }).catch(function (err) {
+      if (gen !== scanGen || err === null) return;
+      scanInfo = { tool: t, kind: 'error', text: err && err.message ? err.message : 'Something went wrong reading the photo. Try again.' };
+    }).then(function () {
+      if (gen !== scanGen) return;
+      scanBusy = null;
+      if (state.tool === t && scanInfo && scanInfo.undo) { showFilled(t); refresh(); applyScanMarks(); }
+      renderScanBar();
+      var bar = $('scanBar');
+      if (bar && !bar.hidden && bar.scrollIntoView && state.tool === t) {
+        var r = bar.getBoundingClientRect();
+        if (r.top < 0 || r.bottom > window.innerHeight) bar.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      }
+    });
+  }
+  function fieldLabel(def, f) {
+    if (f === 'left') return def.name + ' L';
+    if (f === 'right') return def.name + ' R';
+    if (f === 'side') return def.name + ' (higher side)';
+    return def.name;
+  }
+  // put Claude's readings into the boxes; remember what each box held before, for Undo
+  function applyScan(t, out, list) {
+    var s = state[t], byId = {}, marks = s.scanned, notes = [];
+    var undo = { was: {}, put: {}, had: {} };
+    list.forEach(function (x) { byId[x.id] = x; });
+    function put(key, f, v, label) {
+      var mk = key + '|' + f, cur = key === 'meta' ? s.meta[f] : val(t, key)[f];
+      cur = cur == null ? '' : String(cur);
+      if (mk in undo.put) {
+        if (undo.put[mk] !== v) notes.push(label + ': two different values on the paper (' + undo.put[mk] + ' and ' + v + '); ' + v + ' was used.');
+      } else {
+        undo.was[mk] = cur; undo.had[mk] = !!marks[mk];
+        if (cur !== '' && cur !== v && !marks[mk] && key !== 'meta') notes.push(label + ': replaced ' + cur + ' with ' + v + ' from the photo.');
+      }
+      if (key === 'meta') s.meta[f] = v; else val(t, key)[f] = v;
+      undo.put[mk] = v;
+      marks[mk] = true;
+    }
+    (out && Array.isArray(out.readings) ? out.readings : []).forEach(function (r) {
+      var def = r && byId[r.test];
+      if (!def || def.fields.indexOf(r.field) < 0) return;
+      var raw = String(r.value == null ? '' : r.value).trim(), v;
+      if (r.field === 'side') {
+        v = raw.toUpperCase().charAt(0);
+        if (v !== 'L' && v !== 'R') return;
+      } else {
+        v = raw.replace(/,/g, '.').replace(/[^\d.\-]/g, '');
+        if (E.parseInput(v) === null) { if (raw) notes.push(fieldLabel(def, r.field) + ': couldn’t use “' + raw.slice(0, 30) + '”.'); return; }
+      }
+      put(def.key, r.field, v, fieldLabel(def, r.field));
+    });
+    var d = String((out && out.test_date) || '').trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(d) && E.parseDate(d, ['Y-m-d'])) put('meta', 'date', d, 'Test date');
+    var mass = String((out && out.body_mass_kg) || '').replace(/,/g, '.').replace(/[^\d.]/g, ''), mv = E.parseInput(mass);
+    if ('mass' in s.meta && mv !== null && mv >= 20 && mv <= 300) put('meta', 'mass', mass, 'Body mass');
+    var keys = Object.keys(undo.put), n = keys.filter(function (k) { return k.indexOf('meta|') !== 0; }).length;
+    var unclear = (out && Array.isArray(out.unclear) ? out.unclear : []).map(function (x) { return String(x).trim(); }).filter(Boolean).concat(notes);
+    scanInfo = {
+      tool: t, kind: n ? 'done' : 'empty', n: n, unclear: unclear.slice(0, 12), undo: keys.length ? undo : null,
+      date: 'meta|date' in undo.put, mass: 'meta|mass' in undo.put
+    };
+  }
+  // Undo puts back what each box held before the scan, except boxes changed by hand since
+  function undoScan() {
+    var t = state.tool, u = scanInfo && scanInfo.tool === t && scanInfo.undo;
+    if (!u) return;
+    var s = state[t], kept = 0;
+    Object.keys(u.put).forEach(function (mk) {
+      var i = mk.lastIndexOf('|'), key = mk.slice(0, i), f = mk.slice(i + 1);
+      var cur = key === 'meta' ? s.meta[f] : val(t, key)[f];
+      if (String(cur == null ? '' : cur) !== u.put[mk]) { kept++; return; }
+      if (key === 'meta') s.meta[f] = u.was[mk]; else val(t, key)[f] = u.was[mk];
+      if (u.had[mk]) s.scanned[mk] = true; else delete s.scanned[mk];
+    });
+    scanInfo = null;
+    render();
+    toast(kept ? 'Scan undone. ' + kept + (kept === 1 ? ' box you changed was' : ' boxes you changed were') + ' kept.' : 'Scan undone');
+  }
+  function markEl(t, key, field) {
+    if (key === 'meta') return $(t + '-' + field);
+    var row = null;
+    els.entry.querySelectorAll('.metric').forEach(function (el) { if (el.dataset.metric === key) row = el; });
+    if (!row) return null;
+    return field === 'side' ? row.querySelector('.side') : row.querySelector('input[data-field="' + field + '"]');
+  }
+  // show the scanned values in the boxes on screen without rebuilding the page (keeps the keyboard where it is)
+  function showFilled(t) {
+    Object.keys(scanInfo.undo.put).forEach(function (mk) {
+      var i = mk.lastIndexOf('|'), key = mk.slice(0, i), f = mk.slice(i + 1), el = markEl(t, key, f);
+      if (!el) return;
+      if (f === 'side') {
+        var sd = val(t, key).side;
+        el.querySelectorAll('button').forEach(function (x) { x.setAttribute('aria-pressed', String(sd === x.dataset.side)); });
+      } else el.value = key === 'meta' ? state[t].meta[f] || '' : val(t, key)[f] || '';
+    });
+  }
+  function applyScanMarks() {
+    var t = state.tool;
+    els.entry.querySelectorAll('.scanned').forEach(function (el) { el.classList.remove('scanned'); });
+    Object.keys(state[t].scanned || {}).forEach(function (k) {
+      var i = k.lastIndexOf('|'), el = markEl(t, k.slice(0, i), k.slice(i + 1));
+      if (el) el.classList.add('scanned');
+    });
+  }
+  function unmarkScanned(el) {
+    if (!el || !el.classList || !el.classList.contains('scanned')) return;
+    el.classList.remove('scanned');
+    var marks = state[state.tool].scanned, row = el.closest && el.closest('.metric');
+    if (el.dataset && el.dataset.meta) delete marks['meta|' + el.dataset.meta];
+    else if (row && el.classList.contains('side')) delete marks[row.dataset.metric + '|side'];
+    else if (row && el.dataset && el.dataset.field) delete marks[row.dataset.metric + '|' + el.dataset.field];
+  }
+  function renderScanBar() {
+    var bar = $('scanBar'), btn = $('scanBtn'), t = state.tool;
+    if (btn) {
+      btn.classList.toggle('busy', !!scanBusy);
+      btn.setAttribute('aria-disabled', String(!!scanBusy));
+      btn.querySelector('[data-label]').textContent = scanBusy ? 'Reading…' : 'Scan notes';
+      var inp = $('scanFiles');
+      if (inp) inp.disabled = !!scanBusy;
+    }
+    if (!bar) return;
+    var info = scanInfo && scanInfo.tool === t ? scanInfo : null;
+    if (!info) { bar.hidden = true; bar.innerHTML = ''; bar.className = 'scan-bar'; return; }
+    bar.hidden = false;
+    bar.className = 'scan-bar ' + info.kind;
+    var close = '<button type="button" class="quiet scan-x" data-action="scan-close" aria-label="Close this message">×</button>';
+    if (info.kind === 'busy') { bar.innerHTML = '<span class="scan-ico">' + CAMERA + '</span><span class="scan-msg">' + esc(info.text) + '</span>'; return; }
+    if (info.kind === 'error') { bar.innerHTML = '<span class="scan-msg">' + esc(info.text) + '</span>' + close; return; }
+    var extra = [info.date ? 'test date' : '', info.mass ? 'body mass' : ''].filter(Boolean);
+    var html = '<span class="scan-ico">' + CAMERA + '</span>' + (info.kind === 'empty'
+      ? '<span class="scan-msg">Nothing on the photo matched the ' + esc(TOOL_NAMES[t]) + ' tests' + (extra.length ? ' (only the ' + extra.join(' and ') + ')' : '') + '. Check you’re on the right tab, or try a clearer photo.</span>'
+      : '<span class="scan-msg"><b>Filled ' + info.n + (info.n === 1 ? ' result' : ' results') + (extra.length ? ' and the ' + extra.join(' and ') : '') + ' from your notes.</b> Check the highlighted boxes against the paper before creating the report.</span>');
+    if (info.undo) html += '<button type="button" class="quiet scan-undo" data-action="scan-undo">Undo</button>';
+    html += close;
+    if (info.unclear && info.unclear.length) {
+      html += '<div class="scan-unclear"><b>Worth a look:</b><ul>' + info.unclear.map(function (u) { return '<li>' + esc(u) + '</li>'; }).join('') + '</ul></div>';
+    }
+    bar.innerHTML = html;
   }
 
   // ------------------------------------------------------------------ client records

@@ -32,6 +32,7 @@
   --green: #2E7D32; --amber: #DD8800; --red: #C62828; --na: #8C969E;
   --green-soft: #E3F1E4; --amber-soft: #FDF0DA; --red-soft: #FBE4E4; --na-soft: #ECEFF1;
   --green-ink: #1E5B22; --amber-ink: #7A4600; --red-ink: #9A1B1B; --na-ink: #4E5860;
+  --scan: #2F6FD0; --scan-soft: #E7F0FD; --scan-line: #7AA5E8; --scan-ink: #1D4E9E;   /* filled from scanned notes */
   --on-accent: #FFFFFF;
   --seg-on: #FFFFFF;
   --shadow: 0 1px 2px rgba(20, 30, 40, .06), 0 4px 16px rgba(20, 30, 40, .06);
@@ -48,6 +49,7 @@
     --green: #43A047; --amber: #F0A020; --red: #E05555; --na: #7D8990;
     --green-soft: #173220; --amber-soft: #3A2A10; --red-soft: #3D1A1A; --na-soft: #222C33;
     --green-ink: #9ADBA0; --amber-ink: #F6C878; --red-ink: #F4A5A5; --na-ink: #B7C2C8;
+    --scan: #6FA3F0; --scan-soft: #172A45; --scan-line: #4B7BC8; --scan-ink: #A9C8F7;
     --on-accent: #06201E;
     --seg-on: #34444F;
     --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 6px 20px rgba(0, 0, 0, .25);
@@ -61,6 +63,7 @@
   --green: #43A047; --amber: #F0A020; --red: #E05555; --na: #7D8990;
   --green-soft: #173220; --amber-soft: #3A2A10; --red-soft: #3D1A1A; --na-soft: #222C33;
   --green-ink: #9ADBA0; --amber-ink: #F6C878; --red-ink: #F4A5A5; --na-ink: #B7C2C8;
+  --scan: #6FA3F0; --scan-soft: #172A45; --scan-line: #4B7BC8; --scan-ink: #A9C8F7;
   --on-accent: #06201E;
   --seg-on: #34444F;
   --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 6px 20px rgba(0, 0, 0, .25);
@@ -406,6 +409,35 @@ button { cursor: pointer; }
 .interp-flag svg { width: 16px; height: 16px; }
 .interp-flag.ok { color: var(--green-ink); }
 .interp-flag.stale { color: var(--amber-ink); }
+
+/* ---------- scan notes: photo of handwritten results -> boxes filled and highlighted */
+.head-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.scan-btn svg { color: var(--scan); flex: none; }
+.scan-btn.busy { opacity: .75; pointer-events: none; }
+.scan-btn.busy svg { animation: ai-pulse 1s ease-in-out infinite alternate; }
+.scan-bar {
+  margin-top: 12px; padding: 8px 6px 8px 12px; border-radius: 10px; background: var(--field); border: 1px solid var(--line);
+  font-size: 14px; color: var(--fg); display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px;
+}
+.scan-bar .scan-ico { display: inline-flex; color: var(--scan); flex: none; }
+.scan-bar .scan-msg { flex: 1 1 220px; min-width: 0; padding-block: 4px; }
+.scan-bar .quiet { min-height: 36px; padding-inline: 10px; font-size: 14px; }
+.scan-bar .scan-x { font-size: 22px; line-height: 1; color: var(--muted); min-width: 40px; }
+.scan-bar .scan-msg + .quiet { margin-left: auto; }   /* actions sit on the right, also when they wrap on a phone */
+.scan-bar.busy .scan-ico svg { animation: ai-pulse 1s ease-in-out infinite alternate; }
+.scan-bar.done { background: var(--scan-soft); border-color: var(--scan-line); }
+.scan-bar.done .scan-msg b { color: var(--scan-ink); }
+.scan-bar.done .quiet { color: var(--scan-ink); }
+.scan-bar.empty { background: var(--amber-soft); border-color: color-mix(in srgb, var(--amber) 40%, transparent); color: var(--amber-ink); }
+.scan-bar.empty .quiet, .scan-bar.empty .scan-ico { color: var(--amber-ink); }
+.scan-bar.error { background: var(--red-soft); border-color: color-mix(in srgb, var(--red) 35%, transparent); color: var(--red-ink); font-weight: 600; }
+.scan-bar.error .scan-x { color: var(--red-ink); }
+.scan-unclear { flex-basis: 100%; margin: 0 0 4px; padding: 8px 10px; border-radius: 8px; background: var(--surface); font-size: 13.5px; color: var(--fg); }
+.scan-unclear ul { margin: 4px 0 0; padding-left: 20px; }
+.scan-unclear li { margin: 2px 0; overflow-wrap: anywhere; }
+.f input.scanned, .metric input.scanned { background: var(--scan-soft); border-color: var(--scan-line); box-shadow: inset 0 0 0 1px var(--scan-line); }
+.f input.scanned:focus, .metric input.scanned:focus { border-color: var(--teal); box-shadow: 0 0 0 3px color-mix(in srgb, var(--teal) 25%, transparent); }
+.side.scanned { background: var(--scan-soft); border-color: var(--scan-line); box-shadow: inset 0 0 0 1px var(--scan-line); }
 .boot { padding: 60px 20px; text-align: center; color: var(--muted); }
 .error-card { border-color: var(--red); }
 .error-card h2 { color: var(--red-ink); }
@@ -518,9 +550,9 @@ button { cursor: pointer; }
 
 <div class="modal" id="aiDialog" role="dialog" aria-modal="true" aria-labelledby="aiTitle" aria-describedby="aiLead" hidden>
   <div class="modal-card">
-    <h2 id="aiTitle">AI interpretation</h2>
-    <p id="aiLead">Drafting uses Claude through the clinic’s own Claude API key.</p>
-    <p class="modal-fine">The key is separate from a Claude subscription and is paid per use, roughly 1–2 cents per report.</p>
+    <h2 id="aiTitle">AI settings</h2>
+    <p id="aiLead">Drafting interpretations and reading scanned notes use Claude through the clinic’s own Claude API key.</p>
+    <p class="modal-fine">The key is separate from a Claude subscription and is paid per use: roughly 1–2 cents per drafted interpretation and a few cents per scanned photo.</p>
     <ol class="ai-steps">
       <li>Sign in to the Claude Console at <a href="https://platform.claude.com" target="_blank" rel="noopener">platform.claude.com</a>.</li>
       <li>Under <b>Settings › Billing</b>, buy some credit and set a monthly spend limit.</li>
@@ -529,7 +561,7 @@ button { cursor: pointer; }
     <label class="f" for="aiKey"><span>Claude API key</span>
       <input id="aiKey" type="password" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="done" placeholder="sk-ant-…"></label>
     <p class="ai-err" id="aiErr" role="alert" hidden></p>
-    <p class="modal-fine" id="aiKeyState">The key is saved only on this device and is only sent to Anthropic when you tap Draft with AI.</p>
+    <p class="modal-fine" id="aiKeyState">The key is saved only on this device and is only sent to Anthropic when you use Draft with AI or Scan notes.</p>
     <button class="quiet ai-remove" id="aiRemove" type="button" hidden>Remove saved key</button>
     <div class="modal-actions">
       <button class="ghost" id="aiCancel" type="button">Cancel</button>
@@ -554,10 +586,10 @@ button { cursor: pointer; }
 
 <div class="toast" id="toast" role="status" hidden></div>
 
-<script src="engine.js?v=6" defer></script>
-<script src="report-fonts.js?v=6" defer></script>
-<script src="jspdf.umd.min.js?v=6" defer></script>
-<script src="report.js?v=6" defer></script>
-<script src="app.js?v=6" defer></script>
+<script src="engine.js?v=7" defer></script>
+<script src="report-fonts.js?v=7" defer></script>
+<script src="jspdf.umd.min.js?v=7" defer></script>
+<script src="report.js?v=7" defer></script>
+<script src="app.js?v=7" defer></script>
 </body>
 </html>
