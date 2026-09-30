@@ -2,10 +2,10 @@
    Keeps a copy of the app on the device so it opens without a connection.
    Online it always asks the server first (so updated norms and app files show up straight away),
    falling back to the saved copy when offline or when the network takes longer than 4 seconds. */
-var CACHE = 'bh-athlete-report-v11';
-var FILES = ['./', 'index.html', 'app.js?v=11', 'engine.js?v=11', 'report.js?v=11', 'report-fonts.js?v=11', 'jspdf.umd.min.js?v=11',
+var CACHE = 'bh-athlete-report-v12';
+var FILES = ['./', 'index.html', 'app.js?v=12', 'engine.js?v=12', 'report.js?v=12', 'report-fonts.js?v=12', 'jspdf.umd.min.js?v=12',
   'norms.json', 'strength_norms.json', 'hamstring_norms.json', 'acl_norms.json', 'interpretation.json', 'explainers.json', 'manifest.webmanifest',
-  'icon-192.png', 'icon-512.png', 'icon-maskable-512.png', 'apple-touch-icon.png'];
+  'icon-192.png', 'icon-512.png', 'icon-maskable-512.png', 'apple-touch-icon.png', 'rajdhani-600.woff2', 'rajdhani-700.woff2'];
 
 self.addEventListener('install', function (event) {
   event.waitUntil(
