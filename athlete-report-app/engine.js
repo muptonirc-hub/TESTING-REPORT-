@@ -78,12 +78,13 @@
 
   // ---------------------------------------------------------------- status words (screen, PDF and AI payload)
   // Statuses stay Green / Amber / Red inside the app and in saved records; what people read says what each
-  // one means. Screening and LL Strength compare with a target, the rehab tabs with the typical case at the phase.
+  // one means. Screening and LL Strength compare with a target, the rehab tabs with the typical case at the phase
+  // (v11: the rehab tabs share On target and Close; their rule, up to 1 SD behind, is in the status key).
   var STATUS_WORDS = {
     target: { Green: 'On target', Amber: 'Close', Red: 'Off target', 'n/a': 'No target' },
-    rehab: { Green: 'On / ahead', Amber: 'Within 1 SD', Red: 'Behind', 'n/a': 'No target' }
+    rehab: { Green: 'On target', Amber: 'Close', Red: 'Behind', 'n/a': 'No target' }
   };
-  var TALLY_WORDS = { target: ['On target', 'Close', 'Off target'], rehab: ['On / ahead', 'Within 1 SD', '>1 SD behind'] };
+  var TALLY_WORDS = { target: ['On target', 'Close', 'Off target'], rehab: ['On target', 'Close', 'Behind'] };
   function statusWord(status, kind) {
     var w = STATUS_WORDS[kind === 'rehab' ? 'rehab' : 'target'];
     return w[status] || String(status || '');
@@ -138,6 +139,20 @@
     else if (direction === 'Lower') good = delta < 0;
     else return ['● meaningful shift   ' + disp, 'shift'];
     return good ? ['▲ real gain   ' + disp, 'gain'] : ['▼ real drop   ' + disp, 'drop'];
+  }
+  // What people read for a change flag, on screen and in the PDFs (v11). change() keeps its own text: the parity
+  // tests pin it and the AI payload reads its numbers. The word carries the direction, so a real change is unsigned:
+  //   '▲ real gain   +1.3 (+4%)'      -> '▲ Improved 1.3 (4%)'       '▼ real drop   -0.6 (-1%)' -> '▼ Worse 0.6 (1%)'
+  //   '– within noise   +1.3 (+4%)'   -> '+1.3 (+4%) · within noise'  '● meaningful shift   +2 (+5%)' -> '● Shifted +2 (+5%)'
+  function changeLabel(text, kind) {
+    var s = String(text == null ? '' : text).replace(/\s+/g, ' ').trim();
+    var m = /[+\-−]?\d[\d.]*(?: \([+\-−]?\d[\d.]*%\))?$/.exec(s);
+    if (!m) return s;
+    var amount = m[0];
+    if (kind === 'gain' || kind === 'drop') return (kind === 'gain' ? '▲ Improved ' : '▼ Worse ') + amount.replace(/[+\-−](?=\d)/g, '');
+    if (kind === 'noise') return amount + ' · within noise';
+    if (kind === 'shift') return '● Shifted ' + amount;
+    return s;
   }
 
   function blank(v) { return v === null || v === undefined || v === ''; }
@@ -819,7 +834,7 @@
 
   return {
     num: num, parseInput: parseInput, pyFixed: pyFixed, pySigned: pySigned, pyRound: pyRound, fmt: fmt,
-    status: status, targetStr: targetStr, change: change,
+    status: status, targetStr: targetStr, change: change, changeLabel: changeLabel,
     buildRows: buildRows, buildRehabRows: buildRehabRows, flatten: flatten, counts: counts, priorities: priorities,
     lsi: lsi, ageToBand: ageToBand, resolvePopulation: resolvePopulation, sportPopulations: sportPopulations,
     isAsym: isAsym, GEN_M: GEN_M, GEN_F: GEN_F,

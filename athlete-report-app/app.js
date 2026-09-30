@@ -22,7 +22,10 @@
     aiDialog: $('aiDialog'), aiKey: $('aiKey'), aiSave: $('aiSave'), aiCancel: $('aiCancel'), aiRemove: $('aiRemove'),
     aiKeyState: $('aiKeyState'), aiErr: $('aiErr'), aiLead: $('aiLead'),
     clientsBtn: $('clientsBtn'), clientsDialog: $('clientsDialog'), clientsList: $('clientsList'), clientsSummary: $('clientsSummary'),
-    clientsBackup: $('clientsBackup'), clientsRestore: $('clientsRestore'), clientsClose: $('clientsClose')
+    clientsBackup: $('clientsBackup'), clientsRestore: $('clientsRestore'), clientsClose: $('clientsClose'),
+    clientsTitle: $('clientsTitle'), clientsSearch: $('clientsSearch'), clientsSearchWrap: $('clientsSearchWrap'), clientsNew: $('clientsNew'), clientsFine: $('clientsFine'),
+    moreBtn: $('moreBtn'), moreMenu: $('moreMenu'), restoreItem: $('restoreItem'), aiItem: $('aiItem'), appbar: document.querySelector('.appbar'),
+    testsDialog: $('testsDialog'), testsLead: $('testsLead'), testsList: $('testsList'), testsAll: $('testsAll'), testsNone: $('testsNone'), testsDone: $('testsDone')
   };
 
   // ------------------------------------------------------------------ small helpers
@@ -37,11 +40,26 @@
     if (!a || !b) return null;
     return Math.round((Date.UTC(b.y, b.m - 1, b.d) - Date.UTC(a.y, a.m - 1, a.d)) / 86400000);
   }
-  function toast(msg) {
+  // a short message at the foot of the screen; action (v11): { label, run } adds a button to it (e.g. Undo) and keeps it up longer
+  function toast(msg, action) {
     els.toast.textContent = msg;
+    els.toast.classList.toggle('has-act', !!action);
+    if (action) {
+      var b = document.createElement('button');
+      b.type = 'button'; b.className = 'toast-act'; b.textContent = action.label;
+      b.addEventListener('click', function () { clearTimeout(toast.t); els.toast.hidden = true; action.run(); });
+      els.toast.appendChild(b);
+    }
     els.toast.hidden = false;
     clearTimeout(toast.t);
-    toast.t = setTimeout(function () { els.toast.hidden = true; }, 3200);
+    toast.t = setTimeout(function () { els.toast.hidden = true; }, action ? 6000 : 3200);
+  }
+  function reducedMotion() {
+    try { return !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches); } catch (e) { return false; }
+  }
+  function focusQuiet(el) {                            // move focus without scrolling (and without opening the keyboard: never a box)
+    if (!el) return;
+    try { el.focus({ preventScroll: true }); } catch (e) { el.focus(); }
   }
   // Status chips say what they mean (On target / Close / Off target, or the rehab wording) and carry a symbol,
   // so they read without colour: tick, exclamation mark, cross, dash. The words live in engine.js (shared with the PDF).
@@ -74,12 +92,13 @@
   var COACH_STATUS = ['Full training', 'Modified', 'Rehab only'];
   var COACH_LOOK = { 'Full training': 'Green', 'Modified': 'Amber', 'Rehab only': 'Red' };
   function freshCoach() { return { status: '', mods: '', retest: '' }; }
+  // cardOpen (v11): the details card is open (true) or folded into the one-line strip (false)
   function freshTool(tool, keep) {
     keep = keep || {};
-    if (tool === 'screen') return { meta: { name: '', date: todayIso(), sex: '', age: '', sport: '', tester: keep.tester || '', mass: '', notes: '' }, pop: 'general', values: {}, radar: null, collapsed: {}, importLog: null, interp: freshInterp(), coach: freshCoach() };
-    if (tool === 'ham') return { meta: { name: '', date: todayIso(), injured: '', clinician: keep.clinician || '', doi: '', weeks: '', sport: '', notes: '' }, phase: null, values: {}, collapsed: {}, interp: freshInterp(), coach: freshCoach() };
-    if (tool === 'str') return { meta: { name: '', date: todayIso(), mass: '', sport: '', tester: keep.tester || '', notes: '' }, values: {}, collapsed: {}, interp: freshInterp(), coach: freshCoach() };
-    return { meta: { name: '', date: todayIso(), injured: '', surgeon: keep.surgeon || '', graft: '', dos: '', months: '', sport: '', notes: '' }, phase: null, sex: null, values: {}, collapsed: {}, interp: freshInterp(), coach: freshCoach() };
+    if (tool === 'screen') return { meta: { name: '', date: todayIso(), sex: '', age: '', sport: '', tester: keep.tester || '', mass: '', notes: '' }, pop: 'general', values: {}, radar: null, collapsed: {}, importLog: null, interp: freshInterp(), coach: freshCoach(), cardOpen: true };
+    if (tool === 'ham') return { meta: { name: '', date: todayIso(), injured: '', clinician: keep.clinician || '', doi: '', weeks: '', sport: '', notes: '' }, phase: null, values: {}, collapsed: {}, interp: freshInterp(), coach: freshCoach(), cardOpen: true };
+    if (tool === 'str') return { meta: { name: '', date: todayIso(), mass: '', sport: '', tester: keep.tester || '', notes: '' }, values: {}, collapsed: {}, interp: freshInterp(), coach: freshCoach(), cardOpen: true };
+    return { meta: { name: '', date: todayIso(), injured: '', surgeon: keep.surgeon || '', graft: '', dos: '', months: '', sport: '', notes: '' }, phase: null, sex: null, values: {}, collapsed: {}, interp: freshInterp(), coach: freshCoach(), cardOpen: true };
   }
   function loadDraft() {
     try {
@@ -89,10 +108,14 @@
     return null;
   }
   var saveTimer = null;
+  // the draft as saved: everything in state except the Exercises tab's Edit mode (state.ex.editing), which is for this visit only
+  function draftJson() {
+    return JSON.stringify(state, function (k, v) { return k === 'editing' && this === state.ex ? undefined : v; });
+  }
   function saveDraft() {
     clearTimeout(saveTimer);
     saveTimer = setTimeout(function () {
-      try { localStorage.setItem(STORE, JSON.stringify(state)); } catch (e) { /* storage unavailable */ }
+      try { localStorage.setItem(STORE, draftJson()); } catch (e) { /* storage unavailable */ }
     }, 250);
   }
   function tidyState() {
@@ -121,6 +144,7 @@
       co.status = COACH_STATUS.indexOf(co.status) >= 0 ? co.status : '';
       co.mods = typeof co.mods === 'string' ? co.mods : '';
       co.retest = typeof co.retest === 'string' && E.parseDate(co.retest, ['Y-m-d']) ? co.retest : '';
+      state[t].cardOpen = state[t].cardOpen !== false;   // v11: drafts from before the strip have the card open
     });
     tidyEx();                                          // v10: the exercise program (drafts from v9 and earlier have none)
     if (TOOLS.indexOf(state.tool) < 0 && state.tool !== 'ex') state.tool = 'screen';
@@ -189,12 +213,53 @@
 
   // ------------------------------------------------------------------ rendering: entry column
   var HEAD = {
-    screen: ['Performance & readiness screen', 'Type this session’s results. Leave a metric blank to skip it; add the previous result to see real change versus noise.'],
-    str: ['Lower-limb strength & capacity', 'Enter each leg\u2019s result as the load, force or reps you measured. Only the tests you fill in are scored and reported.'],
-    ham: ['Hamstring rehab & return to play', 'Injured-limb results against the targets for the chosen rehab phase.'],
-    acl: ['ACL rehab & return to play', 'Injured-limb and symmetry results against ACLR research norms for the chosen phase and sex.'],
-    ex: ['Exercise program', 'Photograph a handwritten exercise page (leave the patient’s name off the paper), then check and edit the table before creating the handout.']
+    screen: ['Performance & readiness screen', 'Leave a metric blank to skip it; add the previous result to see real change.'],
+    str: ['Lower-limb strength & capacity', 'Enter each leg\u2019s load, force or reps. Blank tests are left out.'],
+    ham: ['Hamstring rehab & return to play', 'Injured-limb results against the targets for the chosen phase.'],
+    acl: ['ACL rehab & return to play', 'Injured-limb and symmetry results against ACLR norms for the chosen phase and sex.'],
+    ex: ['Exercise program', 'Photograph the handwritten page (no patient name on it), then check the table.']
   };
+  // v11: metric-group titles in sentence case on screen (the norms files, the PDFs and the AI keep the raw names)
+  var GROUP_TITLES = {
+    'FORCEDECKS - COUNTERMOVEMENT JUMP (CMJ)': 'ForceDecks · Countermovement jump (CMJ)',
+    'FORCEDECKS - ISOMETRIC MID-THIGH PULL (IMTP)': 'ForceDecks · Isometric mid-thigh pull (IMTP)',
+    'FORCEDECKS - HOP TEST / REACTIVE STRENGTH (RSI)': 'ForceDecks · Hop test / reactive strength (RSI)',
+    'NORDBORD - NORDIC HAMSTRING': 'NordBord · Nordic hamstring',
+    'FORCEFRAME - HIP / GROIN STRENGTH': 'ForceFrame · Hip / groin strength',
+    'DSI - DYNAMIC STRENGTH INDEX (DERIVED)': 'Dynamic strength index (DSI)',
+    'DYNAMO - ISOMETRIC STRENGTH (GENERIC SLOT)': 'DynaMo · Isometric strength',
+    'SMARTSPEED - SPEED & AGILITY': 'SmartSpeed · Speed & agility',
+    'LOWER-LIMB STRENGTH & CAPACITY': 'Lower-limb strength & capacity',
+    'RANGE OF MOTION / LENGTH (DynaMo)': 'Range of motion / length (DynaMo)',
+    'STRENGTH - HAND-HELD / FIXED DYNAMOMETRY (DynaMo)': 'Strength · Hand-held / fixed dynamometry (DynaMo)',
+    'ECCENTRIC STRENGTH (NordBord)': 'Eccentric strength (NordBord)',
+    'ISOKINETIC DYNAMOMETRY (if available)': 'Isokinetic dynamometry (if available)',
+    'FUNCTION (SmartSpeed)': 'Function (SmartSpeed)',
+    'CLINICAL / PATIENT-REPORTED': 'Clinical / patient-reported',
+    'PATIENT-REPORTED OUTCOMES (PROMs)': 'Patient-reported outcomes (PROMs)',
+    'STRENGTH — ISOKINETIC / ISOMETRIC DYNAMOMETRY': 'Strength · Isokinetic / isometric dynamometry',
+    'JUMP — CMJ / SQUAT (ForceDecks)': 'Jump · CMJ / squat (ForceDecks)',
+    'SINGLE-LEG JUMP / REACTIVE (ForceDecks)': 'Single-leg jump / reactive (ForceDecks)',
+    'HOP TESTS (ForceDecks)': 'Hop tests (ForceDecks)',
+    'BALANCE (Star Excursion / SEBT)': 'Balance (star excursion / SEBT)'
+  };
+  // names kept as written when a new group falls back to the generic rule (matched ignoring case)
+  var TITLE_KEEP = {};
+  ['CMJ', 'IMTP', 'RSI', 'DSI', 'RFD', 'ISO', 'LSI', 'ACL', 'ACLR', 'SEBT', 'PROMs', 'HHD', 'ROM', 'VALD', 'L/R', 'BW', 'RM',
+    'ForceDecks', 'NordBord', 'ForceFrame', 'DynaMo', 'SmartSpeed'].forEach(function (w) { TITLE_KEEP[w.toUpperCase()] = w; });
+  function groupTitle(raw) {
+    var key = String(raw == null ? '' : raw).replace(/\s+/g, ' ').trim();
+    if (GROUP_TITLES[key]) return GROUP_TITLES[key];
+    // any other name: lower case with the first word capitalised, a spaced dash as ' · ', the names above as written
+    return key.split(/ [-–—] /).map(function (part) {
+      return part.split(' ').map(function (w, i) {
+        var core = w.replace(/^[(\[]+|[)\],.:;]+$/g, ''), keep = TITLE_KEEP[core.toUpperCase()];
+        if (keep) return w.replace(core, keep);
+        var low = w.toLowerCase();
+        return i === 0 ? low.charAt(0).toUpperCase() + low.slice(1) : low;
+      }).join(' ');
+    }).join(' · ');
+  }
 
   function field(tool, key, label, o) {
     o = o || {};
@@ -222,27 +287,43 @@
       '</select></label>';
   }
 
-  function athleteCard() {
-    var t = state.tool, s = state[t];
-    var out = '<section class="card athlete"><div class="card-head"><h2>' + Person(t) + '</h2><div class="head-actions">';
-    out += '<label class="ghost file-btn scan-btn" id="scanBtn" for="scanFiles">' + CAMERA + '<span data-label>Scan notes</span>' +
-      '<input id="scanFiles" type="file" accept="image/*" multiple aria-label="Scan notes: photo of handwritten results or a VALD app screenshot"></label>';
+  // The scan photo input lives inside whichever Scan button shows: the card's, or the camera in the strip when it is folded
+  // (both are <label for="scanFiles">, so a tap lands on the input itself)
+  function scanInputHtml(t) {
+    return '<input id="scanFiles" type="file" accept="image/*" multiple aria-label="' + (t === 'ex'
+      ? 'Scan exercise page: photos or screenshots of a handwritten exercise program, several pages at once'
+      : 'Scan notes: photo of handwritten results or a VALD app screenshot') + '">';
+  }
+  var PEOPLE = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.6"/><path d="M5 20a7 7 0 0 1 14 0"/></svg>';
+  // the head of the details card: Choose client (report tabs), Scan, Import VALD CSV (Screening) and Done (v11)
+  function cardHead(t, h2id) {
+    var open = state[t].cardOpen !== false;
+    var out = '<div class="card-head"><h2 id="' + h2id + '">' + (t === 'ex' ? 'Patient' : Person(t)) + '</h2><div class="head-actions">';
+    if (t !== 'ex') out += '<button type="button" class="ghost choose-btn" data-action="choose-client" aria-haspopup="dialog">' + PEOPLE + 'Choose client</button>';
+    out += '<label class="ghost file-btn scan-btn" id="scanBtn" for="scanFiles">' + CAMERA + '<span data-label>' + (t === 'ex' ? 'Scan exercise page' : 'Scan notes') + '</span>' +
+      (open ? scanInputHtml(t) : '') + '</label>';
     if (t === 'screen') {
       out += '<label class="ghost file-btn" for="valdFiles">Import VALD CSV<input id="valdFiles" type="file" accept=".csv,text/csv" multiple></label>';
     }
-    out += '</div></div><div class="fields">';
+    // Done last on the right (on a phone, beside the title)
+    return out + '</div><button type="button" class="ghost done-btn" id="athleteDone" data-action="done-athlete"' + (essentials(t) ? '' : ' disabled') + '>Done</button></div>';
+  }
+  function athleteCard() {
+    var t = state.tool, s = state[t];
+    var out = '<section class="card athlete" id="athleteCard" tabindex="-1" aria-labelledby="athleteH"' + (s.cardOpen === false ? ' hidden' : '') + '>' + cardHead(t, 'athleteH');
+    out += '<div class="fields">';
     if (t === 'screen') {
       out += field(t, 'name', Person(t) + ' name', { cls: 'wide', words: true }) + field(t, 'date', 'Test date', { type: 'date' }) +
         seg(t, 'sex', 'Sex', ['Male', 'Female']) +
         field(t, 'age', 'Age (years)', { mode: 'decimal' }) + field(t, 'mass', 'Mass (kg)', { mode: 'decimal' }) +
-        field(t, 'sport', 'Sport', { words: true }) + field(t, 'tester', 'Tester', { words: true }) +
+        field(t, 'sport', 'Sport', { words: true }) + field(t, 'tester', 'Clinician', { words: true }) +
         field(t, 'notes', 'Notes', { cls: 'full' });
       var pops = [['general', 'General population (auto by age & sex)']].concat(E.sportPopulations(DATA.screen).map(function (p) { return [p, p]; }));
       out += select('screen-pop', 'Compare against', pops, s.pop, 'data-choice="pop"', 'wide');
     } else if (t === 'str') {
       out += field(t, 'name', Person(t) + ' name', { cls: 'wide', words: true }) + field(t, 'date', 'Test date', { type: 'date' }) +
         field(t, 'mass', 'Body mass (kg)', { mode: 'decimal' }) +
-        field(t, 'sport', 'Sport', { words: true }) + field(t, 'tester', 'Tester', { words: true }) +
+        field(t, 'sport', 'Sport', { words: true }) + field(t, 'tester', 'Clinician', { words: true }) +
         field(t, 'notes', 'Notes', { cls: 'wide' });
     } else if (t === 'ham') {
       out += field(t, 'name', Person(t) + ' name', { cls: 'wide', words: true }) + field(t, 'date', 'Test date', { type: 'date' }) +
@@ -261,9 +342,144 @@
       out += '<div class="f wide"><span id="acl-sex-l">Norm set</span><div class="seg" role="group" aria-labelledby="acl-sex-l">' +
         DATA.acl.sexes.map(function (x) { return '<button type="button" data-choice-seg="sex" data-value="' + esc(x) + '" aria-pressed="' + (s.sex === x) + '">' + esc(x) + '</button>'; }).join('') + '</div></div>';
     }
-    out += '</div><div class="scan-bar" id="scanBar" role="status" aria-live="polite" hidden></div><div class="client-bar" id="clientBar" hidden></div><p class="note" id="ctxNote" hidden></p>';
-    if (t === 'screen') out += '<div class="import-log" id="importLog" hidden></div>';
-    return out + '</section>';
+    out += '</div><p class="note" id="ctxNote" hidden></p>';
+    // the strip in the card's place when it is folded; the scan and client bars and the VALD import log sit under either,
+    // so they show both ways (v11)
+    return out + '</section>' + stripHtml(t) + '<div class="scan-bar" id="scanBar" role="status" aria-live="polite" hidden></div><div class="client-bar" id="clientBar" hidden></div>' +
+      (t === 'screen' ? '<div class="import-log" id="importLog" hidden></div>' : '');
+  }
+
+  // ------------------------------------------------------------------ the athlete strip (v11)
+  // Once the essentials are in and results start arriving, the details card folds into one line that stays under the
+  // app bar: whose results these are, the details that matter for the tab, a camera for Scan and Edit to open the card.
+  // Essentials: Screening name + sex, LL Strength name + body mass, the rehab tabs name + injured side, Exercises the name.
+  function essentials(t) {
+    var m = state[t].meta;
+    if (blank(m.name)) return false;
+    if (t === 'screen') return !!m.sex;
+    if (t === 'str') return !blank(m.mass);
+    if (t === 'ham' || t === 'acl') return !!m.injured;
+    return true;
+  }
+  function stripHtml(t) {
+    var open = state[t].cardOpen !== false;
+    return '<div class="strip" id="athleteStrip" role="group" aria-label="' + (t === 'screen' ? 'Athlete' : 'Patient') + '"' + (open ? ' hidden' : '') + '>' +
+      '<div class="strip-text" id="stripText"></div>' +
+      '<label class="strip-scan file-btn scan-btn" id="stripScan" for="scanFiles" title="' + (t === 'ex' ? 'Scan exercise page' : 'Scan notes') + '">' + CAMERA + (open ? '' : scanInputHtml(t)) + '</label>' +
+      '<button type="button" class="ghost strip-edit" data-action="edit-athlete" aria-label="Edit ' + (t === 'screen' ? 'athlete' : 'patient') + ' details">Edit</button></div>';
+  }
+  // 'General Clinical — Male · 20-30 yr' -> 'General Clinical M 20–30' (sport populations as they are)
+  function shortPop(label) {
+    return String(label).replace(/ — (Male|Female)/, function (m, s) { return ' ' + s.charAt(0); })
+      .replace(/ · (\d+)-(\d+) yr$/, ' $1–$2').replace(/ · all ages$/, ' all ages');
+  }
+  function stripBits(t, c) {
+    var s = state[t], m = s.meta, out = [];
+    function add(v) { v = clean1(v); if (v) out.push(v); }
+    var date = m.date ? E.displayIso(m.date) : '';
+    if (t === 'screen') {
+      add(m.sex === 'Male' ? 'M' : (m.sex === 'Female' ? 'F' : ''));
+      if (!blank(m.age)) add(clean1(m.age) + ' y');
+      if (!blank(m.mass)) add(clean1(m.mass) + ' kg');
+      add(m.sport); add(date);
+      if (c && c.pop && c.pop.label) add('vs ' + shortPop(c.pop.label));
+    } else if (t === 'str') {
+      if (!blank(m.mass)) add(clean1(m.mass) + ' kg');
+      add(m.sport); add(date);
+    } else if (t === 'ham' || t === 'acl') {
+      if (m.injured) add(m.injured + ' injured');
+      var since = sinceText(t);
+      if (since) add(since + (t === 'ham' ? ' wk' : ' mo post-op'));
+      add(s.phase);
+      if (t === 'acl') {
+        if (s.sex) add(s.sex + ' norms');
+        if (!blank(m.graft)) add(/graft/i.test(m.graft) ? m.graft : clean1(m.graft) + ' graft');
+      }
+      add(date);
+    } else {
+      add(date); add(m.practitioner);
+    }
+    return out;
+  }
+  // the strip's words, and the Done button (enabled once the essentials are in); kept up to date as details change
+  function syncCard(c) {
+    var t = state.tool, el = $('stripText'), done = $('athleteDone');
+    if (done) done.disabled = !essentials(t);
+    if (!el) return;
+    var name = clean1(state[t].meta.name);
+    var html = (name ? '<b class="strip-name">' + esc(name) + '</b>' : '<span class="strip-name none">No name</span>') +
+      '<span class="strip-bits">' + stripBits(t, c).map(function (x) { return '<span class="sb"> · ' + esc(x) + '</span>'; }).join('') + '</span>';
+    if (el._h !== html) { el.innerHTML = html; el._h = html; }
+  }
+  // the card or the strip on screen as state[t].cardOpen says; the scan input moves to the Scan button that shows.
+  // Folding while a result is being typed keeps that box where it was on the screen (the content above it shrank).
+  function showCard() {
+    var t = state.tool, open = state[t].cardOpen !== false, card = $('athleteCard'), strip = $('athleteStrip');
+    document.documentElement.classList.toggle('has-strip', !!strip && !open);
+    if (!card || !strip) return;
+    var a = document.activeElement, anchor = a && a !== document.body && !card.contains(a) && !strip.contains(a) && els.entry.contains(a) ? a : null;
+    var y = anchor ? anchor.getBoundingClientRect().top : 0;
+    if (card.hidden !== !open) card.hidden = !open;
+    if (strip.hidden !== open) strip.hidden = open;
+    var inp = $('scanFiles'), home = open ? $('scanBtn') : $('stripScan');
+    if (inp && home && inp.parentNode !== home) home.appendChild(inp);
+    if (anchor) {
+      var d = anchor.getBoundingClientRect().top - y;
+      if (Math.abs(d) > 1) window.scrollBy(0, d);
+    }
+    checkStuck();
+  }
+  var cardPin = {};                                    // tabs whose card was opened with Edit: typing leaves it open until Done
+  function setCardOpen(t, open) {
+    state[t].cardOpen = open;
+    if (!open) delete cardPin[t];
+    if (t === state.tool) showCard();
+    saveDraft();
+  }
+  // a text box in the details card has focus (the card never folds away under someone typing in it)
+  function cardFieldFocused() {
+    var a = document.activeElement, card = $('athleteCard');
+    return !!(a && card && card.contains(a) && /^(INPUT|SELECT|TEXTAREA)$/.test(a.tagName) && a.type !== 'file');
+  }
+  // results have arrived: fold the card when the essentials are in. typed: a result typed in (not after Edit opened the card)
+  function shouldFold(t, typed) {
+    return state[t].cardOpen !== false && essentials(t) && !(typed && cardPin[t]) && !(state.tool === t && cardFieldFocused());
+  }
+  function foldNow(t, typed) {                         // on the page as it is (no redraw)
+    if (!shouldFold(t, typed)) return false;
+    setCardOpen(t, false);
+    return true;
+  }
+  function foldBeforeRender(t) {                       // for a change that redraws the tab anyway
+    if (!shouldFold(t, false)) return;
+    state[t].cardOpen = false;
+    delete cardPin[t];
+  }
+  function openCard() {                                // Edit: the card, scrolled into view; focus on the card itself (no keyboard)
+    var t = state.tool;
+    cardPin[t] = true;
+    setCardOpen(t, true);
+    var card = $('athleteCard');
+    if (!card) return;
+    var r = card.getBoundingClientRect();
+    if (r.top < appbarH || r.top > window.innerHeight - 120) card.scrollIntoView({ block: 'start', behavior: reducedMotion() ? 'auto' : 'smooth' });
+    focusQuiet(card);
+  }
+  function closeCard() {                               // Done: back to the strip, focus on its Edit button
+    setCardOpen(state.tool, false);
+    focusQuiet(document.querySelector('#athleteStrip [data-action="edit-athlete"]'));
+  }
+  // the strip loses its top corners and border while it sits under the app bar
+  var appbarH = 0, stuckFrame = 0;
+  function checkStuck() {
+    var strip = $('athleteStrip');
+    if (!strip || strip.hidden) return;
+    strip.classList.toggle('stuck', window.pageYOffset > 0 && strip.getBoundingClientRect().top <= appbarH + 0.5);
+  }
+  function measureBar() {                              // --appbar-h: the app bar's height here (landscape, portrait and phone differ)
+    var h = Math.round(els.appbar.getBoundingClientRect().height);
+    if (h && h !== appbarH) { appbarH = h; document.documentElement.style.setProperty('--appbar-h', h + 'px'); }
+    checkStuck();
   }
 
   // the metric name: a button that opens a plain-English explainer when explainers.json has one (A7)
@@ -297,15 +513,26 @@
       '</b><span class="pv-d"><span class="vh">, </span>' + esc(shortDate(v.prevDate, state[tool].meta.date)) + '</span></span>' +
       '<button type="button" class="pv-edit" data-action="prev-edit" aria-label="Edit previous result">' + PENCIL + '</button></div>';
   }
+  // the change line on screen (E.changeLabel's words, v11): when it wraps, the amount and 'within noise' stay whole
+  function changeHtml(text, kind) {
+    return esc(E.changeLabel(text, kind)).replace(/[▲▼●] \S+|[+\-]?\d[\d.]*(?: \([+\-]?\d[\d.]*%\))?|within noise/g, function (m) { return '<span class="nw">' + m + '</span>'; });
+  }
+  // v11: on a phone the column headings are hidden, so each box gets a small label above it (hidden on wider screens;
+  // the boxes keep their own aria-labels)
+  function boxLabels(a, b) {
+    return '<span class="m-bl m-bl-a" aria-hidden="true">' + a + '</span><span class="m-bl m-bl-b" aria-hidden="true">' + b + '</span>';
+  }
   function metricRow(tool, m, gi, mi) {
     var v = val(tool, m.name), id = tool + '-' + gi + '-' + mi, nm = esc(m.name);
     var asym = tool === 'screen' && E.isAsym(m.name);
     var hint = '<span class="m-unit">' + esc(m.unit) + '</span>';
     if (m.calc === 'PERKG' || m.calc === 'PERBW') hint = '<span class="m-unit">enter force in N · scored as ' + esc(m.unit) + ' using mass</span>';
     if (m.calc === 'LSI') hint = '<span class="m-unit">enter left & right · LSI = injured ÷ other side</span>';
-    var html = '<div class="metric' + (asym ? ' has-side' : '') + '" data-metric="' + nm + '" data-status="" id="' + id + '">' +
+    // the same words as the column headings: Result (Injured on the hamstring tab) and Previous; Left and Right for an LSI
+    var labels = m.calc === 'DSI' ? '' : (m.calc === 'LSI' ? boxLabels('Left', 'Right') : boxLabels(tool === 'ham' ? 'Injured' : 'Result', 'Previous'));
+    var html = '<div class="metric' + (asym ? ' has-side' : '') + (labels ? ' has-bl' : '') + '" data-metric="' + nm + '" data-status="" id="' + id + '">' +
       '<div class="m-label">' + nameHtml(tool, m.name, m.name, id) + '<div class="m-hint">' + hint +
-      '<span class="m-target"></span><span class="m-calc"></span><span class="m-prevnote"></span><span class="m-spark"></span></div><div class="m-meter"></div></div>';
+      '<span class="m-target"></span><span class="m-calc"></span><span class="m-prevnote"></span><span class="m-spark"></span></div><div class="m-meter"></div></div>' + labels;
     function input(fieldName, cls, ph, label) { return metricInput(id, nm, v, fieldName, cls, ph, label); }
     if (m.calc === 'DSI') {
       html += '<div class="m-auto" data-auto>CMJ Peak Force ÷ IMTP Peak Force</div>';
@@ -323,12 +550,13 @@
   }
 
   function groupsHtml(tool) {
-    var S = DATA[tool], s = state[tool];
+    var S = DATA[tool], s = state[tool], on = testsShown(tool);
     return S.groups.map(function (g, gi) {
+      if (!on[gi]) return '';                          // left out under Tests today (v11): not drawn at all
       var collapsed = !!s.collapsed[gi];
       var hasLsi = g.metrics.some(function (m) { return m.calc === 'LSI'; });
       return '<section class="group' + (collapsed ? ' collapsed' : '') + '" data-group="' + gi + '">' +
-        '<button type="button" class="group-head" aria-expanded="' + !collapsed + '"><span class="gt">' + esc(g.title) + '</span><span class="gc" data-count></span><span class="chev" aria-hidden="true"></span></button>' +
+        '<button type="button" class="group-head" aria-expanded="' + !collapsed + '"><span class="gt">' + esc(groupTitle(g.title)) + '</span><span class="gc" data-count></span><span class="chev" aria-hidden="true"></span></button>' +
         '<div class="cols" aria-hidden="true"><span class="c-result">' + (hasLsi ? 'Result / L' : (tool === 'ham' ? 'Injured' : 'Result')) + '</span><span class="c-prev">' + (hasLsi ? 'Previous / R' : 'Previous') + '</span><span class="c-out">Status</span></div>' +
         '<div class="group-body">' + g.metrics.map(function (m, mi) { return metricRow(tool, m, gi, mi); }).join('') + '</div></section>';
     }).join('');
@@ -338,10 +566,11 @@
   function strengthRowHtml(t, i) {
     var v = val('str', t.id), id = 'str-' + i, nm = esc(t.name);
     var how = t.input === 'calc' ? 'adduction \u00f7 abduction, each leg' : ((t.detail ? t.detail + ' \u00b7 ' : '') + INPUT_WORD[t.input]);
-    var html = '<div class="metric lr" data-metric="' + esc(t.id) + '" data-status="" id="' + id + '">' +
+    var calc = t.input === 'calc';
+    var html = '<div class="metric lr' + (calc ? '' : ' has-bl') + '" data-metric="' + esc(t.id) + '" data-status="" id="' + id + '">' +
       '<div class="m-label">' + nameHtml('str', t.id, t.name, id) + '<div class="m-hint"><span class="m-unit">' + esc(how) + '</span>' +
-      '<span class="m-target"></span><span class="m-prevnote"></span><span class="m-spark"></span></div></div>';
-    if (t.input === 'calc') {
+      '<span class="m-target"></span><span class="m-prevnote"></span><span class="m-spark"></span></div></div>' + (calc ? '' : boxLabels('Left', 'Right'));
+    if (calc) {
       html += '<div class="m-auto" data-auto>Worked out from the hip adduction and abduction results</div>';
     } else {
       var unit = t.input === 'reps' ? 'reps' : t.input;
@@ -353,18 +582,120 @@
     return html + '<div class="m-out" aria-live="off"></div><div class="m-check" id="' + id + '-check" hidden></div></div>';
   }
   function strengthGroupHtml() {
-    var collapsed = !!state.str.collapsed[0];
+    var collapsed = !!state.str.collapsed[0], on = testsShown('str');
     return '<section class="group' + (collapsed ? ' collapsed' : '') + '" data-group="0">' +
-      '<button type="button" class="group-head" aria-expanded="' + !collapsed + '"><span class="gt">' + esc(String(DATA.str.title || 'Strength battery').toUpperCase()) + '</span><span class="gc" data-count></span><span class="chev" aria-hidden="true"></span></button>' +
+      '<button type="button" class="group-head" aria-expanded="' + !collapsed + '"><span class="gt">' + esc(groupTitle(String(DATA.str.title || 'Strength battery').toUpperCase())) + '</span><span class="gc" data-count></span><span class="chev" aria-hidden="true"></span></button>' +
       '<div class="cols lr" aria-hidden="true"><span class="c-left">Left</span><span class="c-right">Right</span><span class="c-out">Result</span></div>' +
-      '<div class="group-body">' + DATA.str.tests.map(strengthRowHtml).join('') + '</div></section>';
+      '<div class="group-body">' + DATA.str.tests.map(function (tt, i) { return strShown(tt, on) ? strengthRowHtml(tt, i) : ''; }).join('') + '</div></section>';
+  }
+  // LL Strength under Tests today: a test is drawn when chosen (or it has values); the hip ratio comes with either hip test
+  function strShown(tt, on) {
+    if (tt.input !== 'calc') return !!on[DATA.str.tests.indexOf(tt)];
+    return (tt.from || []).some(function (id) { for (var i = 0; i < DATA.str.tests.length; i++) if (DATA.str.tests[i].id === id) return !!on[i]; return false; });
   }
 
+  // ------------------------------------------------------------------ tests today (v11)
+  // A per-tab choice of the sections drawn in the entry column, kept on this device in its own key (not in the draft, so
+  // Clear all leaves it). What is stored is the list of HIDDEN sections (by name; LL Strength: by test id), so a section
+  // added to a norms file later shows up on its own; missing or empty = everything shown. A section with anything entered
+  // in it (result, previous, left/right, side) is always drawn. LL Strength has one section holding every test, so there
+  // the choice is per test.
+  var TESTS_STORE = 'bh-athlete-report-tests-v1';
+  var testsPref = {};
+  function loadTestsPref() {
+    try { var o = JSON.parse(localStorage.getItem(TESTS_STORE)); if (o && typeof o === 'object' && !Array.isArray(o)) return o; } catch (e) { /* none saved */ }
+    return {};
+  }
+  function saveTestsPref() { try { localStorage.setItem(TESTS_STORE, JSON.stringify(testsPref)); } catch (e) { /* storage unavailable */ } }
+  // the choosable parts of a tab: { i: index, title, sub: the count (or the test's detail), has: anything entered }
+  function testParts(t) {
+    var v = state[t].values;
+    function any(key, fs) { var x = v[key] || {}; return fs.some(function (f) { return !blank(x[f]); }); }
+    if (t === 'str') {
+      var out = [];
+      DATA.str.tests.forEach(function (tt, i) {
+        if (tt.input !== 'calc') out.push({ i: i, key: tt.id, title: tt.name, sub: tt.detail || INPUT_WORD[tt.input], has: any(tt.id, ['left', 'right', 'prevLeft', 'prevRight']) });
+      });
+      return out;
+    }
+    return DATA[t].groups.map(function (g, gi) {
+      var has = g.metrics.some(function (m) {
+        // the DSI is worked out, never typed: it counts once both its forces are in (or a previous DSI was loaded)
+        if (m.calc === 'DSI') return (any('CMJ Peak Force', ['result']) && any('IMTP Peak Force', ['result'])) || any(m.name, ['previous']);
+        return any(m.name, ['result', 'previous', 'side', 'left', 'right']);
+      });
+      return { i: gi, key: String(g.title || '').replace(/\s+/g, ' ').trim(), title: groupTitle(g.title), sub: g.metrics.length + (g.metrics.length === 1 ? ' metric' : ' metrics'), has: has };
+    });
+  }
+  function testsChosen(t, key) { var p = testsPref[t]; return !(Array.isArray(p) && p.indexOf(key) >= 0); }
+  function testsShown(t) {                             // index -> drawn
+    var on = {};
+    testParts(t).forEach(function (p) { on[p.i] = p.has || testsChosen(t, p.key); });
+    return on;
+  }
+  function testsBarHtml(t) {
+    var on = testsShown(t), n = testParts(t).filter(function (p) { return !on[p.i]; }).length;
+    var unit = t === 'str' ? ['test', 'tests'] : ['section', 'sections'];
+    return '<div class="tests-bar"><button type="button" class="ghost tests-btn" id="testsBtn" data-action="tests-today" aria-haspopup="dialog">Tests today<span class="chev-s" aria-hidden="true"></span></button>' +
+      (n ? '<span class="tests-hidden" id="testsHidden">' + n + ' ' + unit[n === 1 ? 0 : 1] + ' hidden</span>' : '') + '</div>';
+  }
+  var testsDirty = false;
+  function openTestsDialog() {
+    var t = state.tool;
+    if (TOOLS.indexOf(t) < 0) return;
+    els.testsLead.textContent = t === 'str' ? 'The tests to show on LL Strength today. Tests with results always show.'
+      : 'The sections to show on ' + TOOL_NAMES[t] + ' today. Sections with results always show.';
+    renderTestsList();
+    testsDirty = false;
+    openModal(els.testsDialog, els.testsDone, function (restore) {   // redraw the tab once, on the way out
+      if (!testsDirty) return false;
+      testsDirty = false;
+      render();
+      if (restore) focusQuiet($('testsBtn'));
+      return true;
+    });
+  }
+  function renderTestsList() {
+    var t = state.tool, on = testsShown(t);
+    els.testsList.innerHTML = testParts(t).map(function (p) {
+      return '<li><label class="tests-row' + (p.has ? ' locked' : '') + '"><input type="checkbox" data-part="' + p.i + '"' + (on[p.i] ? ' checked' : '') + (p.has ? ' disabled' : '') + '>' +
+        '<span class="tr-main"><span class="tr-t">' + esc(p.title) + '</span><span class="tr-n">' + esc(p.sub) + (p.has ? ' · has results' : '') + '</span></span></label></li>';
+    }).join('');
+  }
+  // the ticks -> the stored list of hidden parts (a part with results keeps what was chosen before; none hidden = nothing stored)
+  function saveTestsChoice() {
+    var t = state.tool, hidden = [];
+    testParts(t).forEach(function (p) {
+      var cb = els.testsList.querySelector('input[data-part="' + p.i + '"]');
+      var chosen = cb && !cb.disabled ? cb.checked : testsChosen(t, p.key);
+      if (!chosen) hidden.push(p.key);
+    });
+    if (hidden.length) testsPref[t] = hidden; else delete testsPref[t];
+    saveTestsPref();
+    testsDirty = true;
+  }
+  function setAllTests(on) {                           // All: nothing stored (everything shows); None: only sections with results
+    els.testsList.querySelectorAll('input[data-part]:not(:disabled)').forEach(function (cb) { cb.checked = on; });
+    if (on) delete testsPref[state.tool];
+    else testsPref[state.tool] = testParts(state.tool).filter(function (p) { return !p.has; }).map(function (p) { return p.key; });
+    saveTestsPref();
+    testsDirty = true;
+  }
+
+  // the tab row scrolls sideways when the five tabs don't fit (a small phone, larger text): keep the chosen one in view
+  function showTab() {
+    var bar = document.querySelector('.tools'), b = bar && bar.querySelector('[aria-selected="true"]');
+    if (!b || bar.scrollWidth <= bar.clientWidth + 1) return;
+    var r = bar.getBoundingClientRect(), q = b.getBoundingClientRect();
+    if (q.left < r.left + 16) bar.scrollLeft -= r.left + 16 - q.left;
+    else if (q.right > r.right - 16) bar.scrollLeft += q.right - (r.right - 16);
+  }
   function render() {
     var t = state.tool;
     document.querySelectorAll('.tools button').forEach(function (b) { b.setAttribute('aria-selected', String(b.dataset.tool === t)); });
+    showTab();
     if (t === 'ex') { renderEx(); return; }
-    els.entry.innerHTML = '<div class="pagehead"><h1>' + esc(HEAD[t][0]) + '</h1><p>' + esc(HEAD[t][1]) + '</p></div>' + athleteCard() +
+    els.entry.innerHTML = '<div class="pagehead"><h1>' + esc(HEAD[t][0]) + '</h1><p>' + esc(HEAD[t][1]) + '</p></div>' + athleteCard() + testsBarHtml(t) +
       (t === 'str' ? strengthGroupHtml() : groupsHtml(t)) + (t === 'acl' ? rtsCardHtml() : '') + coachCardHtml() + interpCardHtml() +
       '<span id="explainHint" hidden>Shows what this test measures.</span>';
     if (t === 'screen' && state.screen.importLog) showImportLog(state.screen.importLog);
@@ -373,16 +704,18 @@
     fitInterp();
     applyScanMarks();
     renderScanBar();
+    showCard();
   }
 
   // ------------------------------------------------------------------ live updates
-  // The meter: coloured zones, today's marker and, when there is a previous result, a hollow ring at it (same scale,
-  // clamped to the ends) joined to today's marker by a line coloured by the app's own change call (E.change):
-  // real gain = green, real drop = red, anything else (within noise, or a shift on a band) = grey.
+  // The meter: soft zones (v11: grey below, soft amber close, soft green on target; the status pill beside the row
+  // carries the colour, the bar shows position), today's marker and, when there is a previous result, a hollow ring at
+  // it (same scale, clamped to the ends) joined to today's marker by a line coloured by the app's own change call
+  // (E.change): real gain = green, real drop = red, anything else (within noise, or a shift on a band) = grey.
   function meterHtml(result, norm, prev, kind) {
     var m = E.meter(result, norm);
     if (!m) return '';
-    var colour = { Green: 'var(--green)', Amber: 'var(--amber)', Red: 'var(--red)' };
+    var colour = { Green: 'var(--zone-green)', Amber: 'var(--zone-amber)', Red: 'var(--zone-red)' };
     var html = '<span class="mm-bar">' + m.segments.map(function (sg) { return '<span style="width:' + sg.width.toFixed(2) + '%;background:' + colour[sg.color] + '"></span>'; }).join('') + '</span>';
     var p = prev == null ? null : E.meterAt(m, prev);
     if (p !== null) {
@@ -406,7 +739,7 @@
         : 'Add body mass (kg) first: loads and forces are scored relative to it.';
     } else {
       note.className = 'note';
-      note.textContent = 'On target = at or above the target, Close = within ' + pct + '% of it, Off target = further away. Each target also shows what it means for this patient.';
+      note.textContent = 'Close = within ' + pct + '% of the target.';
     }
     var tested = 0, tr = trends('str', c);
     els.entry.querySelectorAll('.metric.lr').forEach(function (el) {
@@ -421,7 +754,7 @@
           var cell = res.sides[k];
           if (cell.value !== null) {
             html += '<div class="lr-line"><span class="lr-sd">' + k + '</span><span class="lr-v">' + esc(cell.text) + '</span>' + chip(cell.status) + '</div>';
-            if (cell.change) html += '<div class="lr-chg m-change ' + cell.change_kind + '">' + esc(cell.change.replace(/\s+/g, ' ')) + '</div>';
+            if (cell.change) html += '<div class="lr-chg m-change ' + cell.change_kind + '">' + changeHtml(cell.change, cell.change_kind) + '</div>';
           } else if (cell.needsMass) html += '<div class="lr-line lr-wait"><span class="lr-sd">' + k + '</span>needs body mass</div>';
         });
         var d = E.diffText(res.diff);
@@ -456,6 +789,7 @@
     var t = state.tool, c = compute();
     applyRetest(false);
     refreshClientBar(c);
+    syncCard(c);
     if (t === 'str') { refreshStrength(c); showTypo(typoFlags(t, c)); renderSummary(c); renderInterpState(c); saveDraft(); return; }
     var S = DATA[t];
     // context note under the athlete card
@@ -463,9 +797,10 @@
     if (t === 'screen') {
       note.hidden = false;
       note.className = 'note' + (c.pop.level === 'warn' ? ' warn' : '');
-      var extra = c.pop.population && c.pop.population.indexOf('General Clinical') === 0 && c.pop.ageBand !== 'All ages'
-        ? ' Jump, Nordic and hip metrics use the age band; IMTP and DSI stay all-ages, and anything without a band falls back to all-ages.' : '';
-      note.textContent = c.pop.note.replace(/([^.])$/, '$1.') + extra;
+      // one short line (v11): the general norms say which band was picked ('Norms: Male, 20–30 yr.'); IMTP and DSI have no bands
+      var gen = !!c.pop.population && c.pop.population.indexOf('General Clinical') === 0;
+      note.textContent = (gen ? c.pop.note.replace(/^Auto-selected: /, 'Norms: ').replace(/(\d)-(\d)/g, '$1–$2') : c.pop.note).replace(/([^.])$/, '$1.') +
+        (gen && c.pop.ageBand !== 'All ages' ? ' IMTP and DSI use all-ages norms.' : '');
     } else if (t === 'acl' && !Object.keys(c.pnorms).length) {
       note.hidden = false; note.className = 'note warn';
       note.textContent = 'The source report has no ' + state.acl.sex.toLowerCase() + ' norms for ' + state.acl.phase + ', so results will show n/a.';
@@ -508,7 +843,7 @@
         if (row) {
           entered++;
           el.dataset.status = row.status || '';
-          out.innerHTML = chip(row.status) + (row.change ? '<span class="m-change ' + row.change_kind + '">' + esc(row.change.replace(/\s+/g, ' ')) + '</span>' : '');
+          out.innerHTML = chip(row.status) + (row.change ? '<span class="m-change ' + row.change_kind + '">' + changeHtml(row.change, row.change_kind) + '</span>' : '');
           meter.innerHTML = meterHtml(row.result, row.norm, row.prev, row.change_kind);
           if (!meter.innerHTML) el.dataset.status = '';
         } else {
@@ -613,10 +948,9 @@
     var n = typoList.length;
     return n ? '<button type="button" class="quiet check-flag" data-action="goto-check">' + statusIcon('Amber') + n + (n === 1 ? ' value to check' : ' values to check') + '</button>' : '';
   }
-  function gotoCheck() {
-    var box = els.entry.querySelector('.metric:not([hidden]) .m-check:not([hidden])');
-    if (!box) return;
-    var row = box.closest('.metric'), g = row.closest('.group');
+  // bring a metric row into view, opening its section first if it is collapsed
+  function revealRow(row) {
+    var g = row.closest('.group');
     if (g && g.classList.contains('collapsed')) {
       state[state.tool].collapsed[+g.dataset.group] = false;
       g.classList.remove('collapsed');
@@ -624,8 +958,33 @@
       saveDraft();
     }
     row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+  function gotoCheck() {
+    var box = els.entry.querySelector('.metric:not([hidden]) .m-check:not([hidden])');
+    if (!box) return;
+    var row = box.closest('.metric');
+    revealRow(row);
     var btn = row.querySelector('.mc-ok');
     if (btn) setTimeout(function () { try { btn.focus({ preventScroll: true }); } catch (e) { btn.focus(); } }, 350);
+  }
+  // A priority in the summary panel (v11): scroll to its row and flash it. Focus goes to the row itself rather than a
+  // box, so the iPad keyboard stays closed; the row is focusable only until it loses focus.
+  var flashTimer = null;
+  function gotoMetric(key) {
+    var row = null;
+    els.entry.querySelectorAll('.metric').forEach(function (el) { if (el.dataset.metric === key) row = el; });
+    if (!row || row.hidden) return;
+    revealRow(row);
+    els.entry.querySelectorAll('.metric.flash').forEach(function (el) { el.classList.remove('flash'); });
+    void row.offsetWidth;                              // restarts the flash when the same row is tapped again
+    row.classList.add('flash');
+    clearTimeout(flashTimer);
+    flashTimer = setTimeout(function () { row.classList.remove('flash'); }, 2000);
+    if (!row.hasAttribute('tabindex')) {
+      row.setAttribute('tabindex', '-1');
+      row.addEventListener('blur', function () { row.removeAttribute('tabindex'); }, { once: true });
+    }
+    setTimeout(function () { try { row.focus({ preventScroll: true }); } catch (e) { row.focus(); } }, 350);
   }
 
   // ------------------------------------------------------------------ retest the same tests
@@ -737,7 +1096,7 @@
     var co = state[state.tool].coach;
     return '<section class="card coach" id="coachCard" aria-labelledby="coachTitle">' +
       '<div class="card-head"><h2 id="coachTitle">' + (state.tool === 'screen' ? 'For the coach' : 'Training status') + '</h2></div>' +
-      '<p class="coach-help">Optional. Printed as a band at the top of the report. Your call: the app never works this out.</p>' +
+      '<p class="coach-help">Optional: your call, printed as a band at the top of the report.</p>' +
       '<div class="coach-fields"><div class="f coach-status"><span id="coachStatusL">' + (state.tool === 'screen' ? 'Training status' : 'Status') + '</span>' +
       '<div class="seg coach-seg" role="group" aria-labelledby="coachStatusL">' + COACH_STATUS.map(function (o) {
         return '<button type="button" data-coach-status="' + esc(o) + '" data-look="' + COACH_LOOK[o] + '" aria-pressed="' + (co.status === o) + '">' + esc(o) + '</button>';
@@ -799,9 +1158,10 @@
     }).join('');
     if (list._html !== html) { list.innerHTML = html; list._html = html; }
   }
-  function rtsSumHtml(c) {                            // the one line in the summary panel (taps through to the card)
+  function rtsSumHtml(c) {                            // in the summary panel: a small ring (green = met) and the count (taps through to the card)
     var r = rtsData(c);
-    return r ? '<button type="button" class="quiet rts-sum" data-action="goto-rts"><span class="rts-sum-t">' + esc(r.title) + '</span><b>' + esc(E.rtsSummary(r)) + '</b></button>' : '';
+    return r ? '<button type="button" class="quiet rts-sum" data-action="goto-rts"><span class="rts-ring">' + ringSvg(44, 6, [['g', r.met]], r.total) + '</span>' +
+      '<span class="rts-sum-x"><span class="rts-sum-t">' + esc(r.title) + '</span><b>' + esc(E.rtsSummary(r)) + '</b></span></button>' : '';
   }
   function gotoRts() {
     var card = $('rtsCard');
@@ -861,57 +1221,100 @@
     if (!c.groups.length) return state.tool === 'screen' ? 'Enter at least one result to create the report.' : 'Enter at least one result to create the rehab report.';
     return '';
   }
+  // one priority (v11): the name with its status on the right and the value and target underneath; the whole row is a
+  // button that scrolls to the metric and flashes it
+  function prioItem(key, name, status, detail) {
+    return '<li><button type="button" class="prio-go" data-action="goto-metric" data-goto="' + esc(key) + '"><span class="pn">' + esc(name) + '</span>' +
+      chip(status) + '<span class="pd">' + esc(detail) + '</span></button></li>';
+  }
+  var TALLY_KEYS = [['g', 'Green', 0], ['a', 'Amber', 1], ['r', 'Red', 2]];
+  // a ring (v11): a grey track and one arc per [class, count], sized by the counts and drawn clockwise from 12 o'clock with
+  // stroke-dasharray / stroke-dashoffset (butt ends, so neighbouring arcs meet cleanly)
+  function ringSvg(size, width, parts, total) {
+    var c = size / 2, r = (size - width) / 2, C = 2 * Math.PI * r, off = 0, fx = function (v) { return v.toFixed(2); };
+    return '<svg viewBox="0 0 ' + size + ' ' + size + '" width="' + size + '" height="' + size + '" aria-hidden="true" focusable="false"><g transform="rotate(-90 ' + c + ' ' + c + ')">' +
+      '<circle class="ring-track" cx="' + c + '" cy="' + c + '" r="' + r + '" stroke-width="' + width + '"/>' +
+      parts.map(function (p) {
+        var len = total ? C * p[1] / total : 0, arc = '<circle class="ring-arc ' + p[0] + '" cx="' + c + '" cy="' + c + '" r="' + r + '" stroke-width="' + width +
+          '" style="stroke-dasharray:' + fx(len) + 'px ' + fx(C) + 'px;stroke-dashoffset:' + fx(-off) + 'px"/>';
+        off += len;
+        return arc;
+      }).join('') + '</g></svg>';
+  }
+  // the panel is redrawn as results change: each arc eases (250 ms) from where it was, unless reduced motion is asked for
+  var ringWas = {};
+  function animateRings(t) {
+    var arcs = els.summary.querySelectorAll('.ring-arc'), now = [], was = ringWas[t];
+    Array.prototype.forEach.call(arcs, function (a) { now.push([a.style.strokeDasharray, a.style.strokeDashoffset]); });
+    ringWas[t] = now;
+    if (!was || was.length !== now.length || reducedMotion()) return;
+    Array.prototype.forEach.call(arcs, function (a, i) {
+      if ((was[i][0] === now[i][0] && was[i][1] === now[i][1]) || !a.animate) return;
+      try {
+        a.animate([{ strokeDasharray: was[i][0], strokeDashoffset: was[i][1] }, { strokeDasharray: now[i][0], strokeDashoffset: now[i][1] }], { duration: 250, easing: 'ease-out' });
+      } catch (e) { /* drawn without the movement */ }
+    });
+  }
   function renderSummary(c) {
     var t = state.tool, labels = (t === 'screen' || t === 'str') ? TALLY.screen : TALLY.rehab;
-    var head = t === 'screen'
-      ? '<h2>Live summary</h2><p class="against">' + (c.pop.label ? 'Compared against <b>' + esc(c.pop.label) + '</b>' : 'Choose sex to pick the norms') + '</p>'
-      : t === 'str'
-        ? '<h2>Strength summary</h2><p class="against">Each leg against <b>BASE Health strength targets</b></p>'
-        : '<h2>Phase progress</h2><p class="against"><b>' + esc(state[t].phase) + (t === 'acl' ? ' · ' + esc(state.acl.sex) : '') + '</b> targets</p>';
-    var tally = '<div class="tally"><div class="g"><b>' + c.counts.Green + '</b><span>' + statusIcon('Green') + esc(labels[0]) + '</span></div>' +
-      '<div class="a"><b>' + c.counts.Amber + '</b><span>' + statusIcon('Amber') + esc(labels[1]) + '</span></div>' +
-      '<div class="r"><b>' + c.counts.Red + '</b><span>' + statusIcon('Red') + esc(labels[2]) + '</span></div></div>';
+    // the same heading on every report tab (v11); the line under it says what the results are compared against
+    var against = t === 'screen' ? (c.pop.label ? 'Compared against <b>' + esc(c.pop.label) + '</b>' : 'Choose sex to pick the norms')
+      : t === 'str' ? 'Each leg against <b>BASE Health strength targets</b>'
+        : 'Compared against <b>' + esc(state[t].phase) + (t === 'acl' ? ' · ' + esc(state.acl.sex) : '') + ' targets</b>';
+    var head = '<h2>Summary</h2><p class="against">' + against + '</p>';
+    // the headline ring (v11) with the counts beside it (the tiles' markup as a legend): a count takes its status colour
+    // only when it is above 0 ('on')
+    var tally = '<div class="tally ring-legend">' + TALLY_KEYS.map(function (x) {
+      var n = c.counts[x[1]];
+      return '<div class="' + x[0] + (n ? ' on' : '') + '"><b>' + n + '</b><span>' + statusIcon(x[1]) + esc(labels[x[2]]) + '</span></div>';
+    }).join('') + '</div>';
+    var g = c.counts.Green, total = c.counts.Green + c.counts.Amber + c.counts.Red;
+    tally = '<div class="headline"><div class="ring-wrap"><div class="ring" role="img" aria-label="' + (total ? g + ' of ' + total + ' on target' : 'Nothing tested yet') + '">' +
+      ringSvg(96, 10, [['g', g], ['a', c.counts.Amber], ['r', c.counts.Red]], total) +
+      '<div class="ring-c" aria-hidden="true"><b>' + (total ? g : '–') + '</b>' + (total ? '<small>of ' + total + '</small>' : '') + '</div></div>' +
+      '<div class="ring-cap" aria-hidden="true">on target</div></div>' + tally + '</div>';
     var list;
     if (t === 'str') {
       if (!c.rows.length) {
-        list = '<p class="empty">Each leg is scored against its target as you type. Only the tests you fill in appear in the report.</p>' +
+        list = '<p class="empty">Each leg is scored as you type.</p>' +
           '<button type="button" class="quiet demo" data-action="demo">Fill in example results</button>';
       } else if (!c.prios.length) {
-        list = '<p class="ok">Nothing below target \u2014 every tested result is on target.</p>';
+        list = '<p class="ok">Nothing below target — every tested result is on target.</p>';
       } else {
         list = '<ol class="prio">' + c.prios.slice(0, 6).map(function (r) {
-          return '<li>' + chip(r.status) + '<span class="pn">' + esc(r.name) + '</span><span class="pd">= ' + esc(r.text) + ' \u00b7 needs ' + esc(r.target) + '</span></li>';
+          return prioItem(r.id, r.name, r.status, r.text + ' · target ' + r.target);
         }).join('') + '</ol>' + (c.prios.length > 6 ? '<p class="fine">+ ' + (c.prios.length - 6) + ' more in the report</p>' : '');
       }
     } else if (!c.groups.length) {
-      list = '<p class="empty">Results are scored against the norms as you type. Blank metrics are left out.</p>' +
+      list = '<p class="empty">Results are scored as you type.</p>' +
         '<button type="button" class="quiet demo" data-action="demo">Fill in example results</button>';
     } else if (!c.prios.length) {
       list = '<p class="ok">Nothing flagged — every tested metric is on target.</p>';
     } else {
       list = '<ol class="prio">' + c.prios.map(function (r) {
-        var val = E.fmt(r.result) + ' ' + r.unit + (r.side ? ' (' + r.side + ' higher)' : '');
-        return '<li>' + chip(r.status) + '<span class="pn">' + esc(r.name) + '</span><span class="pd">= ' + esc(val) + ' · needs ' + esc(r.target) + '</span></li>';
+        return prioItem(r.name, r.name, r.status, E.fmt(r.result) + ' ' + r.unit + (r.side ? ' (' + r.side + ' higher)' : '') + ' · target ' + r.target);
       }).join('') + '</ol>';
     }
-    var html = '<div class="sum"><div class="sum-scroll">' + head + tally + (t === 'acl' ? rtsSumHtml(c) : '') + '<h3>' + (t === 'screen' ? 'Top priorities <small>worst first</small>' : (t === 'str' ? 'Below target <small>worst first</small>' : 'Behind target <small>worst first</small>')) + '</h3>' + list;
+    var html = '<div class="sum"><div class="sum-scroll">' + head + tally + (t === 'acl' ? rtsSumHtml(c) : '') + '<h3>Top priorities <small>worst first</small></h3>' + list;
     if (t === 'screen' && c.radarOptions.length) {
       var full = c.radarPicked.length >= 6;
       html += '<h3>Profile chart <small>pick 3–6 for page 1</small></h3><div class="picks">' + c.radarOptions.map(function (o) {
         var on = c.radarPicked.indexOf(o[0]) >= 0;
         return '<button type="button" data-radar="' + esc(o[0]) + '" aria-pressed="' + on + '"' + (!on && full ? ' disabled' : '') + '>' + esc(o[1]) + '</button>';
       }).join('') + '</div>';
-      html += '<p class="fine picks-note">' + (c.radarPicked.length < 3 ? 'The profile needs at least 3 metrics; with fewer it is left off the report.'
-        : c.radarPicked.length <= 4 ? 'With 3–4 picks the report shows bars (% of target); pick 5 or 6 for a radar.' : 'With 5–6 picks the report shows a radar; pick 3 or 4 for bars.') + '</p>';
+      html += '<p class="fine picks-note">' + (c.radarPicked.length < 3 ? 'Pick at least 3 for a profile on the report.'
+        : c.radarPicked.length <= 4 ? 'Bars on the report; pick 5 or 6 for a radar.' : 'A radar on the report; pick 3 or 4 for bars.') + '</p>';
     }
     var why = blocker(c);
-    html += '</div><div class="sum-foot">' + checkFlagHtml() + interpFlagHtml(t, c) + '<button type="button" class="primary make" data-action="report"' + (why ? ' disabled' : '') + '>Create PDF report</button>' +
-      '<p class="fine">' + esc(why || 'Opens a preview you can share by AirDrop, Mail or Messages, or save to Files.') + '</p>' +
+    html += '</div><div class="sum-foot">' + checkFlagHtml() + interpFlagHtml(t, c) + '<button type="button" class="primary make" data-action="report"' + (why ? ' disabled' : '') + '>Create report</button>' +
+      '<p class="fine">' + esc(why || 'Preview, then share or save.') + '</p>' +
       '<p class="fine client-line">' + esc(clientLine(t)) + '</p></div></div>';
     els.summary.innerHTML = html;
+    animateRings(t);
     var nCheck = typoList.length;
-    els.dock.innerHTML = '<div class="dt">' + [['g', 'Green', 0], ['a', 'Amber', 1], ['r', 'Red', 2]].map(function (x) {
-      return '<a href="#summary" class="' + x[0] + '" aria-label="' + esc(labels[x[2]] + ': ' + c.counts[x[1]]) + '">' + statusIcon(x[1]) + c.counts[x[1]] + '</a>';
+    els.dock.innerHTML = '<div class="dt">' + TALLY_KEYS.map(function (x) {
+      var n = c.counts[x[1]];
+      return '<a href="#summary" class="' + x[0] + (n ? ' on' : '') + '" aria-label="' + esc(labels[x[2]] + ': ' + n) + '">' + statusIcon(x[1]) + n + '</a>';
     }).join('') + '</div>' +
       (nCheck ? '<button type="button" class="dock-check" data-action="goto-check">' + statusIcon('Amber') + nCheck + (nCheck === 1 ? ' value to check' : ' values to check') + '</button>' : '') +
       '<button type="button" class="primary" data-action="report"' + (why ? ' disabled' : '') + '>Create report</button>';
@@ -934,6 +1337,7 @@
       v[el.dataset.field] = el.value;
       if (el.dataset.field === 'previous') v.prevDate = '';     // typed by hand now, no longer the saved record's value
       refresh();
+      if (!blank(el.value)) foldNow(t, true);          // results arriving: the details card folds into the strip (v11)
     }
     keepAwake();
   }
@@ -954,6 +1358,10 @@
   }
   function onButton(b) {
     var t = state.tool;
+    if (b.dataset.action === 'edit-athlete') { openCard(); return; }
+    if (b.dataset.action === 'done-athlete') { closeCard(); return; }
+    if (b.dataset.action === 'choose-client') { openClientsDialog('pick'); return; }
+    if (b.dataset.action === 'tests-today') { openTestsDialog(); return; }
     if (t === 'ex' && exButton(b)) return;
     if (b.dataset.action === 'explain') {
       var box = document.getElementById(b.getAttribute('aria-controls')), open = b.getAttribute('aria-expanded') !== 'true';
@@ -976,6 +1384,7 @@
     if (b.dataset.action === 'goto-rts') { gotoRts(); return; }
     if (b.dataset.action === 'typo-ok') { typoOk(b); return; }
     if (b.dataset.action === 'goto-check') { gotoCheck(); return; }
+    if (b.dataset.action === 'goto-metric') { gotoMetric(b.dataset.goto); return; }
     if (b.dataset.action === 'retest') { toggleRetest(); return; }
     if (b.dataset.seg) {
       var key = b.dataset.seg, cur = state[t].meta[key];
@@ -1055,6 +1464,7 @@
         if (r.meta.sex === 'Male' || r.meta.sex === 'Female') s.meta.sex = r.meta.sex;
         Object.keys(r.results).forEach(function (metric) { val('screen', metric).result = String(r.results[metric]); });
         s.importLog = r.messages.concat(['Check the filled-in values, then set Sex and Age so the right age/sex norms are used.']);
+        if (Object.keys(r.results).length && state.tool === 'screen') foldBeforeRender('screen');
         render();
         toast('Imported ' + Object.keys(r.results).length + ' result' + (Object.keys(r.results).length === 1 ? '' : 's') + ' from VALD');
       })
@@ -1095,8 +1505,9 @@
       Object.keys(ax).forEach(function (k) { var v = val('acl', k); v.result = ax[k][0]; v.previous = ax[k][1]; });
       var q = val('acl', 'Quadriceps LSI'); q.left = '248'; q.right = '205';
     }
+    foldBeforeRender(t);
     render();
-    toast('Example results filled in — tap Clear all data to clear them');
+    toast('Example results filled in — Clear all data in the ⋯ menu clears them');
   }
 
   // ------------------------------------------------------------------ report
@@ -1236,6 +1647,32 @@
     render();
     window.scrollTo(0, 0);
   }
+  // the ⋯ menu (v11): Clear all data…, Back up records…, Restore records…, AI settings…. Arrow keys move between the items;
+  // a tap outside, Escape or choosing an item closes it. Items that open a pop-up hand focus back to ⋯ when it closes.
+  function menuOpen() { return !els.moreMenu.hidden; }
+  function menuItems() { return Array.prototype.slice.call(els.moreMenu.querySelectorAll('[role="menuitem"]')); }
+  function openMenu(last) {
+    els.moreMenu.hidden = false;
+    els.moreBtn.setAttribute('aria-expanded', 'true');
+    var items = menuItems();
+    focusQuiet(last ? items[items.length - 1] : items[0]);
+  }
+  function closeMenu(focusButton) {
+    if (!menuOpen()) return;
+    els.moreMenu.hidden = true;
+    els.moreBtn.setAttribute('aria-expanded', 'false');
+    if (focusButton) focusQuiet(els.moreBtn);
+  }
+  function onMenuKey(e) {
+    var items = menuItems(), n = items.length, i = items.indexOf(document.activeElement);
+    if (e.key === 'Escape') { e.preventDefault(); closeMenu(true); return; }
+    if (e.key === 'Tab') { closeMenu(false); return; }
+    var to = e.key === 'ArrowDown' ? (i + 1) % n : e.key === 'ArrowUp' ? (i < 0 ? n - 1 : (i + n - 1) % n) : e.key === 'Home' ? 0 : e.key === 'End' ? n - 1 : -1;
+    if (to < 0) return;
+    e.preventDefault();
+    items[to].focus();
+  }
+  function menuAction(run) { return function () { closeMenu(true); run(); }; }
   // ------------------------------------------------------------------ clear all data
   // One button wipes every section (names, results, notes, tester details), the saved draft and
   // the last report built, after a check that lists what will go.
@@ -1263,15 +1700,17 @@
     });
   }
   // one pop-up at a time: focus stays inside it, Escape or a tap outside closes it
-  var openModalEl = null, modalReturn = null;
+  var openModalEl = null, modalReturn = null, modalAfter = null;
   function modalFocusables(el) {
     return Array.prototype.filter.call(el.querySelectorAll('button, input, textarea, select, a[href]'), function (x) {
       return !x.disabled && !x.hidden && x.getClientRects().length > 0;
     });
   }
-  function openModal(el, focusEl) {
+  // after (v11): called once the pop-up has closed, with whether focus goes back; returning true means it placed focus itself
+  function openModal(el, focusEl, after) {
     if (openModalEl) closeModal(false);
     modalReturn = document.activeElement;
+    modalAfter = after || null;
     openModalEl = el;
     els.toast.hidden = true;
     el.hidden = false;
@@ -1282,10 +1721,13 @@
   }
   function closeModal(restoreFocus) {
     if (!openModalEl) return;
+    var after = modalAfter;
+    modalAfter = null;
     openModalEl.hidden = true;
     openModalEl = null;
     setBackgroundInert(false);
     document.documentElement.style.overflow = '';
+    if (after && after(restoreFocus !== false)) return;
     if (restoreFocus !== false && modalReturn && modalReturn.focus) modalReturn.focus();
   }
   function onModalKey(e) {
@@ -1314,6 +1756,7 @@
     TOOLS.forEach(function (t) { state[t] = freshTool(t); });
     state.ex = freshEx();
     tidyState();
+    cardPin = {};                                      // every details card open again (v11); Tests today is kept
     // an AI draft still on its way belongs to the athlete just cleared: drop it when it arrives
     aiGen++;
     aiBusy = null; interpMsg = { tool: null, kind: '', text: '' }; interpUndo = null;
@@ -1325,11 +1768,11 @@
     els.sheetTitle.textContent = 'Report';
     // overwrite the saved draft straight away, so closing the app now can't bring the old data back
     clearTimeout(saveTimer);
-    try { localStorage.setItem(STORE, JSON.stringify(state)); } catch (e) { /* storage unavailable */ }
+    try { localStorage.setItem(STORE, draftJson()); } catch (e) { /* storage unavailable */ }
     closeModal(false);
     render();
     window.scrollTo(0, 0);
-    els.clearAll.focus();
+    els.moreBtn.focus();                               // Clear all data is in the ⋯ menu (v11), which has closed
     toast('All data cleared — ready for the next client');
   }
 
@@ -1391,7 +1834,7 @@
   function interpPayload(t, c) {
     var m = state[t].meta, L = [], rehab = t === 'ham' || t === 'acl';
     var totals = 'Totals: ' + (rehab
-      ? c.counts.Green + ' on / ahead, ' + c.counts.Amber + ' within 1 SD, ' + c.counts.Red + ' behind.'
+      ? c.counts.Green + ' on target, ' + c.counts.Amber + ' close, ' + c.counts.Red + ' behind.'
       : c.counts.Green + ' on target, ' + c.counts.Amber + ' close, ' + c.counts.Red + ' off target.');
     if (t === 'screen') {
       L.push('Readers: the athlete and their coach. Refer to the person as \u2018the athlete\u2019.');
@@ -1435,7 +1878,7 @@
         since ? (acl ? 'months since surgery: ' : 'weeks since injury: ') + since : '', acl && !blank(m.graft) ? 'graft: ' + clean1(m.graft) : '',
         blank(m.sport) ? '' : 'sport: ' + clean1(m.sport)]);
       L.push('Context: ' + ctx + '.');
-      L.push('Status key: On / ahead = at or ahead of the typical case at this phase; Within 1 SD = within 1 SD behind; Behind = more than 1 SD behind.');
+      L.push('Status key: On target = at or ahead of the typical case at this phase; Close = up to 1 SD behind; Behind = more than 1 SD behind.');
       L.push(totals);
       L.push('Results (metric: result | phase target | status | change since the previous test, if given):');
       L = L.concat(groupLines(c.groups, 'phase target', t));
@@ -1450,11 +1893,11 @@
     var it = state[state.tool].interp;
     return '<section class="card interp" id="interpCard" aria-labelledby="interpTitle">' +
       '<div class="card-head"><h2 id="interpTitle">Interpretation</h2><button type="button" class="quiet" data-action="ai-settings">AI settings</button></div>' +
-      '<p class="interp-help">Optional. A short plain-English summary for the ' + (state.tool === 'screen' ? 'athlete and coach' : 'patient') + ', printed near the top of the report. Draft it with AI, then check and edit it.</p>' +
+      '<p class="interp-help">Optional summary for the ' + (state.tool === 'screen' ? 'athlete and coach' : 'patient') + ', printed near the top.</p>' +
       '<div class="interp-bar"><button type="button" class="ghost ai-draft" data-action="ai-draft">' + SPARKLE + '<span data-label>Draft with AI</span></button>' +
       '<span class="interp-status" id="interpStatus" role="status" aria-live="polite"></span></div>' +
       '<textarea id="interpText" rows="5" autocapitalize="sentences" placeholder="Tap Draft with AI, or type your own summary." aria-labelledby="interpTitle">' + esc(it.text) + '</textarea>' +
-      '<p class="fine interp-privacy">Claude only sees the results and basic context such as age, sex, sport or rehab phase. Never the ' + person(state.tool) + '’s name, notes or dates.</p>' +
+      '<p class="fine interp-privacy">Claude sees only the results and basic context. Never the ' + person(state.tool) + '’s name, notes or dates.</p>' +
       '</section>';
   }
   function fitInterp() {                             // grow the box to show the whole text
@@ -1830,15 +2273,25 @@
     }).then(function () {
       if (gen !== scanGen) return;
       scanBusy = null;
+      // results filled in: the details card folds into the strip (v11), the scan's message showing under it
+      var filled = !!(scanInfo && scanInfo.tool === t && scanInfo.undo && (exm || scanInfo.kind === 'done'));
       if (state.tool === t && scanInfo && scanInfo.undo) {
-        if (exm) showExScan(); else { showFilled(t); retest.tool = null; refresh(); applyScanMarks(); }
-      }
+        if (exm) { showExScan(); if (filled) foldNow(t, false); }
+        else if (scanOffPage(t)) { if (filled) foldBeforeRender(t); render(); }   // a value for a section left out under Tests today
+        else { showFilled(t); retest.tool = null; refresh(); applyScanMarks(); if (filled) foldNow(t, false); }
+      } else if (filled) foldBeforeRender(t);          // read while on another tab: folded there for when it's opened
       renderScanBar();
       var bar = $('scanBar');
       if (bar && !bar.hidden && bar.scrollIntoView && state.tool === t) {
-        var r = bar.getBoundingClientRect();
-        if (r.top < 0 || r.bottom > window.innerHeight) bar.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        var r = bar.getBoundingClientRect(), top = appbarH + (state[t].cardOpen === false ? 48 : 0);
+        if (r.top < top || r.bottom > window.innerHeight) bar.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
       }
+    });
+  }
+  function scanOffPage(t) {                            // a box the scan filled isn't on the page (its section isn't drawn)
+    return Object.keys(scanInfo.undo.put).some(function (mk) {
+      var i = mk.lastIndexOf('|'), key = mk.slice(0, i);
+      return key !== 'meta' && !markEl(t, key, mk.slice(i + 1));
     });
   }
   function fieldLabel(def, f) {
@@ -1950,6 +2403,12 @@
       var inp = $('scanFiles');
       if (inp) inp.disabled = !!scanBusy;
     }
+    var sc = $('stripScan');                           // the strip's camera (v11) says the same
+    if (sc) {
+      sc.classList.toggle('busy', !!scanBusy);
+      sc.setAttribute('aria-disabled', String(!!scanBusy));
+      sc.title = scanBusy ? 'Reading…' : (t === 'ex' ? 'Scan exercise page' : 'Scan notes');
+    }
     if (!bar) return;
     var info = scanInfo && scanInfo.tool === t ? scanInfo : null;
     if (!info) { bar.hidden = true; bar.innerHTML = ''; bar.className = 'scan-bar'; return; }
@@ -1990,7 +2449,7 @@
   var ICON_DOWN = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M6 13l6 6 6-6"/></svg>';
   var ICON_X = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/></svg>';
 
-  function freshEx() { return { meta: { name: '', date: todayIso(), practitioner: '' }, title: '', instructions: '', items: [], seq: 1, scanned: {} }; }
+  function freshEx() { return { meta: { name: '', date: todayIso(), practitioner: '' }, title: '', instructions: '', items: [], seq: 1, scanned: {}, cardOpen: true }; }
   function exStr(v) { return typeof v === 'string' ? v : (typeof v === 'number' && isFinite(v) ? String(v) : ''); }
   // drafts from v9 and earlier have no program; anything malformed in a stored one is tidied
   function tidyEx() {
@@ -2017,6 +2476,8 @@
     var sc = x.scanned && typeof x.scanned === 'object' && !Array.isArray(x.scanned) ? x.scanned : {}, keep = {};
     Object.keys(sc).forEach(function (k) { if (sc[k] === true && (k === 'title' || k === 'instructions' || seen[k])) keep[k] = true; });
     x.scanned = keep;
+    x.cardOpen = x.cardOpen !== false;                 // v11: the patient card open unless folded into the strip
+    x.editing = false;                                 // v11: Edit mode starts off on every visit (never saved)
   }
   function newExRow(o) {
     var r = { kind: 'ex', id: 'r' + (state.ex.seq++), open: false };
@@ -2051,24 +2512,25 @@
     applyExMarks();
     renderScanBar();
     refreshEx();
+    showCard();
   }
   function exPatientCard() {
-    return '<section class="card athlete ex-patient" aria-labelledby="exPatientH"><div class="card-head"><h2 id="exPatientH">Patient</h2><div class="head-actions">' +
-      '<label class="ghost file-btn scan-btn" id="scanBtn" for="scanFiles">' + CAMERA + '<span data-label>Scan exercise page</span>' +
-      '<input id="scanFiles" type="file" accept="image/*" multiple aria-label="Scan exercise page: photos or screenshots of a handwritten exercise program, several pages at once"></label>' +
-      '</div></div><div class="fields">' +
+    return '<section class="card athlete ex-patient" id="athleteCard" tabindex="-1" aria-labelledby="exPatientH"' + (state.ex.cardOpen === false ? ' hidden' : '') + '>' + cardHead('ex', 'exPatientH') +
+      '<div class="fields">' +
       field('ex', 'name', 'Patient name', { cls: 'wide', words: true, plain: true }) + field('ex', 'date', 'Date', { type: 'date' }) +
-      field('ex', 'practitioner', 'Practitioner', { words: true }) +
-      '</div><div class="scan-bar" id="scanBar" role="status" aria-live="polite" hidden></div></section>';
+      field('ex', 'practitioner', 'Clinician', { words: true }) +
+      '</div></section>' + stripHtml('ex') + '<div class="scan-bar" id="scanBar" role="status" aria-live="polite" hidden></div>';
   }
   function exProgramCard() {
     var x = state.ex;
-    return '<section class="card ex-prog" id="exCard" aria-labelledby="exProgH"><div class="card-head"><h2 id="exProgH">Program</h2><span class="ex-count" id="exCount"></span></div>' +
+    // Edit (v11): shows the move and delete buttons on every row (Done hides them again); not kept in the draft
+    return '<section class="card ex-prog" id="exCard" aria-labelledby="exProgH"><div class="card-head"><h2 id="exProgH">Program</h2><div class="ex-headr"><span class="ex-count" id="exCount"></span>' +
+      '<button type="button" class="ghost ex-edit" id="exEdit" data-action="ex-edit"' + (x.items.length ? '' : ' hidden') + '>' + (x.editing ? 'Done' : 'Edit') + '</button></div></div>' +
       '<div class="ex-top"><label class="f" for="ex-title"><span>Title</span><input id="ex-title" data-ex="title" type="text" value="' + esc(x.title) + '" maxlength="' + EX_LEN.title + '"' +
       ' placeholder="Optional, e.g. Knee rehab – phase 2" autocapitalize="sentences" autocomplete="off" enterkeyhint="next"></label>' +
       '<label class="f" for="ex-instructions"><span>General instructions</span><textarea id="ex-instructions" data-ex="instructions" rows="2" maxlength="' + EX_LEN.instructions + '"' +
       ' placeholder="Optional, e.g. 3 × per week. Ice after if sore." autocapitalize="sentences">' + esc(x.instructions) + '</textarea></label></div>' +
-      '<div class="ex-table" id="exTable">' + exTableHtml() + '</div>' +
+      '<div class="ex-table' + (x.editing ? ' editing' : '') + '" id="exTable">' + exTableHtml() + '</div>' +
       '<div class="ex-add"><button type="button" class="ghost" id="exAdd" data-action="ex-add">+ Exercise</button>' +
       '<button type="button" class="ghost" id="exAddSec" data-action="ex-add-sec">+ Section</button></div></section>';
   }
@@ -2093,7 +2555,15 @@
     if (!items.length) return '<p class="ex-empty">No exercises yet. Scan the exercise page, or add them below.</p>';
     var used = exUsed(), n = 0, s = 0, last = items.length - 1;
     var html = '<div class="ex-cols" aria-hidden="true"><span class="c-name">Exercise</span><span class="c-sets">Sets</span><span class="c-reps">Reps</span><span class="c-load">Load</span></div>';
+    // "+ Exercise" under the last row of each section (v11); the last section has the one under the table
+    var groupEnd = null, groupName = '';
     items.forEach(function (it, i) {
+      if (it.kind === 'section' && groupEnd) {
+        html += '<div class="ex-add-in"><button type="button" class="quiet" data-action="ex-add-in" data-after="' + groupEnd + '">+ Exercise<span class="vh"> ' +
+          esc(groupName ? 'in ' + groupName : 'before the first section') + '</span></button></div>';
+      }
+      if (it.kind === 'section') { groupName = clean1(it.heading) || 'section ' + (s + 1); }
+      groupEnd = it.id;
       var sec = it.kind === 'section', who = sec ? 'Section ' + (++s) : 'Exercise ' + (++n), lower = who.toLowerCase(), id = 'ex-' + it.id;
       var acts = '<div class="ex-acts">' + (sec ? '<span></span>'
         : '<button type="button" class="ex-btn ex-more" id="' + id + '-more" data-action="ex-more" aria-expanded="' + it.open + '" aria-controls="' + id + '-det">' +
@@ -2157,23 +2627,25 @@
     if (r.top < 120 || r.bottom > window.innerHeight - 110) el.scrollIntoView({ block: 'center', behavior: 'smooth' });
   }
   function refreshEx() {
-    var c = exCounts(), cnt = $('exCount');
+    var c = exCounts(), cnt = $('exCount'), eb = $('exEdit');
     if (cnt) cnt.textContent = c.exercises ? c.exercises + (c.exercises === 1 ? ' exercise' : ' exercises') + (c.sections ? ' · ' + c.sections + (c.sections === 1 ? ' section' : ' sections') : '') : '';
+    if (eb) eb.hidden = !state.ex.items.length;        // Edit only once there are rows
+    syncCard(null);
     renderExSummary(c);
     saveDraft();
   }
   function renderExSummary(c) {
     var why = c.exercises ? '' : 'Add at least one exercise to create the handout.';
     var cols = exColumns(), later = EX_DETAIL.filter(function (f) { return cols.indexOf(f) < 0; }).map(function (f) { return EX_LABEL[f]; });
-    var laterText = later.length ? (later.length > 1 ? later.slice(0, -1).join(', ') + ' and ' + later[later.length - 1] : later[0]) + (later.length > 1 ? ' are' : ' is') + ' added when written for any exercise.' : '';
+    var laterText = later.length ? (later.length > 1 ? later.slice(0, -1).join(', ') + ' and ' + later[later.length - 1] : later[0]) + (later.length > 1 ? ' are' : ' is') + ' added when used.' : '';
     els.summary.innerHTML = '<div class="sum ex-sum"><div class="sum-scroll"><h2>Exercise handout</h2><p class="against">A branded PDF for the patient to take home.</p>' +
       '<div class="tally ex-tally"><div><b>' + c.sections + '</b><span>' + (c.sections === 1 ? 'Section' : 'Sections') + '</span></div>' +
       '<div><b>' + c.exercises + '</b><span>' + (c.exercises === 1 ? 'Exercise' : 'Exercises') + '</span></div></div>' +
       '<h3>Handout columns</h3><p class="ex-colsline">' + esc(cols.map(function (f) { return EX_LABEL[f]; }).join(' · ')) + '</p>' +
       (laterText ? '<p class="fine">' + esc(laterText) + '</p>' : '') +
       '</div><div class="sum-foot"><button type="button" class="primary make" data-action="report"' + (why ? ' disabled' : '') + '>Create handout</button>' +
-      '<p class="fine">' + esc(why || 'Opens a preview you can share by AirDrop, Mail or Messages, or save to Files.') + '</p>' +
-      '<p class="fine client-line">Not saved to client records: the program stays in this draft until Clear all.</p></div></div>';
+      '<p class="fine">' + esc(why || 'Preview, then share or save.') + '</p>' +
+      '<p class="fine client-line">Kept until Clear all, not in client records.</p></div></div>';
     els.dock.innerHTML = '<div class="dt"><span class="ex-dock"><b>' + c.exercises + '</b> ' + (c.exercises === 1 ? 'exercise' : 'exercises') +
       (c.sections ? ' · <b>' + c.sections + '</b> ' + (c.sections === 1 ? 'section' : 'sections') : '') + '</span></div>' +
       '<button type="button" class="primary" data-action="report"' + (why ? ' disabled' : '') + '>Create handout</button>';
@@ -2203,14 +2675,23 @@
     if (x.scanned[it.id]) { delete x.scanned[it.id]; row.classList.remove('scanned'); }   // edited: checked
     if (EX_DETAIL.indexOf(f) >= 0) syncExDetails(row);
     refreshEx();
+    if (it.kind === 'ex' && !blank(el.value)) foldNow('ex', true);   // the program under way: the patient card folds (v11)
   }
   function exButton(b) {
     var a = b.dataset.action, x = state.ex;
-    if (a === 'ex-add' || a === 'ex-add-sec') {
-      var add = a === 'ex-add' ? newExRow() : newExSection();
-      x.items.push(add);
+    if (a === 'ex-add' || a === 'ex-add-sec' || a === 'ex-add-in') {
+      var add = a === 'ex-add-sec' ? newExSection() : newExRow(), after = a === 'ex-add-in' ? exIndex(b.dataset.after) : -1;
+      if (after >= 0) x.items.splice(after + 1, 0, add); else x.items.push(add);   // into that section, or at the end
       renderExTable();
       focusEx('ex-' + add.id + '-' + (add.kind === 'ex' ? 'name' : 'heading'));
+      return true;
+    }
+    if (a === 'ex-edit') {                             // Edit / Done (v11): the move and delete buttons on every row
+      x.editing = !x.editing;
+      b.textContent = x.editing ? 'Done' : 'Edit';
+      var tbl = $('exTable');
+      if (tbl) tbl.classList.toggle('editing', x.editing);
+      fitExWraps();                                    // the name column is narrower while editing
       return true;
     }
     if (!a || a.indexOf('ex-') !== 0) return false;
@@ -2226,12 +2707,14 @@
       focusEx(same && !same.disabled ? same.id : 'ex-' + it.id + (a === 'ex-up' ? '-down' : '-up'));
       return true;
     }
-    if (a === 'ex-del') {                              // no confirm: one row, and a scan can be undone
+    if (a === 'ex-del') {                              // no confirm: Undo in the message puts it back (v11)
+      var label = exRowLabel(it, i), wasScanned = !!x.scanned[it.id], list = x.items;
       x.items.splice(i, 1);
       delete x.scanned[it.id];
       renderExTable();
       var next = x.items[i];                           // the row that took its place, else + Exercise
       focusEx(next ? 'ex-' + next.id + '-del' : 'exAdd');
+      toast('Deleted ' + label, { label: 'Undo', run: function () { undoExDelete(x, list, it, i, wasScanned); } });
       return true;
     }
     if (a === 'ex-more') {
@@ -2241,6 +2724,24 @@
       return true;
     }
     return false;
+  }
+  // what the Undo message calls a deleted row: its name or heading, else "exercise 3" / "section 2"
+  function exRowLabel(it, i) {
+    var own = clean1(it.kind === 'section' ? it.heading : it.name), n = 0;
+    if (own) return own;
+    for (var j = 0; j <= i; j++) if (state.ex.items[j].kind === it.kind) n++;
+    return (it.kind === 'section' ? 'section ' : 'exercise ') + n;
+  }
+  // Undo a delete: the row back at its old place with the same id, unless Clear all, a scan or its Undo replaced the program since
+  function undoExDelete(prog, list, it, at, wasScanned) {
+    if (state.ex !== prog || prog.items !== list || exIndex(it.id) >= 0) return;
+    list.splice(Math.min(at, list.length), 0, it);
+    if (wasScanned) prog.scanned[it.id] = true;
+    if (state.tool !== 'ex') { saveDraft(); return; }
+    renderExTable();
+    var del = $('ex-' + it.id + '-del');               // keep the place without opening the keyboard
+    if (del && del.getClientRects().length) focusEx(del.id);
+    else if (it.kind === 'ex') focusEx('ex-' + it.id + '-more');
   }
 
   // ---- the handout
@@ -2425,8 +2926,10 @@
   function earlierCount(cl, t, date) {
     return cl ? cl.sessions.filter(function (x) { return x.tool === t && x.date < date; }).length : 0;
   }
-  // fill Previous results (and unchanging details) from the client's record
-  function loadHistory(t, key) {
+  // fill Previous results (and unchanging details) from the client's record. picked: chosen in Choose client (v11), which
+  // folds the details card once the essentials are in; otherwise it folds when earlier results were loaded (never under a
+  // box being typed in, e.g. a name suggestion tapped)
+  function loadHistory(t, key, picked) {
     var cl = clients.clients[key];
     if (!cl) return;
     var s = state[t], m = s.meta, date = m.date || todayIso();
@@ -2482,6 +2985,7 @@
     if (!s.hist || s.hist.key !== key) s.onlyPrev = false;   // "Only last time's tests" starts off for a different client
     s.hist = { key: key, name: cl.name, n: n, dates: Object.keys(dates).sort(), date: date };
     hideSuggest();
+    if (picked || n) foldBeforeRender(t);
     render();
     toast(n ? 'Loaded ' + cl.name + ': previous results for ' + n + (n === 1 ? ' test' : ' tests') : cl.name + ': no earlier ' + TOOL_NAMES[t] + ' results; details filled in');
   }
@@ -2530,9 +3034,10 @@
     var name = String(state[t].meta.name || '').trim(), cl = clientFor(name);
     if (!name) return 'Add a name to save this session to a client record.';
     var date = state[t].meta.date || todayIso();
-    if (!cl) return 'Creating the PDF starts a client record for ' + name + ' on this device.';
-    var same = cl.sessions.some(function (x) { return x.tool === t && x.date === date; }), earlier = earlierCount(cl, t, date);
-    return 'Creating the PDF ' + (same ? 'updates' : 'saves to') + ' ' + cl.name + '’s record' + (earlier ? ' (' + earlier + ' earlier ' + TOOL_NAMES[t] + (earlier === 1 ? ' session)' : ' sessions)') : '') + '.';
+    // one line each (v11); the client bar in the details card says how many sessions there are
+    if (!cl) return 'Saves to ' + name + '’s client record on this device.';
+    var same = cl.sessions.some(function (x) { return x.tool === t && x.date === date; });
+    return same ? 'Updates ' + cl.name + '’s client record for this date.' : 'Saves to ' + cl.name + '’s client record on this device.';
   }
   function progressData(t, c) {
     var m = state[t].meta, cl = clientFor(m.name);
@@ -2552,25 +3057,71 @@
       rows: p.rows.map(function (r) { return { name: label[r.metric] || r.metric, unit: unit[r.metric] || '', dir: dir[r.metric] || '', values: r.values, first: r.first, last: r.last }; })
     };
   }
-  // the Clients list: see, delete, back up and restore
-  function openClientsDialog() { renderClientsList(); openModal(els.clientsDialog, els.clientsClose); }
+  // The Clients dialog (v11), one searchable list in two modes. pick (Choose client, in the details card): each row is a
+  // button that loads that client, plus New client. manage (the header's Clients button): the rows with a two-tap Delete.
+  // Back up and Restore are in the ⋯ menu.
+  var clientsMode = 'manage';
+  function openClientsDialog(mode) {
+    var pick = mode === 'pick' && TOOLS.indexOf(state.tool) >= 0;
+    clientsMode = pick ? 'pick' : 'manage';
+    els.clientsSearch.value = '';
+    els.clientsTitle.textContent = pick ? 'Choose client' : 'Clients';
+    els.clientsNew.hidden = !pick;
+    els.clientsClose.textContent = pick ? 'Cancel' : 'Done';
+    els.clientsClose.className = pick ? 'ghost' : 'primary';
+    els.clientsFine.hidden = pick;
+    renderClientsList();
+    // no box focused at first (the iPad keyboard would cover the list): the first client, else New client / Done
+    openModal(els.clientsDialog, pick ? els.clientsList.querySelector('.cl-pick') || els.clientsNew : els.clientsClose);
+  }
+  function clientKeys() {
+    return Object.keys(clients.clients).sort(function (a, b) { return clients.clients[a].name.localeCompare(clients.clients[b].name); });
+  }
+  function clientDetail(cl) {                          // 'Last test 29 Sep 2026 · Screening, LL Strength'
+    var last = '', used = {};
+    cl.sessions.forEach(function (x) { if (x.date > last) last = x.date; used[x.tool] = 1; });
+    var tools = TOOLS.filter(function (t) { return used[t]; }).map(function (t) { return TOOL_NAMES[t]; }).join(', ');
+    return [last ? 'Last test ' + E.displayIso(last) : '', tools].filter(Boolean).join(' · ') || 'No sessions';
+  }
   function renderClientsList() {
-    var keys = Object.keys(clients.clients).sort(function (a, b) { return clients.clients[a].name.localeCompare(clients.clients[b].name); });
-    var total = 0;
+    var keys = clientKeys(), total = 0, pick = clientsMode === 'pick', typed = els.clientsSearch.value.trim(), q = E.nameKey(typed);
     keys.forEach(function (k) { total += clients.clients[k].sessions.length; });
-    els.clientsSummary.textContent = keys.length ? keys.length + (keys.length === 1 ? ' client, ' : ' clients, ') + total + (total === 1 ? ' session' : ' sessions') + ', saved on this device.'
-      : 'No saved clients yet. A record starts the first time a PDF is created with the client’s name filled in.';
-    els.clientsList.innerHTML = keys.length ? '<ul class="client-list">' + keys.map(function (k) {
-      var cl = clients.clients[k], by = {};
-      cl.sessions.forEach(function (x) { by[x.tool] = (by[x.tool] || 0) + 1; });
-      var last = cl.sessions.length ? cl.sessions[cl.sessions.length - 1].date : '';
-      var parts = TOOLS.filter(function (t) { return by[t]; }).map(function (t) { return by[t] + ' ' + TOOL_NAMES[t]; });
-      return '<li><div class="cl-main"><b>' + esc(cl.name) + '</b><span>' + esc(parts.join(' · ') || 'no sessions') + (last ? ' · last ' + esc(E.displayIso(last)) : '') + '</span></div>' +
-        '<button type="button" class="quiet cl-del" data-action="delete-client" data-key="' + esc(k) + '">Delete</button></li>';
-    }).join('') + '</ul>' : '';
+    els.clientsSummary.textContent = !keys.length ? 'No saved clients yet. A record starts when you create a report with a name filled in.'
+      : pick ? 'Loading a client fills in their details and their results from last time.'
+        : keys.length + (keys.length === 1 ? ' client, ' : ' clients, ') + total + (total === 1 ? ' session' : ' sessions') + ', saved on this device.';
+    els.clientsSearchWrap.hidden = !keys.length;
+    var shown = q ? keys.filter(function (k) { return k.indexOf(q) >= 0; }) : keys;
+    if (!keys.length) { els.clientsList.innerHTML = ''; return; }
+    if (!shown.length) { els.clientsList.innerHTML = '<p class="client-none" role="status">No clients match “' + esc(typed) + '”.</p>'; return; }
+    els.clientsList.innerHTML = '<ul class="client-list' + (pick ? ' pick' : '') + '">' + shown.map(function (k) {
+      var cl = clients.clients[k], d = '<b>' + esc(cl.name) + '</b><span>' + esc(clientDetail(cl)) + '</span>';
+      return pick ? '<li><button type="button" class="cl-pick" data-action="pick-client" data-key="' + esc(k) + '">' + d + '</button></li>'
+        : '<li><div class="cl-main">' + d + '</div><button type="button" class="quiet cl-del" data-action="delete-client" data-key="' + esc(k) + '">Delete</button></li>';
+    }).join('') + '</ul>';
+  }
+  // a client chosen: the name and the existing load (details and previous results), then the card folds if it can
+  function pickFromDialog(key) {
+    var t = state.tool;
+    closeModal(false);
+    if (TOOLS.indexOf(t) < 0 || !clients.clients[key]) return;
+    loadHistory(t, key, true);
+    focusQuiet(state[t].cardOpen === false ? document.querySelector('#athleteStrip [data-action="edit-athlete"]') : document.querySelector('#athleteCard [data-action="choose-client"]'));
+  }
+  function newClient() {                               // New client: the name box emptied and ready to type in
+    var t = state.tool;
+    closeModal(false);
+    if (TOOLS.indexOf(t) < 0) return;
+    state[t].meta.name = '';
+    if (state[t].cardOpen === false) setCardOpen(t, true);
+    var box = $(t + '-name');
+    if (box) box.value = '';
+    refresh();
+    if (box) box.focus();
   }
   var delTimer = null;
   function onClientsClick(e) {
+    var pk = e.target.closest('button[data-action="pick-client"]');
+    if (pk) { pickFromDialog(pk.dataset.key); return; }
     var b = e.target.closest('button[data-action="delete-client"]');
     if (!b) return;
     var key = b.dataset.key;
@@ -2590,6 +3141,7 @@
     toast('Deleted ' + name + '’s record');
   }
   function backupClients() {
+    if (!Object.keys(clients.clients).length) { toast('No client records to back up yet'); return; }
     var name = 'BASE_Health_client_records_' + todayIso() + '.json';
     var blob = new Blob([JSON.stringify(clients, null, 1)], { type: 'application/json' });
     var file = new File([blob], name, { type: 'application/json' });
@@ -2643,6 +3195,7 @@
       DATA.screen = r[0]; DATA.ham = r[1]; DATA.acl = r[2]; DATA.str = r[3]; DATA.ai = r[4];
       DATA.explain = r[5] && r[5].metrics && typeof r[5].metrics === 'object' ? r[5] : { metrics: {} };
       clients = loadClients();
+      testsPref = loadTestsPref();
       state = loadDraft() || { v: 1, tool: 'screen', screen: freshTool('screen'), str: freshTool('str'), ham: freshTool('ham'), acl: freshTool('acl'), ex: freshEx() };
       tidyState();
       els.entry.addEventListener('input', onInput);
@@ -2655,19 +3208,40 @@
         var b = e.target.closest('button[data-tool]');
         if (b) { switchTool(b.dataset.tool); keepAwake(); }
       });
-      els.clearAll.addEventListener('click', openClearDialog);
+      // the ⋯ menu (v11)
+      els.moreBtn.addEventListener('click', function () { if (menuOpen()) closeMenu(true); else openMenu(false); });
+      els.moreBtn.addEventListener('keydown', function (e) {
+        if ((e.key === 'ArrowDown' || e.key === 'ArrowUp') && !menuOpen()) { e.preventDefault(); e.stopPropagation(); openMenu(e.key === 'ArrowUp'); }
+      });
+      document.addEventListener('pointerdown', function (e) {       // a tap anywhere else closes it
+        if (menuOpen() && !els.moreMenu.contains(e.target) && !els.moreBtn.contains(e.target)) closeMenu(false);
+      }, true);
+      els.moreMenu.addEventListener('focusout', function (e) {
+        var to = e.relatedTarget;
+        if (menuOpen() && to && !els.moreMenu.contains(to) && to !== els.moreBtn) closeMenu(false);
+      });
+      els.clearAll.addEventListener('click', menuAction(openClearDialog));
+      els.clientsBackup.addEventListener('click', menuAction(backupClients));
+      els.restoreItem.addEventListener('click', function () { els.clientsRestore.click(); closeMenu(true); });
+      els.aiItem.addEventListener('click', menuAction(function () { openAiSettings(null); }));
       els.clearCancel.addEventListener('click', function () { closeModal(); });
       els.clearConfirm.addEventListener('click', clearAllData);
       els.aiSave.addEventListener('click', saveAiKey);
       els.aiCancel.addEventListener('click', function () { closeModal(); });
       els.aiRemove.addEventListener('click', removeAiKey);
       els.aiKey.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); saveAiKey(); } });
-      els.clientsBtn.addEventListener('click', openClientsDialog);
+      els.clientsBtn.addEventListener('click', function () { openClientsDialog('manage'); });
       els.clientsClose.addEventListener('click', function () { closeModal(); });
-      els.clientsBackup.addEventListener('click', backupClients);
+      els.clientsNew.addEventListener('click', newClient);
+      els.clientsSearch.addEventListener('input', function () { renderClientsList(); });
       els.clientsRestore.addEventListener('change', function () { restoreClients(els.clientsRestore.files); els.clientsRestore.value = ''; });
       els.clientsList.addEventListener('click', onClientsClick);
-      [els.clearDialog, els.aiDialog, els.clientsDialog].forEach(function (d) {
+      // Tests today (v11)
+      els.testsList.addEventListener('change', function (e) { if (e.target.matches('input[data-part]')) saveTestsChoice(); });
+      els.testsAll.addEventListener('click', function () { setAllTests(true); });
+      els.testsNone.addEventListener('click', function () { setAllTests(false); });
+      els.testsDone.addEventListener('click', function () { closeModal(); });
+      [els.clearDialog, els.aiDialog, els.clientsDialog, els.testsDialog].forEach(function (d) {
         d.addEventListener('click', function (e) { if (e.target === d) closeModal(); });
       });
       // tapping a suggested client must not blur the name box before the tap lands
@@ -2683,16 +3257,23 @@
       els.share.addEventListener('click', sharePdf);
       document.addEventListener('keydown', function (e) {
         if (openModalEl) { onModalKey(e); return; }
+        if (menuOpen()) { onMenuKey(e); return; }
         if (e.key === 'Escape' && !els.sheet.hidden) closeReport();
       });
       // the system lets a screen wake lock go when the app is hidden: ask again on coming back, if still needed
       document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible') keepAwake(); });
-      // turning the iPad changes how the exercise names and notes wrap
+      // turning the iPad changes how the exercise names and notes wrap, and the app bar's height (the strip sits under it)
       var fitTimer = null;
       window.addEventListener('resize', function () {
+        measureBar();
         clearTimeout(fitTimer);
         fitTimer = setTimeout(function () { if (state.tool === 'ex') { fitExWraps(); fitExNotes(); } }, 120);
       });
+      measureBar();
+      if (window.ResizeObserver) new ResizeObserver(function () { measureBar(); }).observe(els.appbar);
+      window.addEventListener('scroll', function () {
+        if (!stuckFrame) stuckFrame = requestAnimationFrame(function () { stuckFrame = 0; checkStuck(); });
+      }, { passive: true });
       render();
     }).catch(function (err) {
       els.entry.innerHTML = '<section class="card error-card"><div class="card-head"><h2>Norms not found</h2></div>' +

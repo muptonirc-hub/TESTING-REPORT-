@@ -623,7 +623,7 @@
           lx += lead + ww;
         });
       });
-      var chg = r.change ? wrap(r.change, 'bold', fs(8.5), c4) : [];
+      var chg = r.change ? wrap(E.changeLabel(r.change, r.change_kind), 'bold', fs(8.5), c4) : [];
       var h1 = lines.length * lineH(10);
       var h3 = px(9 + 2) + lineH(8);
       var h4 = lineH(9) + px(2) + (chg.length ? px(2) + chg.length * lineH(8.5) : 0);
@@ -980,7 +980,7 @@
   function screening(d) {
     var doc = new Doc(), m = d.meta || {}, P = P1;
     header(doc, 'Athlete Performance & Readiness Report', 'VALD Testing • Normative screening with change-vs-previous');
-    meta(doc, [['Athlete', m.name], ['Date', m.date], ['Sport', m.sport], ['Tester', m.tester], ['Age', m.age],
+    meta(doc, [['Athlete', m.name], ['Date', m.date], ['Sport', m.sport], ['Clinician', m.tester], ['Age', m.age],
       ['Sex', m.sex], ['Mass', clean(m.mass).trim() ? clean(m.mass).trim() + ' kg' : ''], ['Notes', m.notes]], P.meta);
     coachBand(doc, d.coach);
     band(doc, 'Compared against', d.popLabel || '—', tallyChips('target', d.counts), P.band);
@@ -1084,7 +1084,7 @@
         doc.text(raw, x, baseline(my + px(9) + px(4), 7.5), { style: 'regular', size: fs(7.5), color: C.MUTE });
         if (cell.change) {
           var kcol = cell.change_kind === 'gain' ? C.G : (cell.change_kind === 'drop' ? C.R : C.MUTE);
-          var ctext = clean(cell.change).replace(/\s+/g, ' ') + (cell.prev ? ' · was ' + cell.prev.text : '');
+          var ctext = E.changeLabel(cell.change, cell.change_kind) + (cell.prev ? ' · was ' + cell.prev.text : '');
           doc.text(wrap(ctext, 'bold', fs(7.5), w)[0], x, baseline(my + px(9) + px(4) + lineH(7.5) + px(1), 7.5), { style: 'bold', size: fs(7.5), color: kcol });
         }
       });
@@ -1100,7 +1100,7 @@
     var doc = new Doc(), m = d.meta || {}, c = d.counts;
     header(doc, 'Lower-Limb Strength & Capacity', 'Strength battery • targets relative to body weight');
     meta(doc, [['Patient', m.name], ['Date', m.date], ['Mass', clean(m.mass).trim() ? clean(m.mass).trim() + ' kg' : ''],
-      ['Sport', m.sport], ['Tester', m.tester], ['Notes', m.notes]]);
+      ['Sport', m.sport], ['Clinician', m.tester], ['Notes', m.notes]]);
     coachBand(doc, d.coach);
     band(doc, 'Scored against', 'BASE Health strength targets', tallyChips('target', c));
     interpretation(doc, d.interp);
@@ -1311,7 +1311,7 @@
   function exercises(d) {
     var doc = new Doc(), m = d.meta || {};
     header(doc, 'Exercise Program', 'Prescribed exercises • sets, reps and load');
-    meta(doc, [['Patient', exText(m.name)], ['Date', m.date], ['Practitioner', exText(m.practitioner)]]);
+    meta(doc, [['Patient', exText(m.name)], ['Date', m.date], ['Clinician', exText(m.practitioner)]]);
     var title = clean(exText(d.title)).trim();
     if (title) {
       doc.y += px(2);
