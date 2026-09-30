@@ -1,6 +1,6 @@
 /* BASE Health Report: the branded PDF, built on the device.
    Recreates the WeasyPrint designs from report_pdf.py (screening, hamstring, ACL), plus the strength
-   battery and the optional interpretation box, as a list of
+   battery, the optional interpretation box and (v10) the exercise program handout, as a list of
    vector drawing commands, which are then written two ways from the same layout:
      toPdf()  -> a real PDF file (jsPDF, embedded fonts, selectable text)
      toSvg()  -> SVG pages for the on-screen preview
@@ -74,21 +74,21 @@
     });
     return w;
   }
-  // greedy word wrap to maxW (mm); very long words are split
-  function wrap(str, style, size, maxW) {
+  // greedy word wrap to maxW (mm); very long words are split. cs: letter spacing (mm), when the text is drawn with it
+  function wrap(str, style, size, maxW, cs) {
     str = clean(str).trim();
     if (!str) return [''];
-    if (width(str, style, size) <= maxW) return [str];
+    if (width(str, style, size, cs) <= maxW) return [str];
     var lines = [], line = '';
     str.split(' ').forEach(function (word) {
       var cand = line ? line + ' ' + word : word;
-      if (width(cand, style, size) <= maxW) { line = cand; return; }
+      if (width(cand, style, size, cs) <= maxW) { line = cand; return; }
       if (line) lines.push(line);
       line = '';
-      if (width(word, style, size) <= maxW) { line = word; return; }
+      if (width(word, style, size, cs) <= maxW) { line = word; return; }
       var chunk = '';
       for (var ch of word) {
-        if (chunk && width(chunk + ch, style, size) > maxW) { lines.push(chunk); chunk = ch; }
+        if (chunk && width(chunk + ch, style, size, cs) > maxW) { lines.push(chunk); chunk = ch; }
         else chunk += ch;
       }
       line = chunk;
@@ -1123,6 +1123,220 @@
     return finish(doc, 'Lower-Limb Strength & Capacity', m.name);
   }
 
+  // ------------------------------------------------------------------ exercise program handout (v10)
+  // The program the practitioner checked on screen, for the patient: the meta row, the title and a general instructions
+  // box when given, then one table. Exercise, Sets, Reps and Load always; Rest, Tempo, Side and Notes only when something
+  // is written for at least one exercise. A dark band per section heading. A row never splits across pages; after a page
+  // break the section band (marked continued) and the column header repeat, and a band or header never ends a page.
+  var EX_COLS = [['name', 'EXERCISE'], ['sets', 'SETS'], ['reps', 'REPS'], ['load', 'LOAD'], ['rest', 'REST'], ['tempo', 'TEMPO'], ['side', 'SIDE'], ['notes', 'NOTES']];
+  var EX_CORE = { name: 1, sets: 1, reps: 1, load: 1 };
+  var EX_WMM = { sets: [9, 16], reps: [11, 26], load: [14, 30], rest: [10, 18], tempo: [11, 22], side: [12, 22] };   // short columns: narrowest, roomiest (mm)
+  var EX_SZ = 13.33, EX_HEAD = 9.33, EX_BAND = 10.5, EX_MAXLINES = 40;           // CSS px: 10 pt cells, 7 pt column labels, 7.9 pt bands
+  var EX_TINT = '#F2F5F7';
+  // characters the fonts lack but notes often use: fractions spelt out; emoji and invisible characters dropped; an
+  // accented letter the fonts lack prints as its base letter (e.g. Nguyễn as Nguyen) rather than '?'
+  var FRACTIONS = { '⅐': '1/7', '⅑': '1/9', '⅒': '1/10', '⅓': '1/3', '⅔': '2/3', '⅕': '1/5', '⅖': '2/5', '⅗': '3/5', '⅘': '4/5',
+    '⅙': '1/6', '⅚': '5/6', '⅛': '1/8', '⅜': '3/8', '⅝': '5/8', '⅞': '7/8', '↉': '0/3' };
+  function exText(s) {
+    s = String(s == null ? '' : s);
+    if (s.normalize) s = s.normalize('NFC');
+    s = s.replace(/[⅐-⅞↉]/g, function (c) { return FRACTIONS[c] || c; })
+      .replace(/[\uD800-\uDFFF]/g, '').replace(/[\uFE00-\uFE0F\u200B-\u200D\u2060\uFEFF]/g, '');
+    var out = '';
+    for (var ch of s) {
+      var cp = ch.codePointAt(0);
+      if (cp < 128 || faceFor('regular', cp) || !ch.normalize) { out += ch; continue; }
+      var base = ch.normalize('NFD').replace(/[\u0300-\u036F]/g, '');
+      out += base && base !== ch && Array.from(base).every(function (b) { return !!faceFor('regular', b.codePointAt(0)); }) ? base : ch;
+    }
+    return out;
+  }
+  // Column widths (mm). A short column gets what its longest value (or label) needs, within its limits, and never less
+  // than its longest word (so "AMRAP" never breaks); when space is short they squeeze towards that. Exercise and Notes
+  // share the rest (the one needing less keeps just what it needs); with no Notes, Exercise takes it all, and spare room
+  // widens the short columns so the values sit nearer the names.
+  function exWidths(cols, groups, avail) {
+    var need = {}, word = {}, W = {};
+    cols.forEach(function (c) {
+      var k = c[0], style = k === 'name' ? 'bold' : 'regular', n = width(c[1], 'bold', fs(EX_HEAD), px(0.5)), wd = n;
+      groups.forEach(function (g) {
+        g.rows.forEach(function (r) {
+          if (!r[k]) return;
+          n = Math.max(n, width(r[k], style, fs(EX_SZ)));
+          r[k].split(' ').forEach(function (w) { wd = Math.max(wd, width(w, style, fs(EX_SZ))); });
+        });
+      });
+      need[k] = n + 0.3; word[k] = wd + 0.3;
+    });
+    var short = cols.map(function (c) { return c[0]; }).filter(function (k) { return EX_WMM[k]; });
+    var notes = !!need.notes, lo = {}, sum = 0, loSum = 0;
+    short.forEach(function (k) {
+      lo[k] = Math.min(Math.max(EX_WMM[k][0], word[k]), EX_WMM[k][1]);
+      W[k] = Math.min(Math.max(need[k], lo[k]), EX_WMM[k][1]);
+      sum += W[k]; loSum += lo[k];
+    });
+    var flexMin = notes ? 96 : 56;
+    if (avail - sum < flexMin && sum > loSum) {
+      var f = Math.max(0, Math.min(1, (avail - flexMin - loSum) / (sum - loSum)));
+      sum = 0;
+      short.forEach(function (k) { W[k] = lo[k] + (W[k] - lo[k]) * f; sum += W[k]; });
+    }
+    var flex = avail - sum;
+    if (!notes) {
+      var target = Math.max(need.name + 6, 64), grow = short.map(function (k) { return EX_WMM[k][1] - W[k]; });
+      var gs = grow.reduce(function (s, v) { return s + v; }, 0);
+      if (flex > target && gs > 0) {
+        var take = Math.min(flex - target, gs);
+        short.forEach(function (k, i) { W[k] += take * grow[i] / gs; });
+        flex -= take;
+      }
+      W.name = flex;
+      return W;
+    }
+    if (need.name + need.notes <= flex) {
+      var extra = (flex - need.name - need.notes) / 2;
+      W.name = need.name + extra; W.notes = need.notes + extra;
+    } else if (need.notes < flex / 2) { W.notes = need.notes; W.name = flex - W.notes; }
+    else if (need.name < flex / 2) { W.name = need.name; W.notes = flex - W.name; }
+    else { W.name = W.notes = flex / 2; }
+    if (W.notes < 30) { W.notes = 30; W.name = flex - 30; }
+    return W;
+  }
+  function exCellLines(v, style, maxW) {             // wrapped, at most EX_MAXLINES lines (the last one ends in an ellipsis)
+    if (!v) return [];
+    var lines = wrap(v, style, fs(EX_SZ), maxW);
+    if (lines.length <= EX_MAXLINES) return lines;
+    lines = lines.slice(0, EX_MAXLINES);
+    var l = lines[EX_MAXLINES - 1];
+    while (l.length > 1 && width(l + '…', style, fs(EX_SZ)) > maxW) l = l.slice(0, -1);
+    lines[EX_MAXLINES - 1] = l.replace(/\s+$/, '') + '…';
+    return lines;
+  }
+  function exTable(doc, groups, tailH) {
+    var used = {};
+    groups.forEach(function (g) { g.rows.forEach(function (r) { EX_COLS.forEach(function (c) { if (r[c[0]]) used[c[0]] = true; }); }); });
+    var cols = EX_COLS.filter(function (c) { return EX_CORE[c[0]] || used[c[0]]; });
+    var pad = px(8), gap = px(10), lh = lineH(EX_SZ), padY = px(6);
+    var W = exWidths(cols, groups, CW - 2 * pad - gap * (cols.length - 1)), xs = [], x = ML + pad;
+    cols.forEach(function (c) { xs.push(x); x += W[c[0]] + gap; });
+    var headH = px(6) + lineH(EX_HEAD) + px(5);
+    function bandLines(title, cont) { return wrap(title.toUpperCase() + (cont ? ' (CONTINUED)' : ''), 'bold', fs(EX_BAND), CW - px(8 + 7.5 + 7 + 10), px(0.4)); }
+    function bandH(title, cont) { return title ? bandLines(title, cont).length * lineH(EX_BAND) + px(8) : 0; }
+    function band(title, cont) {                     // the section heading: dark band, teal square, white capitals
+      if (!title) return;
+      var lines = bandLines(title, cont), top = doc.y, h = bandH(title, cont);
+      doc.rect(ML, top, CW, h, { r: px(3), fill: C.GBAND });
+      var bl = baseline(top + px(4), EX_BAND);
+      doc.rect(ML + px(8), bl - px(7.5), px(7.5), px(7.5), { r: px(2), fill: C.BLUE });
+      lines.forEach(function (l, i) {
+        doc.text(l, ML + px(8 + 7.5 + 7), bl + i * lineH(EX_BAND), { style: 'bold', size: fs(EX_BAND), color: C.WHITE, cs: px(0.4) });
+      });
+      doc.y = top + h;
+    }
+    function colHead() {                             // the column labels, repeated after every page break
+      var top = doc.y, hy = baseline(top + px(6), EX_HEAD);
+      cols.forEach(function (c, i) { doc.text(c[1], xs[i], hy, { style: 'bold', size: fs(EX_HEAD), color: C.MUTE, cs: px(0.5) }); });
+      doc.line(ML, top + headH - px(0.5), ML + CW, top + headH - px(0.5), { stroke: '#D5DBE0', lw: px(1) });
+      doc.y = top + headH;
+    }
+    function layout(r) {
+      var cells = cols.map(function (c, i) { return exCellLines(r[c[0]], c[0] === 'name' ? 'bold' : 'regular', W[c[0]]); });
+      var n = Math.max.apply(null, [1].concat(cells.map(function (l) { return l.length; })));
+      return { cells: cells, h: n * lh + 2 * padY };
+    }
+    var lastG = groups.length - 1;
+    groups.forEach(function (g, gi) {
+      var rows = g.rows.map(layout), title = g.heading;
+      var lead = doc.y > MT + 0.5 ? px(gi ? 16 : 8) : 0;
+      // the band and the column labels only start where the first row (and, for a one-row end, the footer) fits too
+      var first = rows[0].h + (gi === lastG && rows.length === 1 ? tailH : 0);
+      if (!doc.fits(lead + bandH(title, false) + headH + first) && doc.y > MT + 0.5) { doc.newPage(); lead = 0; }
+      doc.y += lead;
+      band(title, false);
+      colHead();
+      rows.forEach(function (L, ri) {
+        var need = L.h + (gi === lastG && ri === rows.length - 1 ? tailH : 0);
+        if (!doc.fits(need)) { doc.newPage(); band(title, true); colHead(); }
+        var top = doc.y;
+        if (ri % 2 === 1) doc.rect(ML, top, CW, L.h, { fill: EX_TINT });
+        L.cells.forEach(function (lines, ci) {
+          var bold = cols[ci][0] === 'name';
+          lines.forEach(function (l, li) {
+            doc.text(l, xs[ci], baseline(top + padY + li * lh, EX_SZ), { style: bold ? 'bold' : 'regular', size: fs(EX_SZ), color: bold ? C.BLACK : C.INK });
+          });
+        });
+        doc.y = top + L.h;
+      });
+      doc.line(ML, doc.y, ML + CW, doc.y, { stroke: '#D5DBE0', lw: px(1) });
+    });
+  }
+  // the general instructions: a tinted box with a teal edge, its label on the first part; it keeps line breaks and
+  // splits across pages if it has to (like the interpretation box)
+  function exInstructions(doc, text) {
+    var raw = String(text || '').replace(/\r\n?/g, '\n').trim();
+    if (!raw) return;
+    var size = EX_SZ, LH = 1.4, lh = lineH(size, LH), bar = px(3), padX = px(10), padY = px(7), paraGap = px(4), ls = 10.5, labelH = lineH(ls) + px(3);
+    var maxW = CW - bar - 2 * padX, lines = [], gapNext = 0;
+    raw.split('\n').forEach(function (para) {
+      if (!clean(para).trim()) { gapNext = paraGap; return; }
+      wrap(para, 'regular', fs(size), maxW).forEach(function (l, i) { lines.push({ s: l, gap: i === 0 && lines.length ? gapNext : 0 }); });
+      gapNext = 0;
+    });
+    if (!lines.length) return;
+    doc.y += px(4);
+    var i = 0, first = true;
+    while (i < lines.length) {
+      var head = first ? labelH : 0, avail = PAGE_H - MB - doc.y - 2 * padY - head, n = 0, h = 0;
+      while (i + n < lines.length && h + (n ? lines[i + n].gap : 0) + lh <= avail + 0.01) { h += (n ? lines[i + n].gap : 0) + lh; n++; }
+      if (!n) {
+        if (doc.y > MT + 0.5) { doc.newPage(); continue; }
+        n = 1; h = lh;
+      }
+      var top = doc.y, boxH = head + h + 2 * padY;
+      doc.rect(ML, top, CW, boxH, { r: [0, px(3), px(3), 0], fill: '#F1F7F6' });
+      doc.rect(ML, top, bar, boxH, { fill: C.BLUE });
+      var y = top + padY;
+      if (first) { doc.text('General instructions', ML + bar + padX, baseline(y, ls), { style: 'bold', size: fs(ls), color: C.BLUEINK }); y += labelH; }
+      for (var k = 0; k < n; k++) {
+        if (k) y += lines[i + k].gap;
+        doc.text(lines[i + k].s, ML + bar + padX, baseline(y, size, LH), { style: 'regular', size: fs(size), color: C.INK });
+        y += lh;
+      }
+      doc.y = top + boxH;
+      i += n; first = false;
+      if (i < lines.length) doc.newPage();
+    }
+  }
+  var EX_FOOT = 'Prepared by BASE Health Noosa. Follow your practitioner’s instructions.';
+  function exercises(d) {
+    var doc = new Doc(), m = d.meta || {};
+    header(doc, 'Exercise Program', 'Prescribed exercises • sets, reps and load');
+    meta(doc, [['Patient', exText(m.name)], ['Date', m.date], ['Practitioner', exText(m.practitioner)]]);
+    var title = clean(exText(d.title)).trim();
+    if (title) {
+      doc.y += px(2);
+      wrap(title, 'bold', fs(18), CW - px(4)).forEach(function (l) {
+        doc.text(l, ML + px(2), baseline(doc.y, 18), { style: 'bold', size: fs(18), color: C.BLACK });
+        doc.y += lineH(18);
+      });
+      doc.y += px(4);
+    }
+    exInstructions(doc, exText(d.instructions));
+    var groups = (d.groups || []).map(function (g) {
+      return {
+        heading: clean(exText(g.heading)).trim(),
+        rows: (g.rows || []).map(function (r) {
+          var o = {};
+          EX_COLS.forEach(function (c) { o[c[0]] = clean(exText(r[c[0]])).trim(); });
+          return o;
+        }).filter(function (o) { return EX_COLS.some(function (c) { return o[c[0]]; }); })
+      };
+    }).filter(function (g) { return g.rows.length; });
+    exTable(doc, groups, footerH(EX_FOOT));
+    footer(doc, EX_FOOT);
+    return finish(doc, 'Exercise Program', exText(m.name));
+  }
+
   function finish(doc, title, name) {
     return { pages: doc.pages, title: title + (clean(name).trim() ? ' — ' + clean(name).trim() : '') };
   }
@@ -1261,5 +1475,5 @@
     });
   }
 
-  return { screening: screening, rehab: rehab, strength: strength, toPdf: toPdf, toSvg: toSvg, fontFaces: fontFaces, _width: width, _wrap: wrap };
+  return { screening: screening, rehab: rehab, strength: strength, exercises: exercises, toPdf: toPdf, toSvg: toSvg, fontFaces: fontFaces, _width: width, _wrap: wrap };
 });

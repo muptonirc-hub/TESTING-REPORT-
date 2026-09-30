@@ -3,7 +3,9 @@
    scored as they are typed, the PDF is built locally, and a draft is kept in this browser only until
    "Clear all data" wipes it. Creating a PDF also saves the session to the client's record on this device,
    so the next test can load their previous results and the report can show progress. "Scan notes" reads a photo
-   of handwritten results with Claude and fills the boxes for checking. */
+   of handwritten results with Claude and fills the boxes for checking.
+   A fifth tab, Exercises (v10), turns a photo of a handwritten exercise page into an editable table and a PDF
+   handout. It is kept in the draft only (never in client records). */
 (function () {
   'use strict';
   var E = window.BHEngine;
@@ -64,8 +66,8 @@
   }
 
   // ------------------------------------------------------------------ state
-  var TOOLS = ['screen', 'str', 'ham', 'acl'];
-  var TOOL_NAMES = { screen: 'Screening', str: 'LL Strength', ham: 'Hamstring rehab', acl: 'ACL rehab' };
+  var TOOLS = ['screen', 'str', 'ham', 'acl'];         // the four reports (the Exercises tab, 'ex', is handled on its own)
+  var TOOL_NAMES = { screen: 'Screening', str: 'LL Strength', ham: 'Hamstring rehab', acl: 'ACL rehab', ex: 'Exercises' };
   function freshInterp() { return { text: '', ai: false, basis: '' }; }
   // For the coach (v8): the clinician's call on training, printed as a band on the report. Never worked out by the
   // app, never filled in from records and never sent to Claude.
@@ -120,7 +122,8 @@
       co.mods = typeof co.mods === 'string' ? co.mods : '';
       co.retest = typeof co.retest === 'string' && E.parseDate(co.retest, ['Y-m-d']) ? co.retest : '';
     });
-    if (TOOLS.indexOf(state.tool) < 0) state.tool = 'screen';
+    tidyEx();                                          // v10: the exercise program (drafts from v9 and earlier have none)
+    if (TOOLS.indexOf(state.tool) < 0 && state.tool !== 'ex') state.tool = 'screen';
   }
   function val(tool, name) {
     var v = state[tool].values;
@@ -189,7 +192,8 @@
     screen: ['Performance & readiness screen', 'Type this session’s results. Leave a metric blank to skip it; add the previous result to see real change versus noise.'],
     str: ['Lower-limb strength & capacity', 'Enter each leg\u2019s result as the load, force or reps you measured. Only the tests you fill in are scored and reported.'],
     ham: ['Hamstring rehab & return to play', 'Injured-limb results against the targets for the chosen rehab phase.'],
-    acl: ['ACL rehab & return to play', 'Injured-limb and symmetry results against ACLR research norms for the chosen phase and sex.']
+    acl: ['ACL rehab & return to play', 'Injured-limb and symmetry results against ACLR research norms for the chosen phase and sex.'],
+    ex: ['Exercise program', 'Photograph a handwritten exercise page (leave the patient’s name off the paper), then check and edit the table before creating the handout.']
   };
 
   function field(tool, key, label, o) {
@@ -202,8 +206,8 @@
       (o.mode ? ' inputmode="' + o.mode + '"' : '') +
       (o.placeholder ? ' placeholder="' + esc(o.placeholder) + '"' : '') +
       (o.words ? ' autocapitalize="words"' : '') + ' autocomplete="off" spellcheck="false" enterkeyhint="next"></label>';
-    // the name field offers saved clients as you type
-    if (key === 'name') html = '<div class="f' + (o.cls ? ' ' + o.cls : '') + ' name-wrap">' + html.replace(' ' + o.cls, '') + '<div class="suggest" id="' + id + '-sugg" hidden></div></div>';
+    // the name field offers saved clients as you type (o.plain: a name box without suggestions, on the Exercises tab)
+    if (key === 'name' && !o.plain) html ='<div class="f' + (o.cls ? ' ' + o.cls : '') + ' name-wrap">' + html.replace(' ' + o.cls, '') + '<div class="suggest" id="' + id + '-sugg" hidden></div></div>';
     return html;
   }
   function seg(tool, key, label, options) {
@@ -359,6 +363,7 @@
   function render() {
     var t = state.tool;
     document.querySelectorAll('.tools button').forEach(function (b) { b.setAttribute('aria-selected', String(b.dataset.tool === t)); });
+    if (t === 'ex') { renderEx(); return; }
     els.entry.innerHTML = '<div class="pagehead"><h1>' + esc(HEAD[t][0]) + '</h1><p>' + esc(HEAD[t][1]) + '</p></div>' + athleteCard() +
       (t === 'str' ? strengthGroupHtml() : groupsHtml(t)) + (t === 'acl' ? rtsCardHtml() : '') + coachCardHtml() + interpCardHtml() +
       '<span id="explainHint" hidden>Shows what this test measures.</span>';
@@ -447,6 +452,7 @@
   }
 
   function refresh() {
+    if (state.tool === 'ex') { refreshEx(); return; }   // e.g. a late AI draft or a client restore while on the Exercises tab
     var t = state.tool, c = compute();
     applyRetest(false);
     refreshClientBar(c);
@@ -683,6 +689,7 @@
   // when the app comes back to the front. Clear all lets it go. Silent: no UI, and any refusal is ignored.
   var wake = { lock: null, pending: false };
   function hasResults(t) {
+    if (t === 'ex') return false;                      // writing up exercises isn't a testing session
     var v = state[t].values;
     return Object.keys(v).some(function (k) { return v[k] && (!blank(v[k].result) || !blank(v[k].left) || !blank(v[k].right)); });
   }
@@ -914,6 +921,7 @@
   // ------------------------------------------------------------------ input handling
   function onInput(e) {
     var el = e.target, t = state.tool;
+    if (t === 'ex') { onExInput(el); return; }
     if (el.id === 'interpText') { onInterpInput(el); return; }
     if (el.dataset.coach) { state[t].coach[el.dataset.coach] = el.value; saveDraft(); keepAwake(); return; }
     unmarkScanned(el);
@@ -946,6 +954,7 @@
   }
   function onButton(b) {
     var t = state.tool;
+    if (t === 'ex' && exButton(b)) return;
     if (b.dataset.action === 'explain') {
       var box = document.getElementById(b.getAttribute('aria-controls')), open = b.getAttribute('aria-expanded') !== 'true';
       var mk = t + '|' + b.closest('.metric').dataset.metric;
@@ -1018,10 +1027,14 @@
   }
   // Return/Next on the iPad keyboard jumps to the next result box
   function onKey(e) {
-    if (e.key !== 'Enter' || !e.target.matches('input')) return;
+    if (e.key !== 'Enter' || !e.target.matches('input, textarea.ex-wrap')) return;
     e.preventDefault();
     var live = '.group:not(.collapsed):not([hidden]) .metric:not([hidden]) ';          // skips rows the retest filter hides
-    var stops = els.entry.querySelectorAll('.athlete input:not([type=file]):not([type=date]), ' + live + 'input.m-result, ' + live + 'input.m-in');
+    var stops = state.tool === 'ex'
+      // Exercises: patient details, title, general instructions, then each row's boxes in order (hidden details skipped)
+      ? Array.prototype.filter.call(els.entry.querySelectorAll('.athlete input:not([type=file]):not([type=date]), #ex-title, #ex-instructions, .ex-row input, .ex-row textarea'),
+        function (x) { return x.getClientRects().length > 0; })
+      : els.entry.querySelectorAll('.athlete input:not([type=file]):not([type=date]), ' + live + 'input.m-result, ' + live + 'input.m-in');
     var next = null;
     for (var i = 0; i < stops.length; i++) {
       if (e.target.compareDocumentPosition(stops[i]) & Node.DOCUMENT_POSITION_FOLLOWING) { next = stops[i]; break; }
@@ -1159,14 +1172,17 @@
     try { return !!(navigator.share && navigator.canShare && navigator.canShare({ files: [file] })); } catch (e) { return false; }
   }
   function openReport() {
-    var built = buildReport();
+    var ex = state.tool === 'ex';
+    var built = ex ? buildHandout() : buildReport();
     if (!built) return;
-    var saved = saveSession(state.tool, compute());
+    // the exercise handout is never saved to the client's record
+    var saved = ex ? null : saveSession(state.tool, compute());
     if (saved) {
       if (!saved.ok) toast('The session couldn’t be saved to the client record (storage is full or blocked).');
       else toast(saved.replaced ? 'Updated ' + saved.name + '’s record for this date' : 'Saved to ' + saved.name + '’s record (' + saved.count + (saved.count === 1 ? ' session)' : ' sessions)'));
       refresh();
     }
+    els.back.textContent = '‹ ' + (ex ? 'Back to the program' : 'Back to results');
     current = { file: null, blob: null, title: built.rep.title };
     els.sheetTitle.innerHTML = esc(built.rep.title) + '<small>' + esc(built.file) + '</small>';
     els.pages.innerHTML = '<p class="sheet-msg">Building the report…</p>';
@@ -1224,6 +1240,11 @@
   // One button wipes every section (names, results, notes, tester details), the saved draft and
   // the last report built, after a check that lists what will go.
   function toolContent(t) {
+    if (t === 'ex') {                                  // Exercises: the exercises count; any other text is a detail
+      var x = state.ex, xc = exCounts();
+      var more = xc.sections > 0 || !blank(x.meta.name) || !blank(x.meta.practitioner) || !blank(x.title) || !blank(x.instructions);
+      return { results: xc.exercises, any: xc.exercises > 0 || more, name: String(x.meta.name || '').trim(), unit: ['exercise', 'exercises'] };
+    }
     var s = state[t], n = 0, details = false;
     Object.keys(s.values || {}).forEach(function (k) {
       var v = s.values[k] || {};
@@ -1279,11 +1300,11 @@
   }
   function openClearDialog() {
     var any = false;
-    els.clearList.innerHTML = TOOLS.map(function (t) {
-      var c = toolContent(t);
+    els.clearList.innerHTML = TOOLS.concat(['ex']).map(function (t) {
+      var c = toolContent(t), u = c.unit || ['result', 'results'];
       if (c.any) any = true;
       var d = !c.any ? 'nothing entered'
-        : (c.name || 'no name') + ' · ' + (c.results ? c.results + (c.results === 1 ? ' result' : ' results') : 'details only');
+        : (c.name || 'no name') + ' · ' + (c.results ? c.results + ' ' + (c.results === 1 ? u[0] : u[1]) : 'details only');
       return '<li' + (c.any ? ' class="has-data"' : '') + '><span class="cl-t">' + TOOL_NAMES[t] + '</span><span class="cl-d">' + esc(d) + '</span></li>';
     }).join('');
     if (!any) { toast('Nothing to clear — every section is already empty'); return; }
@@ -1291,6 +1312,7 @@
   }
   function clearAllData() {
     TOOLS.forEach(function (t) { state[t] = freshTool(t); });
+    state.ex = freshEx();
     tidyState();
     // an AI draft still on its way belongs to the athlete just cleared: drop it when it arrives
     aiGen++;
@@ -1758,24 +1780,25 @@
     }, Promise.resolve()).then(function () { return out; });
   }
   function startScan(files) {
-    var t = state.tool;
+    var t = state.tool, exm = t === 'ex';                 // exm: the Exercises tab's own prompt, schema and apply step
     if (!files.length || scanBusy) return;
-    var cfg = scanCfg();
+    var cfg = exm ? exScanCfg() : scanCfg();
     function fail(msg) { scanInfo = { tool: t, kind: 'error', text: msg }; renderScanBar(); }
     if (!DATA.ai || !cfg.model) return fail('The AI settings file (interpretation.json) didn’t load. Reopen the app while online.');
     var photos = files.filter(function (f) { return !f.type || f.type.indexOf('image/') === 0; });
-    if (!photos.length) return fail('That file isn’t a photo. Choose a photo of your notes.');
+    if (!photos.length) return fail(exm ? 'That file isn’t a photo. Choose a photo of the exercise page.' : 'That file isn’t a photo. Choose a photo of your notes.');
     if (!aiKey()) {
-      openAiSettings(function () { if (state.tool === t) startScan(files); },
-        'To read photos of your notes or VALD screenshots, the app needs a Claude API key. You only need to do this once on each device.');
+      openAiSettings(function () { if (state.tool === t) startScan(files); }, exm
+        ? 'To read photos of a handwritten exercise page, the app needs a Claude API key. You only need to do this once on each device.'
+        : 'To read photos of your notes or VALD screenshots, the app needs a Claude API key. You only need to do this once on each device.');
       return;
     }
-    if (navigator.onLine === false) return fail('No internet connection. Connect to scan your notes, or type the results in.');
+    if (navigator.onLine === false) return fail(exm ? 'No internet connection. Connect to scan the exercise page, or type the exercises in.' : 'No internet connection. Connect to scan your notes, or type the results in.');
     var max = cfg.max_photos || 6, extra = photos.length > max ? photos.length - max : 0;
     photos = photos.slice(0, max);
-    var gen = scanGen, list = scanList(t);
+    var gen = scanGen, list = exm ? null : scanList(t), nPhotos = photos.length;
     scanBusy = t;
-    scanInfo = { tool: t, kind: 'busy', text: 'Reading ' + (photos.length === 1 ? 'your notes' : photos.length + ' photos') + '… this can take up to a minute.' };
+    scanInfo = { tool: t, kind: 'busy', text: 'Reading ' + (nPhotos === 1 ? (exm ? 'the exercise page' : 'your notes') : nPhotos + ' photos') + '… this can take up to a minute.' };
     renderScanBar();
     prepareAll(photos, cfg.max_edge || 2000).then(function (images) {
       if (gen !== scanGen) throw null;
@@ -1784,11 +1807,12 @@
         if (images.length > 1) content.push({ type: 'text', text: 'Photo ' + (i + 1) + ':' });
         content.push({ type: 'image', source: { type: 'base64', media_type: im.media_type, data: im.data } });
       });
-      content.push({ type: 'text', text: scanPrompt(t, list) });
+      // Exercises: only the photos and a fixed request go to Claude, never anything from the patient card or the program
+      content.push({ type: 'text', text: exm ? exScanRequest(images.length) : scanPrompt(t, list) });
       var body = {
         model: cfg.model, max_tokens: cfg.max_tokens || 8000, system: [].concat(cfg.system || []).join('\n'),
         messages: [{ role: 'user', content: content }],
-        output_config: { format: { type: 'json_schema', schema: scanSchema(list) } }
+        output_config: { format: { type: 'json_schema', schema: exm ? exScanSchema() : scanSchema(list) } }
       };
       if (cfg.effort) body.output_config.effort = cfg.effort;
       return claudeRequest(aiKey(), body, cfg.endpoint, cfg.timeout_s || 120, 'read the photo');
@@ -1798,7 +1822,7 @@
       if (j.stop_reason === 'refusal') throw new Error('Claude couldn’t read these notes. Try a clearer photo.');
       var out;
       try { out = JSON.parse(replyText(j)); } catch (e) { throw new Error('Claude’s answer couldn’t be read. Try again.'); }
-      applyScan(t, out, list);
+      if (exm) applyExScan(out, nPhotos); else applyScan(t, out, list);
       if (extra) scanInfo.unclear.unshift('Only the first ' + max + ' photos were read (' + extra + (extra === 1 ? ' more was' : ' more were') + ' left out). Scan the rest separately.');
     }).catch(function (err) {
       if (gen !== scanGen || err === null) return;
@@ -1806,7 +1830,9 @@
     }).then(function () {
       if (gen !== scanGen) return;
       scanBusy = null;
-      if (state.tool === t && scanInfo && scanInfo.undo) { showFilled(t); retest.tool = null; refresh(); applyScanMarks(); }
+      if (state.tool === t && scanInfo && scanInfo.undo) {
+        if (exm) showExScan(); else { showFilled(t); retest.tool = null; refresh(); applyScanMarks(); }
+      }
       renderScanBar();
       var bar = $('scanBar');
       if (bar && !bar.hidden && bar.scrollIntoView && state.tool === t) {
@@ -1865,6 +1891,7 @@
   }
   // Undo puts back what each box held before the scan, except boxes changed by hand since
   function undoScan() {
+    if (state.tool === 'ex') { undoExScan(); return; }
     var t = state.tool, u = scanInfo && scanInfo.tool === t && scanInfo.undo;
     if (!u) return;
     var s = state[t], kept = 0;
@@ -1899,6 +1926,7 @@
   }
   function applyScanMarks() {
     var t = state.tool;
+    if (t === 'ex') { applyExMarks(); return; }
     els.entry.querySelectorAll('.scanned').forEach(function (el) { el.classList.remove('scanned'); });
     Object.keys(state[t].scanned || {}).forEach(function (k) {
       var i = k.lastIndexOf('|'), el = markEl(t, k.slice(0, i), k.slice(i + 1));
@@ -1918,7 +1946,7 @@
     if (btn) {
       btn.classList.toggle('busy', !!scanBusy);
       btn.setAttribute('aria-disabled', String(!!scanBusy));
-      btn.querySelector('[data-label]').textContent = scanBusy ? 'Reading…' : 'Scan notes';
+      btn.querySelector('[data-label]').textContent = scanBusy ? 'Reading…' : (t === 'ex' ? 'Scan exercise page' : 'Scan notes');
       var inp = $('scanFiles');
       if (inp) inp.disabled = !!scanBusy;
     }
@@ -1931,7 +1959,10 @@
     if (info.kind === 'busy') { bar.innerHTML = '<span class="scan-ico">' + CAMERA + '</span><span class="scan-msg">' + esc(info.text) + '</span>'; return; }
     if (info.kind === 'error') { bar.innerHTML = '<span class="scan-msg">' + esc(info.text) + '</span>' + close; return; }
     var extra = [info.date ? 'test date' : '', info.mass ? 'body mass' : ''].filter(Boolean);
-    var html = '<span class="scan-ico">' + CAMERA + '</span>' + (info.kind === 'empty'
+    var html = '<span class="scan-ico">' + CAMERA + '</span>' + (t === 'ex' ? (info.kind === 'empty'
+      ? '<span class="scan-msg">No exercises were found on the ' + (info.photos > 1 ? 'photos' : 'photo') + '. Check it’s a photo of the exercise page, or try a clearer photo. Nothing was changed.</span>'
+      : '<span class="scan-msg"><b>Filled ' + info.n + (info.n === 1 ? ' exercise' : ' exercises') + ' from your notes.</b> Check them against the page before creating the handout.</span>')
+      : info.kind === 'empty'
       ? '<span class="scan-msg">Nothing on the photo matched the ' + esc(TOOL_NAMES[t]) + ' tests' + (extra.length ? ' (only the ' + extra.join(' and ') + ')' : '') + '. Check you’re on the right tab, or try a clearer photo.</span>'
       : '<span class="scan-msg"><b>Filled ' + info.n + (info.n === 1 ? ' result' : ' results') + (extra.length ? ' and the ' + extra.join(' and ') : '') + ' from your notes.</b> Check the highlighted boxes against the paper or screenshot before creating the report.</span>');
     if (info.undo) html += '<button type="button" class="quiet scan-undo" data-action="scan-undo">Undo</button>';
@@ -1940,6 +1971,393 @@
       html += '<div class="scan-unclear"><b>Worth a look:</b><ul>' + info.unclear.map(function (u) { return '<li>' + esc(u) + '</li>'; }).join('') + '</ul></div>';
     }
     bar.innerHTML = html;
+  }
+
+  // ------------------------------------------------------------------ exercise program (v10)
+  // A handwritten exercise page becomes an editable table and a branded PDF handout. The practitioner photographs the
+  // page (Scan exercise page) or types the exercises; Claude only ever sees the photos and a fixed request. The table is
+  // a flat list of section headings and exercise rows, so moving a row up or down past a heading moves it into that
+  // section. Every value is free text ("8–12", "30 s", "AMRAP", "Red band"). Exercise, Sets, Reps and Load always show;
+  // Rest, Tempo, Side and Notes are a row's details, shown when written (as columns only when used anywhere) or opened
+  // with More. The program is kept in the draft only (state.ex) until Clear all: never in the client records.
+  var EX_FIELDS = ['name', 'sets', 'reps', 'load', 'rest', 'tempo', 'side', 'notes'];
+  var EX_MAIN = ['sets', 'reps', 'load'];
+  var EX_DETAIL = ['rest', 'tempo', 'side', 'notes'];
+  var EX_LABEL = { name: 'Exercise', sets: 'Sets', reps: 'Reps', load: 'Load', rest: 'Rest', tempo: 'Tempo', side: 'Side', notes: 'Notes' };
+  var EX_LEN = { name: 120, notes: 300, heading: 80, title: 120, instructions: 1000 };   // characters kept (other boxes: 60)
+  var EX_WORDS = { name: 1, load: 1, side: 1, notes: 1 };                              // boxes that start with a capital
+  var ICON_UP = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M6 11l6-6 6 6"/></svg>';
+  var ICON_DOWN = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M6 13l6 6 6-6"/></svg>';
+  var ICON_X = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/></svg>';
+
+  function freshEx() { return { meta: { name: '', date: todayIso(), practitioner: '' }, title: '', instructions: '', items: [], seq: 1, scanned: {} }; }
+  function exStr(v) { return typeof v === 'string' ? v : (typeof v === 'number' && isFinite(v) ? String(v) : ''); }
+  // drafts from v9 and earlier have no program; anything malformed in a stored one is tidied
+  function tidyEx() {
+    var x = state.ex;
+    if (!x || typeof x !== 'object' || Array.isArray(x)) x = state.ex = freshEx();
+    if (!x.meta || typeof x.meta !== 'object' || Array.isArray(x.meta)) x.meta = { name: '', date: todayIso(), practitioner: '' };
+    var dt = x.meta.date;                              // a date cleared by hand stays cleared; anything unreadable becomes today
+    x.meta = { name: exStr(x.meta.name), date: dt === '' || (typeof dt === 'string' && E.parseDate(dt, ['Y-m-d'])) ? dt : todayIso(), practitioner: exStr(x.meta.practitioner) };
+    x.title = exStr(x.title); x.instructions = exStr(x.instructions);
+    var seen = {}, top = 0, list = [];
+    (Array.isArray(x.items) ? x.items : []).forEach(function (it) {
+      if (!it || typeof it !== 'object' || (it.kind !== 'ex' && it.kind !== 'section')) return;
+      var id = typeof it.id === 'string' && /^r\d{1,9}$/.test(it.id) && !seen[it.id] ? it.id : '';
+      if (id) { seen[id] = 1; top = Math.max(top, +id.slice(1)); }
+      var o = { kind: it.kind, id: id };
+      if (it.kind === 'section') o.heading = exStr(it.heading);
+      else { EX_FIELDS.forEach(function (f) { o[f] = exStr(it[f]); }); o.open = it.open === true; }
+      list.push(o);
+    });
+    var seq = typeof x.seq === 'number' && x.seq % 1 === 0 && x.seq > 0 && x.seq < 1e9 ? x.seq : 1;
+    x.seq = Math.max(seq, top + 1);
+    list.forEach(function (o) { if (!o.id) o.id = 'r' + (x.seq++); });
+    x.items = list;
+    var sc = x.scanned && typeof x.scanned === 'object' && !Array.isArray(x.scanned) ? x.scanned : {}, keep = {};
+    Object.keys(sc).forEach(function (k) { if (sc[k] === true && (k === 'title' || k === 'instructions' || seen[k])) keep[k] = true; });
+    x.scanned = keep;
+  }
+  function newExRow(o) {
+    var r = { kind: 'ex', id: 'r' + (state.ex.seq++), open: false };
+    EX_FIELDS.forEach(function (f) { r[f] = o && o[f] ? o[f] : ''; });
+    return r;
+  }
+  function newExSection(h) { return { kind: 'section', id: 'r' + (state.ex.seq++), heading: h || '' }; }
+  function exIndex(id) { for (var i = 0; i < state.ex.items.length; i++) if (state.ex.items[i].id === id) return i; return -1; }
+  function exItem(id) { var i = exIndex(id); return i < 0 ? null : state.ex.items[i]; }
+  function exFilled(it) { return it.kind === 'ex' && EX_FIELDS.some(function (f) { return !blank(it[f]); }); }
+  function exHasDet(it) { return EX_DETAIL.some(function (f) { return !blank(it[f]); }); }
+  function exUsed() {                                  // detail columns written for at least one exercise
+    var u = {};
+    state.ex.items.forEach(function (it) { if (it.kind === 'ex') EX_DETAIL.forEach(function (f) { if (!blank(it[f])) u[f] = true; }); });
+    return u;
+  }
+  function exCounts() {                                // what the summary, the dock and Clear all count
+    var n = 0, s = 0;
+    state.ex.items.forEach(function (it) { if (it.kind === 'section') { if (!blank(it.heading)) s++; } else if (exFilled(it)) n++; });
+    return { exercises: n, sections: s };
+  }
+  function exColumns() {
+    var u = exUsed();
+    return ['name'].concat(EX_MAIN, EX_DETAIL.filter(function (f) { return u[f]; }));
+  }
+
+  // ---- the screen: patient card (with the scan button), program card (title, instructions, the table)
+  function renderEx() {
+    els.entry.innerHTML = '<div class="pagehead"><h1>' + esc(HEAD.ex[0]) + '</h1><p>' + esc(HEAD.ex[1]) + '</p></div>' + exPatientCard() + exProgramCard();
+    fitExNotes();
+    fitExWraps();
+    applyExMarks();
+    renderScanBar();
+    refreshEx();
+  }
+  function exPatientCard() {
+    return '<section class="card athlete ex-patient" aria-labelledby="exPatientH"><div class="card-head"><h2 id="exPatientH">Patient</h2><div class="head-actions">' +
+      '<label class="ghost file-btn scan-btn" id="scanBtn" for="scanFiles">' + CAMERA + '<span data-label>Scan exercise page</span>' +
+      '<input id="scanFiles" type="file" accept="image/*" multiple aria-label="Scan exercise page: photos or screenshots of a handwritten exercise program, several pages at once"></label>' +
+      '</div></div><div class="fields">' +
+      field('ex', 'name', 'Patient name', { cls: 'wide', words: true, plain: true }) + field('ex', 'date', 'Date', { type: 'date' }) +
+      field('ex', 'practitioner', 'Practitioner', { words: true }) +
+      '</div><div class="scan-bar" id="scanBar" role="status" aria-live="polite" hidden></div></section>';
+  }
+  function exProgramCard() {
+    var x = state.ex;
+    return '<section class="card ex-prog" id="exCard" aria-labelledby="exProgH"><div class="card-head"><h2 id="exProgH">Program</h2><span class="ex-count" id="exCount"></span></div>' +
+      '<div class="ex-top"><label class="f" for="ex-title"><span>Title</span><input id="ex-title" data-ex="title" type="text" value="' + esc(x.title) + '" maxlength="' + EX_LEN.title + '"' +
+      ' placeholder="Optional, e.g. Knee rehab – phase 2" autocapitalize="sentences" autocomplete="off" enterkeyhint="next"></label>' +
+      '<label class="f" for="ex-instructions"><span>General instructions</span><textarea id="ex-instructions" data-ex="instructions" rows="2" maxlength="' + EX_LEN.instructions + '"' +
+      ' placeholder="Optional, e.g. 3 × per week. Ice after if sore." autocapitalize="sentences">' + esc(x.instructions) + '</textarea></label></div>' +
+      '<div class="ex-table" id="exTable">' + exTableHtml() + '</div>' +
+      '<div class="ex-add"><button type="button" class="ghost" id="exAdd" data-action="ex-add">+ Exercise</button>' +
+      '<button type="button" class="ghost" id="exAddSec" data-action="ex-add-sec">+ Section</button></div></section>';
+  }
+  // The name and the notes wrap (a one-line box that grows, so a long name can be checked against the page in full);
+  // Return still moves to the next box. The other boxes are ordinary one-line inputs.
+  var EX_WRAP = { name: 1, notes: 1 };
+  function exInput(it, f, who) {
+    var words = EX_WORDS[f] ? ' autocapitalize="sentences"' : ' autocapitalize="none" autocorrect="off" spellcheck="false"';
+    var attrs = ' id="ex-' + it.id + '-' + f + '" data-f="' + f + '" maxlength="' + (EX_LEN[f] || 60) + '" placeholder="' + EX_LABEL[f] + '" aria-label="' + who + ' ' + f + '"' +
+      words + ' autocomplete="off" enterkeyhint="next"';
+    if (EX_WRAP[f]) return '<textarea class="ex-in ex-wrap ex-' + f + '" rows="1"' + attrs + '>' + esc(it[f]) + '</textarea>';
+    return '<input class="ex-in ex-' + f + '" type="text" value="' + esc(it[f]) + '"' + attrs + '>';
+  }
+  function fitExWraps() {                              // each wrapping box as tall as its text (hidden ones are fitted when shown)
+    var list = Array.prototype.filter.call(els.entry.querySelectorAll('textarea.ex-wrap'), function (el) { return el.getClientRects().length > 0; });
+    list.forEach(function (el) { el.style.height = 'auto'; });
+    var hs = list.map(function (el) { return el.scrollHeight; });
+    list.forEach(function (el, i) { el.style.height = (hs[i] + 2) + 'px'; });
+  }
+  function exTableHtml() {
+    var items = state.ex.items;
+    if (!items.length) return '<p class="ex-empty">No exercises yet. Scan the exercise page, or add them below.</p>';
+    var used = exUsed(), n = 0, s = 0, last = items.length - 1;
+    var html = '<div class="ex-cols" aria-hidden="true"><span class="c-name">Exercise</span><span class="c-sets">Sets</span><span class="c-reps">Reps</span><span class="c-load">Load</span></div>';
+    items.forEach(function (it, i) {
+      var sec = it.kind === 'section', who = sec ? 'Section ' + (++s) : 'Exercise ' + (++n), lower = who.toLowerCase(), id = 'ex-' + it.id;
+      var acts = '<div class="ex-acts">' + (sec ? '<span></span>'
+        : '<button type="button" class="ex-btn ex-more" id="' + id + '-more" data-action="ex-more" aria-expanded="' + it.open + '" aria-controls="' + id + '-det">' +
+          (it.open ? 'Less' : 'More') + '<span class="vh"> details, ' + lower + '</span></button>') +
+        '<button type="button" class="ex-btn" id="' + id + '-up" data-action="ex-up" aria-label="Move ' + lower + ' up"' + (i === 0 ? ' disabled' : '') + '>' + ICON_UP + '</button>' +
+        '<button type="button" class="ex-btn" id="' + id + '-down" data-action="ex-down" aria-label="Move ' + lower + ' down"' + (i === last ? ' disabled' : '') + '>' + ICON_DOWN + '</button>' +
+        '<button type="button" class="ex-btn ex-del" id="' + id + '-del" data-action="ex-del" aria-label="Delete ' + lower + '">' + ICON_X + '</button></div>';
+      if (sec) {
+        html += '<div class="ex-row ex-sec" id="' + id + '" data-id="' + it.id + '" role="group" aria-label="' + who + '">' +
+          '<input class="ex-in ex-heading" id="' + id + '-heading" data-f="heading" type="text" value="' + esc(it.heading) + '" maxlength="' + EX_LEN.heading + '"' +
+          ' placeholder="Section heading, e.g. Warm-up" aria-label="' + who + ' heading" autocapitalize="sentences" autocomplete="off" enterkeyhint="next">' + acts + '</div>';
+        return;
+      }
+      html += '<div class="ex-row" id="' + id + '" data-id="' + it.id + '" role="group" aria-label="' + who + '"><span class="ex-num" aria-hidden="true">' + n + '</span>' +
+        exInput(it, 'name', who) +
+        EX_MAIN.map(function (f) { return '<label class="ex-cell c-' + f + '"><span class="ex-cl">' + EX_LABEL[f] + '</span>' + exInput(it, f, who) + '</label>'; }).join('') + acts +
+        '<div class="ex-det" id="' + id + '-det"' + (it.open || exHasDet(it) ? '' : ' hidden') + '>' + EX_DETAIL.map(function (f) {
+          return '<label class="ex-cell c-' + f + '"' + (it.open || used[f] ? '' : ' hidden') + '><span class="ex-cl">' + EX_LABEL[f] + '</span>' + exInput(it, f, who) + '</label>';
+        }).join('') + '</div></div>';
+    });
+    return html;
+  }
+  function renderExTable() {
+    var tbl = $('exTable');
+    if (!tbl) return;
+    tbl.innerHTML = exTableHtml();
+    fitExWraps();
+    applyExMarks();
+    refreshEx();
+  }
+  // A detail column comes and goes as it is first written or last cleared: the other rows show or hide that box. The row
+  // being typed in is left alone (nothing moves under the finger); it is tidied at the next redraw.
+  function syncExDetails(except) {
+    var used = exUsed(), changed = false;
+    els.entry.querySelectorAll('.ex-row[data-id]').forEach(function (row) {
+      var it = row === except ? null : exItem(row.dataset.id);
+      if (!it || it.kind !== 'ex') return;
+      EX_DETAIL.forEach(function (f) {
+        var c = row.querySelector('.ex-det .c-' + f), hide = !(it.open || used[f]);
+        if (c && c.hidden !== hide) { c.hidden = hide; changed = true; }
+      });
+    });
+    if (changed) fitExWraps();                         // a notes box just shown is fitted to its text
+  }
+  function applyExMarks() {                            // the blue "check me" look on rows (and title, instructions) filled by a scan
+    var sc = state.ex.scanned;
+    els.entry.querySelectorAll('.ex-row[data-id]').forEach(function (row) { row.classList.toggle('scanned', !!sc[row.dataset.id]); });
+    ['title', 'instructions'].forEach(function (k) { var el = $('ex-' + k); if (el) el.classList.toggle('scanned', !!sc[k]); });
+  }
+  function fitExNotes() {                              // grow the instructions box to show all of it
+    var ta = $('ex-instructions');
+    if (!ta) return;
+    ta.style.height = 'auto';
+    ta.style.height = Math.max(76, ta.scrollHeight + 2) + 'px';
+  }
+  function focusEx(id) {
+    var el = $(id);
+    if (!el) return;
+    try { el.focus({ preventScroll: true }); } catch (e) { el.focus(); }
+    var r = el.getBoundingClientRect();
+    if (r.top < 120 || r.bottom > window.innerHeight - 110) el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  }
+  function refreshEx() {
+    var c = exCounts(), cnt = $('exCount');
+    if (cnt) cnt.textContent = c.exercises ? c.exercises + (c.exercises === 1 ? ' exercise' : ' exercises') + (c.sections ? ' · ' + c.sections + (c.sections === 1 ? ' section' : ' sections') : '') : '';
+    renderExSummary(c);
+    saveDraft();
+  }
+  function renderExSummary(c) {
+    var why = c.exercises ? '' : 'Add at least one exercise to create the handout.';
+    var cols = exColumns(), later = EX_DETAIL.filter(function (f) { return cols.indexOf(f) < 0; }).map(function (f) { return EX_LABEL[f]; });
+    var laterText = later.length ? (later.length > 1 ? later.slice(0, -1).join(', ') + ' and ' + later[later.length - 1] : later[0]) + (later.length > 1 ? ' are' : ' is') + ' added when written for any exercise.' : '';
+    els.summary.innerHTML = '<div class="sum ex-sum"><div class="sum-scroll"><h2>Exercise handout</h2><p class="against">A branded PDF for the patient to take home.</p>' +
+      '<div class="tally ex-tally"><div><b>' + c.sections + '</b><span>' + (c.sections === 1 ? 'Section' : 'Sections') + '</span></div>' +
+      '<div><b>' + c.exercises + '</b><span>' + (c.exercises === 1 ? 'Exercise' : 'Exercises') + '</span></div></div>' +
+      '<h3>Handout columns</h3><p class="ex-colsline">' + esc(cols.map(function (f) { return EX_LABEL[f]; }).join(' · ')) + '</p>' +
+      (laterText ? '<p class="fine">' + esc(laterText) + '</p>' : '') +
+      '</div><div class="sum-foot"><button type="button" class="primary make" data-action="report"' + (why ? ' disabled' : '') + '>Create handout</button>' +
+      '<p class="fine">' + esc(why || 'Opens a preview you can share by AirDrop, Mail or Messages, or save to Files.') + '</p>' +
+      '<p class="fine client-line">Not saved to client records: the program stays in this draft until Clear all.</p></div></div>';
+    els.dock.innerHTML = '<div class="dt"><span class="ex-dock"><b>' + c.exercises + '</b> ' + (c.exercises === 1 ? 'exercise' : 'exercises') +
+      (c.sections ? ' · <b>' + c.sections + '</b> ' + (c.sections === 1 ? 'section' : 'sections') : '') + '</span></div>' +
+      '<button type="button" class="primary" data-action="report"' + (why ? ' disabled' : '') + '>Create handout</button>';
+    els.dock.classList.remove('has-check');
+  }
+
+  // ---- editing
+  function onExInput(el) {
+    var x = state.ex;
+    if (el.dataset.meta) { x.meta[el.dataset.meta] = el.value; refreshEx(); return; }
+    if (el.dataset.ex) {                               // the title or the general instructions
+      x[el.dataset.ex] = el.value;
+      if (x.scanned[el.dataset.ex]) { delete x.scanned[el.dataset.ex]; el.classList.remove('scanned'); }
+      if (el.id === 'ex-instructions') fitExNotes();
+      refreshEx();
+      return;
+    }
+    var row = el.closest('.ex-row'), it = row && exItem(row.dataset.id), f = el.dataset.f;
+    if (!it || !f) return;
+    if (el.tagName === 'TEXTAREA' && /[\r\n]/.test(el.value)) {    // one line: a pasted line break becomes a space
+      var at = el.selectionStart;
+      el.value = el.value.replace(/\s*[\r\n]+\s*/g, ' ');
+      try { el.setSelectionRange(Math.min(at, el.value.length), Math.min(at, el.value.length)); } catch (e) { /* not focused */ }
+    }
+    if (el.tagName === 'TEXTAREA') { el.style.height = 'auto'; el.style.height = (el.scrollHeight + 2) + 'px'; }
+    it[f] = el.value;
+    if (x.scanned[it.id]) { delete x.scanned[it.id]; row.classList.remove('scanned'); }   // edited: checked
+    if (EX_DETAIL.indexOf(f) >= 0) syncExDetails(row);
+    refreshEx();
+  }
+  function exButton(b) {
+    var a = b.dataset.action, x = state.ex;
+    if (a === 'ex-add' || a === 'ex-add-sec') {
+      var add = a === 'ex-add' ? newExRow() : newExSection();
+      x.items.push(add);
+      renderExTable();
+      focusEx('ex-' + add.id + '-' + (add.kind === 'ex' ? 'name' : 'heading'));
+      return true;
+    }
+    if (!a || a.indexOf('ex-') !== 0) return false;
+    var row = b.closest('.ex-row'), i = row ? exIndex(row.dataset.id) : -1;
+    if (i < 0) return true;
+    var it = x.items[i];
+    if (a === 'ex-up' || a === 'ex-down') {
+      var j = a === 'ex-up' ? i - 1 : i + 1;
+      if (j < 0 || j >= x.items.length) return true;
+      x.items[i] = x.items[j]; x.items[j] = it;
+      renderExTable();
+      var same = $('ex-' + it.id + (a === 'ex-up' ? '-up' : '-down'));   // keep the place, so a second tap moves it again
+      focusEx(same && !same.disabled ? same.id : 'ex-' + it.id + (a === 'ex-up' ? '-down' : '-up'));
+      return true;
+    }
+    if (a === 'ex-del') {                              // no confirm: one row, and a scan can be undone
+      x.items.splice(i, 1);
+      delete x.scanned[it.id];
+      renderExTable();
+      var next = x.items[i];                           // the row that took its place, else + Exercise
+      focusEx(next ? 'ex-' + next.id + '-del' : 'exAdd');
+      return true;
+    }
+    if (a === 'ex-more') {
+      it.open = !it.open;
+      renderExTable();
+      focusEx('ex-' + it.id + '-more');
+      return true;
+    }
+    return false;
+  }
+
+  // ---- the handout
+  function buildHandout() {
+    var x = state.ex;
+    if (!exCounts().exercises) return null;
+    var groups = [], cur = null;
+    x.items.forEach(function (it) {
+      if (it.kind === 'section') { if (!blank(it.heading)) { cur = { heading: clean1(it.heading), rows: [] }; groups.push(cur); } return; }
+      if (!exFilled(it)) return;
+      if (!cur) { cur = { heading: '', rows: [] }; groups.push(cur); }
+      var r = {};
+      EX_FIELDS.forEach(function (f) { r[f] = clean1(it[f]); });
+      cur.rows.push(r);
+    });
+    var m = x.meta, name = clean1(m.name);
+    return {
+      file: name ? name.replace(/[\\/:*?"<>|]+/g, '-').replace(/ /g, '_') + '_exercises.pdf' : 'exercises.pdf',
+      rep: window.BHReport.exercises({
+        meta: { name: name, date: E.displayIso(m.date), practitioner: clean1(m.practitioner) },
+        title: clean1(x.title), instructions: String(x.instructions || '').trim(),
+        groups: groups.filter(function (g) { return g.rows.length; })
+      })
+    };
+  }
+
+  // ---- Scan exercise page: the photos go to Claude with this prompt and schema (and nothing from the patient card)
+  var EX_SCAN_DEFAULT = {
+    effort: 'medium', max_tokens: 8000, timeout_s: 120, max_edge: 2000, max_photos: 6,
+    system: [
+      'You read exercise programs from photos taken at BASE Health Noosa, a sports physiotherapy clinic in Queensland, Australia. The photos are a physiotherapist’s handwritten exercise program for a patient. Your answer fills a table that the practitioner checks and then prints as a handout for the patient.',
+      'Do your best with what is written. Any of sets, reps, load, rest, tempo, side or notes may be missing for an exercise: leave those fields as empty strings. Never invent exercises or values, and never fill in anything that is not written on the page. Keep the exercises in the order they are written.',
+      'Tidy each exercise name into a clear, full name in sentence case, expanding common shorthand: SL = single-leg, DL = deadlift, BW = body weight, DB = dumbbell, KB = kettlebell, BB = barbell, TB = TheraBand, ecc = eccentric, iso = isometric, ext = extension, flex = flexion, and other standard abbreviations like these. Well-known exercise names that are normally written as initials, such as RDL, stay as they are. Keep the equipment and variations that are written (for example "SL RDL" becomes "Single-leg RDL" and "KB swing" becomes "Kettlebell swing"). When you are not sure what a piece of shorthand means, keep it exactly as written and add a note to unclear.',
+      'Read the usual notation: "3x10" is sets 3 and reps 10; "3 x 8-12" is reps "8–12" (with an en dash); "3 x 30s" is reps "30 s"; "@20kg" or "20kg" is load "20 kg"; "BW" as a load is "Body weight"; "e/s", "ea side" or "each leg" is side "Each side", and "L only" is side "Left" ("R only" is "Right"); "r 90s" or "90s rest" is rest "90 s"; a tempo such as "3-1-1" is tempo, copied as written. Other short cues for an exercise (for example "slow lowering" or "keep hips level") go in its notes.',
+      'Copy numbers exactly as written: don’t round, total or convert them. Keep units as written (don’t convert lb to kg or minutes to seconds), with a space between a number and its unit (20 kg, 30 s, 2 min).',
+      'Section headings on the page (for example Warm-up, Day A, Day B, Gym or Home) become sections, in order, each holding the exercises written under it. If the page has no headings, return one section with an empty heading holding every exercise.',
+      'Instructions for the whole program rather than one exercise (for example "3x/week" or "ice after") go in the top-level notes, written out plainly (for example "3 times a week. Ice after."). A title for the whole program, if one is written, goes in title; otherwise title is an empty string.',
+      'Ignore names and any other personal details on the page (the patient’s name, date of birth, phone number or address) and never include them in your answer.',
+      'Put a short note in unclear for anything that is hard to read or ambiguous, naming the exercise it is about (for example "Step-up: 10 or 16 reps?"), and for any shorthand kept as written. Leave unclear empty when everything is clear.'
+    ]
+  };
+  function exScanCfg() {                               // same model, key and endpoint as the interpretation; "exercise_scan" in interpretation.json overrides
+    var cfg = Object.assign({}, EX_SCAN_DEFAULT), ai = DATA.ai || {};
+    cfg.model = ai.model; cfg.endpoint = ai.endpoint;
+    if (ai.exercise_scan && typeof ai.exercise_scan === 'object') Object.keys(ai.exercise_scan).forEach(function (k) { cfg[k] = ai.exercise_scan[k]; });
+    return cfg;
+  }
+  function exScanRequest(n) {
+    return 'Turn the handwritten exercise program in ' + (n > 1 ? 'these ' + n + ' photos (pages in order)' : 'this photo') +
+      ' into the table format: the title and general instructions if written, then each section in the order written, with its exercises. Use an empty string for anything that isn’t written.';
+  }
+  function exScanSchema() {
+    var str = { type: 'string' }, ex = { type: 'object', properties: {}, required: EX_FIELDS.slice(), additionalProperties: false };
+    EX_FIELDS.forEach(function (f) { ex.properties[f] = str; });
+    return {
+      type: 'object',
+      properties: {
+        title: str, notes: str,
+        sections: { type: 'array', items: { type: 'object', properties: { heading: str, exercises: { type: 'array', items: ex } }, required: ['heading', 'exercises'], additionalProperties: false } },
+        unclear: { type: 'array', items: str }
+      },
+      required: ['title', 'notes', 'sections', 'unclear'],
+      additionalProperties: false
+    };
+  }
+  // a value from Claude, tidied: no emoji or invisible characters, one line (the instructions keep their line breaks),
+  // a lone dash or "n/a" counts as not written, and nothing longer than the box allows
+  function exTidy(v, f) {
+    var s = String(v == null ? '' : v);
+    if (s.normalize) s = s.normalize('NFC');
+    s = s.replace(/[\uD800-\uDFFF]/g, '').replace(/[\uFE0F\u200B-\u200D\u2060\uFEFF]/g, '');
+    s = f === 'instructions' ? s.replace(/\r\n?/g, '\n').replace(/[ \t\u00A0]+/g, ' ').replace(/ *\n */g, '\n').replace(/\n{3,}/g, '\n\n').trim()
+      : s.replace(/\s+/g, ' ').trim();
+    if (/^(?:[-–—]+|n\/?a)$/i.test(s)) return '';
+    var max = EX_LEN[f] || 60;
+    return s.length > max ? s.slice(0, max).trim() : s;
+  }
+  // replace the table with the scanned one (the title and instructions only when found); Undo puts back exactly what was there
+  function applyExScan(out, photos) {
+    var x = state.ex, found = [], n = 0;
+    (out && Array.isArray(out.sections) ? out.sections : []).forEach(function (sec) {
+      if (!sec || typeof sec !== 'object') return;
+      var rows = (Array.isArray(sec.exercises) ? sec.exercises : []).map(function (e) {
+        var r = {};
+        EX_FIELDS.forEach(function (f) { r[f] = exTidy(e && typeof e === 'object' ? e[f] : '', f); });
+        return r;
+      }).filter(function (r) { return EX_FIELDS.some(function (f) { return r[f]; }); });
+      if (!rows.length) return;
+      var h = exTidy(sec.heading, 'heading');
+      if (h) found.push({ heading: h });
+      rows.forEach(function (r) { found.push({ row: r }); n++; });
+    });
+    var unclear = (out && Array.isArray(out.unclear) ? out.unclear : []).map(function (u) { return clean1(u); }).filter(Boolean).slice(0, 12);
+    if (!n) { scanInfo = { tool: 'ex', kind: 'empty', n: 0, photos: photos, unclear: unclear, undo: null }; return; }
+    var before = { title: x.title, instructions: x.instructions, items: JSON.parse(JSON.stringify(x.items)), scanned: Object.assign({}, x.scanned), seq: x.seq };
+    var marks = {};
+    x.items = found.map(function (f) { var it = f.heading ? newExSection(f.heading) : newExRow(f.row); marks[it.id] = true; return it; });
+    var title = exTidy(out.title, 'title'), notes = exTidy(out.notes, 'instructions');
+    if (title) { x.title = title; marks.title = true; } else if (x.scanned.title) marks.title = true;
+    if (notes) { x.instructions = notes; marks.instructions = true; } else if (x.scanned.instructions) marks.instructions = true;
+    x.scanned = marks;
+    scanInfo = { tool: 'ex', kind: 'done', n: n, photos: photos, unclear: unclear, undo: before };
+  }
+  function showExScan() {                              // redraw the program without touching the patient card (its keyboard stays put)
+    var x = state.ex, ti = $('ex-title'), tx = $('ex-instructions');
+    if (ti && ti.value !== x.title) ti.value = x.title;
+    if (tx && tx.value !== x.instructions) { tx.value = x.instructions; fitExNotes(); }
+    renderExTable();
+  }
+  function undoExScan() {
+    var u = scanInfo && scanInfo.tool === 'ex' && scanInfo.undo, x = state.ex;
+    if (!u) return;
+    x.title = u.title; x.instructions = u.instructions; x.items = u.items; x.scanned = u.scanned;
+    x.seq = Math.max(x.seq, u.seq);                    // ids are never reused
+    scanInfo = null;
+    render();
+    toast('Scan undone');
   }
 
   // ------------------------------------------------------------------ client records
@@ -2225,7 +2643,7 @@
       DATA.screen = r[0]; DATA.ham = r[1]; DATA.acl = r[2]; DATA.str = r[3]; DATA.ai = r[4];
       DATA.explain = r[5] && r[5].metrics && typeof r[5].metrics === 'object' ? r[5] : { metrics: {} };
       clients = loadClients();
-      state = loadDraft() || { v: 1, tool: 'screen', screen: freshTool('screen'), str: freshTool('str'), ham: freshTool('ham'), acl: freshTool('acl') };
+      state = loadDraft() || { v: 1, tool: 'screen', screen: freshTool('screen'), str: freshTool('str'), ham: freshTool('ham'), acl: freshTool('acl'), ex: freshEx() };
       tidyState();
       els.entry.addEventListener('input', onInput);
       els.entry.addEventListener('change', onChange);
@@ -2269,6 +2687,12 @@
       });
       // the system lets a screen wake lock go when the app is hidden: ask again on coming back, if still needed
       document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible') keepAwake(); });
+      // turning the iPad changes how the exercise names and notes wrap
+      var fitTimer = null;
+      window.addEventListener('resize', function () {
+        clearTimeout(fitTimer);
+        fitTimer = setTimeout(function () { if (state.tool === 'ex') { fitExWraps(); fitExNotes(); } }, 120);
+      });
       render();
     }).catch(function (err) {
       els.entry.innerHTML = '<section class="card error-card"><div class="card-head"><h2>Norms not found</h2></div>' +

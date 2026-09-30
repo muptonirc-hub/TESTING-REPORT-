@@ -521,6 +521,93 @@ button { cursor: pointer; }
 .error-card { border-color: var(--red); }
 .error-card h2 { color: var(--red-ink); }
 
+/* ---------- exercise program (v10): the patient card, then the program card with its table editor */
+.f textarea {
+  display: block; width: 100%; min-width: 0; min-height: 76px; padding: 10px 12px; resize: vertical; overflow-y: auto;
+  border: 1px solid var(--line); border-radius: 10px; background: var(--field); color: var(--fg); font: 17px/1.45 var(--font);
+}
+.f textarea:focus { border-color: var(--teal); outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--teal) 25%, transparent); }
+.f textarea::placeholder { color: color-mix(in srgb, var(--muted) 70%, transparent); }
+.f textarea.scanned { background: var(--scan-soft); border-color: var(--scan-line); box-shadow: inset 0 0 0 1px var(--scan-line); }
+.f textarea.scanned:focus { border-color: var(--teal); box-shadow: 0 0 0 3px color-mix(in srgb, var(--teal) 25%, transparent); }
+.ex-count { font-size: 13px; font-weight: 600; color: var(--muted); font-variant-numeric: tabular-nums; }
+.ex-top { display: grid; gap: 12px; margin-bottom: 16px; }
+.ex-table { container: extable / inline-size; }
+.ex-empty { margin: 0; padding: 18px 14px; border: 1px dashed var(--line-strong); border-radius: 10px; color: var(--muted); font-size: 14px; text-align: center; }
+/* narrow (a phone, or a narrow column): the name on its own line, then sets / reps / load, the details and the row's buttons */
+.ex-cols { display: none; }
+.ex-row {
+  display: grid; align-items: start; column-gap: 8px; row-gap: 8px; padding: 10px 0; border-top: 1px solid var(--line);
+  grid-template-columns: 24px minmax(0, .8fr) minmax(0, 1fr) minmax(0, 1.3fr);
+  grid-template-areas: "num name name name" ". sets reps load" ". det det det" ". acts acts acts";
+}
+.ex-row:has(> .ex-det[hidden]) { grid-template-areas: "num name name name" ". sets reps load" ". acts acts acts"; }   /* no empty details row */
+.ex-num { grid-area: num; text-align: center; line-height: 44px; font-size: 13px; font-weight: 700; color: var(--muted); font-variant-numeric: tabular-nums; }
+.ex-row > .ex-name { grid-area: name; }
+.ex-row > .c-sets { grid-area: sets; }
+.ex-row > .c-reps { grid-area: reps; }
+.ex-row > .c-load { grid-area: load; }
+.ex-acts { grid-area: acts; display: grid; grid-template-columns: 52px 40px 40px 40px; gap: 2px; justify-content: end; }
+.ex-det { grid-area: det; display: flex; flex-wrap: wrap; gap: 8px; }
+.ex-det > .ex-cell { flex: 1 1 84px; }
+.ex-det > .c-notes { flex-basis: 100%; }
+.ex-cell { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.ex-cl { font-size: 11px; font-weight: 700; letter-spacing: .5px; text-transform: uppercase; color: var(--muted); }
+.ex-in {
+  height: 44px; width: 100%; min-width: 0; padding: 0 10px; border: 1px solid var(--line); border-radius: 10px;
+  background: var(--field); color: var(--fg); font-size: 16px; -webkit-appearance: none; appearance: none;   /* 16px: no zoom on focus (iPad) */
+}
+.ex-in:focus { border-color: var(--teal); outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--teal) 25%, transparent); background: var(--surface); }
+.ex-in::placeholder { color: color-mix(in srgb, var(--muted) 55%, transparent); }
+.ex-wrap { display: block; min-height: 44px; padding: 10px; line-height: 22px; font-family: inherit; resize: none; overflow: hidden; }
+.ex-name { font-weight: 600; }
+.ex-sec { grid-template-columns: 24px minmax(0, 1fr) auto; grid-template-areas: "num head acts"; align-items: center; margin-top: 10px; padding: 6px 0; border-top: 0; border-radius: 12px; background: var(--field); }
+.ex-sec::before { content: ""; grid-area: num; justify-self: center; width: 4px; height: 26px; border-radius: 2px; background: var(--teal); }
+.ex-sec .ex-acts { grid-template-columns: 40px 40px 40px; }
+.ex-sec .ex-acts > span:first-child { display: none; }
+.ex-heading { grid-area: head; font-weight: 700; background: var(--surface); }
+.ex-sec + .ex-row { border-top: 0; }
+.ex-btn {
+  width: 40px; height: 44px; padding: 0; border: 0; border-radius: 9px; background: transparent; color: var(--muted);
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.ex-btn:disabled { opacity: .28; cursor: default; }
+.ex-btn:not(:disabled):active { background: var(--field); }
+.ex-more { width: auto; padding: 0 8px; font-size: 14px; font-weight: 600; color: var(--teal-ink); }
+.ex-del { color: var(--red-ink); }
+.ex-row.scanned .ex-in { background: var(--scan-soft); border-color: var(--scan-line); box-shadow: inset 0 0 0 1px var(--scan-line); }
+.ex-row.scanned .ex-in:focus { border-color: var(--teal); box-shadow: 0 0 0 3px color-mix(in srgb, var(--teal) 25%, transparent); }
+.ex-row.scanned .ex-num { color: var(--scan-ink); }
+.ex-add { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; }
+/* wide (iPad): one line per exercise under the column header; a second line for the details when there are any */
+@container extable (min-width: 660px) {
+  .ex-cols, .ex-row { grid-template-columns: 24px minmax(0, 1fr) 56px 80px 116px 178px; }
+  .ex-cols {
+    display: grid; column-gap: 8px; grid-template-areas: "num name sets reps load acts"; padding: 0 0 6px;
+    font-size: 11.5px; font-weight: 700; letter-spacing: .6px; text-transform: uppercase; color: var(--muted);
+  }
+  .ex-cols > span { padding-left: 11px; }
+  .ex-cols .c-name { grid-area: name; }
+  .ex-cols .c-sets { grid-area: sets; }
+  .ex-cols .c-reps { grid-area: reps; }
+  .ex-cols .c-load { grid-area: load; }
+  .ex-row { grid-template-areas: "num name sets reps load acts" ". det det det det det"; }
+  .ex-row:has(> .ex-det[hidden]) { grid-template-areas: "num name sets reps load acts"; }
+  .ex-row > .ex-cell .ex-cl { display: none; }
+  .ex-sec { grid-template-columns: 24px minmax(0, 1fr) 178px; grid-template-areas: "num head acts"; }
+  .ex-sec .ex-acts { grid-template-columns: 52px 40px 40px 40px; }
+  .ex-sec .ex-acts > span:first-child { display: block; }
+  .ex-det > .ex-cell { flex: 0 1 104px; }
+  .ex-det > .c-side { flex-basis: 132px; }
+  .ex-det > .c-notes { flex: 1 1 220px; }
+}
+.ex-tally { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.ex-tally div { background: var(--field); border: 1px solid var(--line); color: var(--fg); }
+.ex-tally span { color: var(--muted); }
+.ex-colsline { margin: 0; font-size: 14px; font-weight: 650; }
+.dock .ex-dock { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14.5px; color: var(--fg); }
+.dock .ex-dock b { font-variant-numeric: tabular-nums; }
+
 @media (max-width: 999px) {
   .workspace { grid-template-columns: minmax(0, 1fr); padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px)); }
   .summary { position: static; max-height: none; }
@@ -573,6 +660,13 @@ button { cursor: pointer; }
 @media (max-width: 430px) {
   .clear-btn .cb-label { display: none; }
   .appbar .clear-btn { padding-inline: 12px; }
+  .tools button { font-size: 13px; padding-inline: 3px; }        /* five tabs on a phone */
+}
+@media (max-width: 380px) {
+  .tab-pre { display: none; }                                      /* "LL Strength" reads "Strength" */
+  .tools { gap: 1px; padding: 2px; overflow-x: auto; scrollbar-width: none; }   /* never wider than the screen */
+  .tools::-webkit-scrollbar { display: none; }
+  .tools button { font-size: 12px; padding-inline: 2px; }
 }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
 </style>
@@ -588,9 +682,10 @@ button { cursor: pointer; }
   </div>
   <nav class="tools" role="tablist" aria-label="Report type">
     <button role="tab" id="tab-screen" data-tool="screen" aria-selected="true">Screening</button>
-    <button role="tab" id="tab-str" data-tool="str" aria-selected="false">LL Strength</button>
+    <button role="tab" id="tab-str" data-tool="str" aria-selected="false"><span class="tab-pre">LL </span>Strength</button>
     <button role="tab" id="tab-ham" data-tool="ham" aria-selected="false">Hamstring<span class="tab-extra"> rehab</span></button>
     <button role="tab" id="tab-acl" data-tool="acl" aria-selected="false">ACL<span class="tab-extra"> rehab</span></button>
+    <button role="tab" id="tab-ex" data-tool="ex" aria-selected="false">Exercises</button>
   </nav>
   <button class="ghost clients-btn" id="clientsBtn" type="button" aria-haspopup="dialog" aria-label="Clients">
     <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0M16 4.5a3.5 3.5 0 0 1 0 7M21.5 20a6.5 6.5 0 0 0-5-6.3"/></svg>
@@ -624,7 +719,7 @@ button { cursor: pointer; }
 <div class="modal" id="clearDialog" role="alertdialog" aria-modal="true" aria-labelledby="clearTitle" aria-describedby="clearIntro" hidden>
   <div class="modal-card">
     <h2 id="clearTitle">Clear all data?</h2>
-    <p id="clearIntro">This clears everything entered in all four sections, including names, notes and tester details. Saved client records are kept; manage those under Clients.</p>
+    <p id="clearIntro">This clears everything entered in all five sections, including names, notes, tester details and the exercise program. Saved client records are kept; manage those under Clients.</p>
     <ul class="clear-list" id="clearList"></ul>
     <p class="modal-fine">Save or share any reports you need first. This can’t be undone.</p>
     <div class="modal-actions">
@@ -672,10 +767,10 @@ button { cursor: pointer; }
 
 <div class="toast" id="toast" role="status" hidden></div>
 
-<script src="engine.js?v=9" defer></script>
-<script src="report-fonts.js?v=9" defer></script>
-<script src="jspdf.umd.min.js?v=9" defer></script>
-<script src="report.js?v=9" defer></script>
-<script src="app.js?v=9" defer></script>
+<script src="engine.js?v=10" defer></script>
+<script src="report-fonts.js?v=10" defer></script>
+<script src="jspdf.umd.min.js?v=10" defer></script>
+<script src="report.js?v=10" defer></script>
+<script src="app.js?v=10" defer></script>
 </body>
 </html>
