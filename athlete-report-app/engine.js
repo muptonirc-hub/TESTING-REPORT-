@@ -1,4 +1,4 @@
-/* BASE Health Athlete Report: scoring engine.
+/* BASE Health Report: scoring engine.
    JavaScript port of engine.py, the report helpers in report_pdf.py and vald_import.py.
    Pure functions with no dependencies. Numbers are rounded and formatted exactly the
    way Python does it, so results match the original app.
@@ -505,7 +505,7 @@
     return null;
   }
 
-  // The target in the units you enter, for this athlete (e.g. 26.7 kg for an 80 kg athlete)
+  // The target in the units you enter, for this person (e.g. 26.7 kg for someone who weighs 80 kg)
   function strengthRawTarget(t, mass) {
     if (!mass || t.dir === 'Band' || t.score === 'reps' || t.input === 'calc') return null;
     var v = t.score === 'xBW' || t.score === 'Nkg' ? t.green * mass

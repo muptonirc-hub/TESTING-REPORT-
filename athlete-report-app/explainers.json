@@ -1,5 +1,5 @@
 {
-  "about": "Plain-English explainers for every metric (the exact metric name, or the LL Strength test id). 'what' is for athletes and coaches (20 words at most) and shows when a metric name is tapped and under each Top priority on the PDF; 'how' is an optional protocol reminder for the clinician, shown on the screen only. Edit the wording here; the app picks it up the next time it opens online.",
+  "about": "Plain-English explainers for every metric (the exact metric name, or the LL Strength test id). 'what' is for athletes, patients and coaches (20 words at most) and shows when a metric name is tapped and under each Top priority on the PDF; 'how' is an optional protocol reminder for the clinician, shown on the screen only. Edit the wording here; the app picks it up the next time it opens online.",
   "metrics": {
     "Jump Height": {
       "what": "How high you jump from standing after a quick dip: a simple measure of lower-body power.",
@@ -175,7 +175,7 @@
     },
     "HaOS score": {
       "what": "A questionnaire score (0–100) of how the hamstring feels and works in daily life and sport.",
-      "how": "Hamstring Outcome Score, completed by the athlete."
+      "how": "Hamstring Outcome Score, completed by the patient."
     },
     "Pain on palpation — length": {
       "what": "Length of the tender area along the hamstring when it is pressed. Smaller is better.",

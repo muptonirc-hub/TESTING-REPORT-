@@ -1,7 +1,7 @@
 {
-  "name": "BASE Health Athlete Report",
-  "short_name": "Athlete Report",
-  "description": "Type in VALD test results and create the BASE Health athlete report on the spot.",
+  "name": "BASE Health Report",
+  "short_name": "BASE Report",
+  "description": "Type in test results and create the BASE Health report for an athlete or patient on the spot.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

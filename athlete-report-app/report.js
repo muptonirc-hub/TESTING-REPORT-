@@ -1,4 +1,4 @@
-/* BASE Health Athlete Report: the branded PDF, built on the device.
+/* BASE Health Report: the branded PDF, built on the device.
    Recreates the WeasyPrint designs from report_pdf.py (screening, hamstring, ACL), plus the strength
    battery and the optional interpretation box, as a list of
    vector drawing commands, which are then written two ways from the same layout:
@@ -1008,11 +1008,11 @@
     var doc = new Doc(), m = d.meta || {}, acl = d.kind === 'acl';
     if (acl) {
       header(doc, 'ACL Rehab & Return-to-Play', 'ACLR research norms • injured-limb / symmetry tracking');
-      meta(doc, [['Athlete', m.name], ['Date', m.date], ['Injured side', m.injured], ['Graft', m.graft],
+      meta(doc, [['Patient', m.name], ['Date', m.date], ['Injured side', m.injured], ['Graft', m.graft],
         ['Surgeon', m.surgeon], ['Months post-op', m.months], ['Sport', m.sport], ['Notes', m.notes]]);
     } else {
       header(doc, 'Hamstring Rehab & Return-to-Play', 'Injured-limb tracking vs phase targets • change-vs-previous');
-      meta(doc, [['Athlete', m.name], ['Date', m.date], ['Injured side', m.injured], ['Clinician', m.clinician],
+      meta(doc, [['Patient', m.name], ['Date', m.date], ['Injured side', m.injured], ['Clinician', m.clinician],
         ['Wks since injury', m.weeks], ['Sport', m.sport], ['Notes', m.notes]]);
     }
     coachBand(doc, d.coach);
@@ -1099,7 +1099,7 @@
   function strength(d) {
     var doc = new Doc(), m = d.meta || {}, c = d.counts;
     header(doc, 'Lower-Limb Strength & Capacity', 'Strength battery • targets relative to body weight');
-    meta(doc, [['Athlete', m.name], ['Date', m.date], ['Mass', clean(m.mass).trim() ? clean(m.mass).trim() + ' kg' : ''],
+    meta(doc, [['Patient', m.name], ['Date', m.date], ['Mass', clean(m.mass).trim() ? clean(m.mass).trim() + ' kg' : ''],
       ['Sport', m.sport], ['Tester', m.tester], ['Notes', m.notes]]);
     coachBand(doc, d.coach);
     band(doc, 'Scored against', 'BASE Health strength targets', tallyChips('target', c));
@@ -1152,7 +1152,7 @@
       pdf.addFileToVFS(f.file, f.data);
       pdf.addFont(f.file, f.family, 'normal');
     });
-    pdf.setProperties({ title: report.title, author: (info && info.author) || 'BASE Health Noosa', creator: 'BASE Health Athlete Report' });
+    pdf.setProperties({ title: report.title, author: (info && info.author) || 'BASE Health Noosa', creator: 'BASE Health Report' });
     var gsFull = new pdf.GState({ opacity: 1 });
     report.pages.forEach(function (page, pi) {
       if (pi) pdf.addPage('a4');

@@ -1,4 +1,4 @@
-/* BASE Health Athlete Report: screen logic.
+/* BASE Health Report: screen logic.
    Four tools (screening, LL strength, hamstring rehab, ACL rehab). Everything runs on the device: results are
    scored as they are typed, the PDF is built locally, and a draft is kept in this browser only until
    "Clear all data" wipes it. Creating a PDF also saves the session to the client's record on this device,
@@ -54,6 +54,9 @@
     return p ? '<svg class="si" viewBox="0 0 12 12" width="12" height="12" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round">' + p + '</svg>' : '';
   }
   function wordKind(t) { return t === 'ham' || t === 'acl' ? 'rehab' : 'target'; }
+  // Screening is for athletes; LL Strength and the rehab tabs are used with patients of all kinds (v9)
+  function person(t) { return t === 'screen' ? 'athlete' : 'patient'; }
+  function Person(t) { return t === 'screen' ? 'Athlete' : 'Patient'; }
   function statusWord(status, t) { return E.statusWord(status, wordKind(t || state.tool)); }
   function chip(status, text) {
     var cls = status === 'n/a' ? 'na' : status;
@@ -217,7 +220,7 @@
 
   function athleteCard() {
     var t = state.tool, s = state[t];
-    var out = '<section class="card athlete"><div class="card-head"><h2>Athlete</h2><div class="head-actions">';
+    var out = '<section class="card athlete"><div class="card-head"><h2>' + Person(t) + '</h2><div class="head-actions">';
     out += '<label class="ghost file-btn scan-btn" id="scanBtn" for="scanFiles">' + CAMERA + '<span data-label>Scan notes</span>' +
       '<input id="scanFiles" type="file" accept="image/*" multiple aria-label="Scan notes: photo of handwritten results or a VALD app screenshot"></label>';
     if (t === 'screen') {
@@ -225,7 +228,7 @@
     }
     out += '</div></div><div class="fields">';
     if (t === 'screen') {
-      out += field(t, 'name', 'Athlete name', { cls: 'wide', words: true }) + field(t, 'date', 'Test date', { type: 'date' }) +
+      out += field(t, 'name', Person(t) + ' name', { cls: 'wide', words: true }) + field(t, 'date', 'Test date', { type: 'date' }) +
         seg(t, 'sex', 'Sex', ['Male', 'Female']) +
         field(t, 'age', 'Age (years)', { mode: 'decimal' }) + field(t, 'mass', 'Mass (kg)', { mode: 'decimal' }) +
         field(t, 'sport', 'Sport', { words: true }) + field(t, 'tester', 'Tester', { words: true }) +
@@ -233,19 +236,19 @@
       var pops = [['general', 'General population (auto by age & sex)']].concat(E.sportPopulations(DATA.screen).map(function (p) { return [p, p]; }));
       out += select('screen-pop', 'Compare against', pops, s.pop, 'data-choice="pop"', 'wide');
     } else if (t === 'str') {
-      out += field(t, 'name', 'Athlete name', { cls: 'wide', words: true }) + field(t, 'date', 'Test date', { type: 'date' }) +
+      out += field(t, 'name', Person(t) + ' name', { cls: 'wide', words: true }) + field(t, 'date', 'Test date', { type: 'date' }) +
         field(t, 'mass', 'Body mass (kg)', { mode: 'decimal' }) +
         field(t, 'sport', 'Sport', { words: true }) + field(t, 'tester', 'Tester', { words: true }) +
         field(t, 'notes', 'Notes', { cls: 'wide' });
     } else if (t === 'ham') {
-      out += field(t, 'name', 'Athlete name', { cls: 'wide', words: true }) + field(t, 'date', 'Test date', { type: 'date' }) +
+      out += field(t, 'name', Person(t) + ' name', { cls: 'wide', words: true }) + field(t, 'date', 'Test date', { type: 'date' }) +
         seg(t, 'injured', 'Injured side', ['Left', 'Right']) +
         field(t, 'doi', 'Date of injury', { type: 'date' }) + field(t, 'weeks', 'Weeks since injury', { mode: 'decimal' }) +
         field(t, 'clinician', 'Clinician', { words: true }) + field(t, 'sport', 'Sport', { words: true }) +
         field(t, 'notes', 'Notes', { cls: 'full' });
       out += select('ham-phase', 'Rehab phase', DATA.ham.phases.map(function (p) { return [p, p]; }), s.phase, 'data-choice="phase"', 'wide');
     } else {
-      out += field(t, 'name', 'Athlete name', { cls: 'wide', words: true }) + field(t, 'date', 'Test date', { type: 'date' }) +
+      out += field(t, 'name', Person(t) + ' name', { cls: 'wide', words: true }) + field(t, 'date', 'Test date', { type: 'date' }) +
         seg(t, 'injured', 'Injured side', ['Left', 'Right']) +
         field(t, 'dos', 'Date of surgery', { type: 'date' }) + field(t, 'months', 'Months since surgery', { mode: 'decimal' }) +
         field(t, 'graft', 'Graft type') + field(t, 'surgeon', 'Surgeon / clinician', { words: true }) +
@@ -398,7 +401,7 @@
         : 'Add body mass (kg) first: loads and forces are scored relative to it.';
     } else {
       note.className = 'note';
-      note.textContent = 'On target = at or above the target, Close = within ' + pct + '% of it, Off target = further away. Each target also shows what it means for this athlete.';
+      note.textContent = 'On target = at or above the target, Close = within ' + pct + '% of it, Off target = further away. Each target also shows what it means for this patient.';
     }
     var tested = 0, tr = trends('str', c);
     els.entry.querySelectorAll('.metric.lr').forEach(function (el) {
@@ -726,9 +729,9 @@
   function coachCardHtml() {
     var co = state[state.tool].coach;
     return '<section class="card coach" id="coachCard" aria-labelledby="coachTitle">' +
-      '<div class="card-head"><h2 id="coachTitle">For the coach</h2></div>' +
+      '<div class="card-head"><h2 id="coachTitle">' + (state.tool === 'screen' ? 'For the coach' : 'Training status') + '</h2></div>' +
       '<p class="coach-help">Optional. Printed as a band at the top of the report. Your call: the app never works this out.</p>' +
-      '<div class="coach-fields"><div class="f coach-status"><span id="coachStatusL">Training status</span>' +
+      '<div class="coach-fields"><div class="f coach-status"><span id="coachStatusL">' + (state.tool === 'screen' ? 'Training status' : 'Status') + '</span>' +
       '<div class="seg coach-seg" role="group" aria-labelledby="coachStatusL">' + COACH_STATUS.map(function (o) {
         return '<button type="button" data-coach-status="' + esc(o) + '" data-look="' + COACH_LOOK[o] + '" aria-pressed="' + (co.status === o) + '">' + esc(o) + '</button>';
       }).join('') + '</div></div>' +
@@ -1062,18 +1065,18 @@
         'Adductor Peak Force': ['402', ''], 'Abductor Peak Force': ['371', ''], '10 m sprint': ['1.78', '1.81'], '20 m sprint': ['3.02', ''] };
       Object.keys(ex).forEach(function (k) { var v = val('screen', k); v.result = ex[k][0]; v.previous = ex[k][1]; v.side = ex[k][2] || ''; });
     } else if (t === 'ham') {
-      Object.assign(s.meta, { name: 'Example Athlete', injured: 'Left', sport: 'Soccer', notes: 'Example data — not a real athlete' });
+      Object.assign(s.meta, { name: 'Example Patient', injured: 'Left', sport: 'Soccer', notes: 'Example data — not a real patient' });
       var hx = { 'AKET deficit vs uninjured': ['4', '9'], 'SLR % of uninjured side': ['96', '88'], 'HHD 90° knee-flex % of uninjured': ['91', '80'],
         'Nordic peak force — injured': ['290', '245'], 'Nordic peak-force imbalance': ['22', '41'], '10 m sprint time': ['1.86', '1.95'], 'HaOS score': ['84', '70'] };
       Object.keys(hx).forEach(function (k) { var v = val('ham', k); v.result = hx[k][0]; v.previous = hx[k][1]; });
     } else if (t === 'str') {
-      Object.assign(s.meta, { name: 'Example Athlete', mass: '80', sport: 'AFL', notes: 'Example data \u2014 not a real athlete' });
+      Object.assign(s.meta, { name: 'Example Patient', mass: '80', sport: 'AFL', notes: 'Example data \u2014 not a real patient' });
       var sx = { split_squat: ['28', '25'], sl_seated_calf_vald: ['1650', '1540'], sl_seated_calf_smith: ['125', '118'],
         sl_knee_extension: ['820', '700'], sl_bridge: ['17', '16'], sl_calf_raise_reps: ['27', '22'],
         prone_hamstring_curl: ['420', '385'], hip_abduction: ['350', '372'], hip_adduction: ['395', '380'] };
       Object.keys(sx).forEach(function (k) { var v = val('str', k); v.left = sx[k][0]; v.right = sx[k][1]; });
     } else {
-      Object.assign(s.meta, { name: 'Example Athlete', injured: 'Right', graft: 'Hamstring', sport: 'Netball', notes: 'Example data — not a real athlete' });
+      Object.assign(s.meta, { name: 'Example Patient', injured: 'Right', graft: 'Hamstring', sport: 'Netball', notes: 'Example data — not a real patient' });
       var ax = { 'IKDC': ['78', '70'], 'ACL-RSI': ['61', '52'], 'KOOS — Sport & Rec': ['75', '65'], 'Knee extension LSI': ['84', '76'],
         'CMJ — Jump height': ['27.5', '25.9'], 'Single hop LSI': ['88', ''] };
       Object.keys(ax).forEach(function (k) { var v = val('acl', k); v.result = ax[k][0]; v.previous = ax[k][1]; });
@@ -1099,7 +1102,7 @@
     return fontsReady;
   }
   function fileName(suffix) {
-    var n = (state[state.tool].meta.name || 'athlete').trim() || 'athlete';
+    var n = (state[state.tool].meta.name || person(state.tool)).trim() || person(state.tool);
     return n.replace(/[\\/:*?"<>|]+/g, '-').replace(/ /g, '_') + suffix;
   }
   function buildReport() {
@@ -1305,7 +1308,7 @@
     render();
     window.scrollTo(0, 0);
     els.clearAll.focus();
-    toast('All data cleared — ready for the next athlete');
+    toast('All data cleared — ready for the next client');
   }
 
   // ------------------------------------------------------------------ AI interpretation
@@ -1362,12 +1365,14 @@
     if (!blank(m.months)) return clean1(m.months);
     var d2 = daysBetween(m.dos, m.date); return d2 !== null && d2 >= 0 ? String(Math.floor(d2 / 30.4375)) : '';
   }
+  var READERS_PATIENT = 'Readers: the patient (and their coach or trainer, if they have one). Refer to the person as \u2018the patient\u2019.';
   function interpPayload(t, c) {
     var m = state[t].meta, L = [], rehab = t === 'ham' || t === 'acl';
     var totals = 'Totals: ' + (rehab
       ? c.counts.Green + ' on / ahead, ' + c.counts.Amber + ' within 1 SD, ' + c.counts.Red + ' behind.'
       : c.counts.Green + ' on target, ' + c.counts.Amber + ' close, ' + c.counts.Red + ' off target.');
     if (t === 'screen') {
+      L.push('Readers: the athlete and their coach. Refer to the person as \u2018the athlete\u2019.');
       L.push('Report: athlete performance and readiness screen (VALD force plate and related tests).');
       L.push('Compared against: ' + clean1(c.pop.label) + '.');
       var who = joinBits([clean1(m.sex), blank(m.age) ? '' : clean1(m.age) + ' years', blank(m.mass) ? '' : clean1(m.mass) + ' kg', blank(m.sport) ? '' : 'sport: ' + clean1(m.sport)]);
@@ -1378,9 +1383,10 @@
       L = L.concat(groupLines(c.groups, 'target', t));
     } else if (t === 'str') {
       var pct = DATA.str.amber_pct == null ? 5 : DATA.str.amber_pct;
+      L.push(READERS_PATIENT);
       L.push('Report: lower-limb strength and capacity battery. Each leg is scored against a target relative to body weight (BW). RM = repetition maximum.');
       var who2 = joinBits([blank(m.mass) ? '' : 'body mass ' + clean1(m.mass) + ' kg', blank(m.sport) ? '' : 'sport: ' + clean1(m.sport)]);
-      if (who2) L.push('Athlete: ' + who2 + '.');
+      if (who2) L.push('Patient: ' + who2 + '.');
       L.push('Status key: On target = at or above target; Close = up to ' + pct + '% below target; Off target = more than ' + pct + '% below target. For the hip ratio the target is a band, and Close is within ' + pct + '% outside it.');
       L.push(totals.replace('Totals:', 'Totals (each leg counted separately):'));
       L.push('Results (test: left leg | right leg | target | difference between legs):');
@@ -1398,6 +1404,7 @@
       });
     } else {
       var S = DATA[t], acl = t === 'acl';
+      L.push(READERS_PATIENT);
       L.push(acl ? 'Report: ACL reconstruction rehab. Results are compared with ACLR research norms for ' + clean1(state.acl.sex).toLowerCase() + ' patients at this rehab phase.'
         : 'Report: hamstring strain rehab. Injured-limb results are compared with research norms for the typical case at this rehab phase.');
       if (S.disclaimer) L.push('About the norms: ' + clean1(S.disclaimer));
@@ -1421,11 +1428,11 @@
     var it = state[state.tool].interp;
     return '<section class="card interp" id="interpCard" aria-labelledby="interpTitle">' +
       '<div class="card-head"><h2 id="interpTitle">Interpretation</h2><button type="button" class="quiet" data-action="ai-settings">AI settings</button></div>' +
-      '<p class="interp-help">Optional. A short plain-English summary for the athlete and coach, printed near the top of the report. Draft it with AI, then check and edit it.</p>' +
+      '<p class="interp-help">Optional. A short plain-English summary for the ' + (state.tool === 'screen' ? 'athlete and coach' : 'patient') + ', printed near the top of the report. Draft it with AI, then check and edit it.</p>' +
       '<div class="interp-bar"><button type="button" class="ghost ai-draft" data-action="ai-draft">' + SPARKLE + '<span data-label>Draft with AI</span></button>' +
       '<span class="interp-status" id="interpStatus" role="status" aria-live="polite"></span></div>' +
       '<textarea id="interpText" rows="5" autocapitalize="sentences" placeholder="Tap Draft with AI, or type your own summary." aria-labelledby="interpTitle">' + esc(it.text) + '</textarea>' +
-      '<p class="fine interp-privacy">Claude only sees the results and basic context such as age, sex, sport or rehab phase. Never the athlete’s name, notes or dates.</p>' +
+      '<p class="fine interp-privacy">Claude only sees the results and basic context such as age, sex, sport or rehab phase. Never the ' + person(state.tool) + '’s name, notes or dates.</p>' +
       '</section>';
   }
   function fitInterp() {                             // grow the box to show the whole text
