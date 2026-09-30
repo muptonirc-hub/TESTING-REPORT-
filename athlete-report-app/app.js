@@ -5,10 +5,13 @@
    so the next test can load their previous results and the report can show progress. "Scan notes" reads a photo
    of handwritten results with Claude and fills the boxes for checking.
    A fifth tab, Exercises (v10), turns a photo of a handwritten exercise page into an editable table and a PDF
-   handout. It is kept in the draft only (never in client records). */
+   handout. It is kept in the draft only (never in client records).
+   v13: with the clinic store configured (cloud-config.js), every device signs in once with the clinic login and the
+   client records live in Firestore (cloud.js), cached on the device; the draft stays on the device as before. */
 (function () {
   'use strict';
   var E = window.BHEngine;
+  var CLOUD = window.BHCloud && window.BHCloud.enabled ? window.BHCloud : null;   // v13: the clinic store, or null in local mode
   var DATA = {};
   var STORE = 'bh-athlete-report-draft-v1';
   var IS_IOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
@@ -25,7 +28,13 @@
     clientsBackup: $('clientsBackup'), clientsRestore: $('clientsRestore'), clientsClose: $('clientsClose'),
     clientsTitle: $('clientsTitle'), clientsSearch: $('clientsSearch'), clientsSearchWrap: $('clientsSearchWrap'), clientsNew: $('clientsNew'), clientsFine: $('clientsFine'),
     moreBtn: $('moreBtn'), moreMenu: $('moreMenu'), restoreItem: $('restoreItem'), aiItem: $('aiItem'), appbar: document.querySelector('.appbar'),
-    testsDialog: $('testsDialog'), testsLead: $('testsLead'), testsList: $('testsList'), testsAll: $('testsAll'), testsNone: $('testsNone'), testsDone: $('testsDone')
+    testsDialog: $('testsDialog'), testsLead: $('testsLead'), testsList: $('testsList'), testsAll: $('testsAll'), testsNone: $('testsNone'), testsDone: $('testsDone'),
+    // v13: the clinic store's sign-in card, status bar and dialogs
+    cloudBar: $('cloudBar'), signin: $('signin'), signinForm: $('signinForm'), signinEmail: $('signinEmail'), signinPassword: $('signinPassword'), signinShow: $('signinShow'),
+    signinName: $('signinName'), signinBtn: $('signinBtn'), signinErr: $('signinErr'), accountTpl: $('accountTpl'),
+    nameDialog: $('nameDialog'), nameBox: $('nameBox'), nameErr: $('nameErr'), nameCancel: $('nameCancel'), nameSave: $('nameSave'),
+    signOutDialog: $('signOutDialog'), signOutText: $('signOutText'), signOutCancel: $('signOutCancel'), signOutConfirm: $('signOutConfirm'),
+    legacyDialog: $('legacyDialog'), legacyText: $('legacyText'), legacyLater: $('legacyLater'), legacyUpload: $('legacyUpload'), legacyNever: $('legacyNever')
   };
 
   // ------------------------------------------------------------------ small helpers
@@ -92,13 +101,31 @@
   var COACH_STATUS = ['Full training', 'Modified', 'Rehab only'];
   var COACH_LOOK = { 'Full training': 'Green', 'Modified': 'Amber', 'Rehab only': 'Red' };
   function freshCoach() { return { status: '', mods: '', retest: '' }; }
+  // v13, cloud mode: the practitioner's name on this device (bh-athlete-report-user-v1), typed on the sign-in card. It fills
+  // the Clinician box (tester on Screening and LL Strength, clinician on Hamstring, practitioner on Exercises) whenever that
+  // box is empty; never a typed value. The ACL box is the surgeon's, so it is left alone.
+  function userName() { return CLOUD ? CLOUD.userName() : ''; }
+  var NAME_FIELDS = { screen: 'tester', str: 'tester', ham: 'clinician', ex: 'practitioner' };
   // cardOpen (v11): the details card is open (true) or folded into the one-line strip (false)
   function freshTool(tool, keep) {
     keep = keep || {};
-    if (tool === 'screen') return { meta: { name: '', date: todayIso(), sex: '', age: '', sport: '', tester: keep.tester || '', mass: '', notes: '' }, pop: 'general', values: {}, radar: null, collapsed: {}, importLog: null, interp: freshInterp(), coach: freshCoach(), cardOpen: true };
-    if (tool === 'ham') return { meta: { name: '', date: todayIso(), injured: '', clinician: keep.clinician || '', doi: '', weeks: '', sport: '', notes: '' }, phase: null, values: {}, collapsed: {}, interp: freshInterp(), coach: freshCoach(), cardOpen: true };
-    if (tool === 'str') return { meta: { name: '', date: todayIso(), mass: '', sport: '', tester: keep.tester || '', notes: '' }, values: {}, collapsed: {}, interp: freshInterp(), coach: freshCoach(), cardOpen: true };
+    if (tool === 'screen') return { meta: { name: '', date: todayIso(), sex: '', age: '', sport: '', tester: keep.tester || userName(), mass: '', notes: '' }, pop: 'general', values: {}, radar: null, collapsed: {}, importLog: null, interp: freshInterp(), coach: freshCoach(), cardOpen: true };
+    if (tool === 'ham') return { meta: { name: '', date: todayIso(), injured: '', clinician: keep.clinician || userName(), doi: '', weeks: '', sport: '', notes: '' }, phase: null, values: {}, collapsed: {}, interp: freshInterp(), coach: freshCoach(), cardOpen: true };
+    if (tool === 'str') return { meta: { name: '', date: todayIso(), mass: '', sport: '', tester: keep.tester || userName(), notes: '' }, values: {}, collapsed: {}, interp: freshInterp(), coach: freshCoach(), cardOpen: true };
     return { meta: { name: '', date: todayIso(), injured: '', surgeon: keep.surgeon || '', graft: '', dos: '', months: '', sport: '', notes: '' }, phase: null, sex: null, values: {}, collapsed: {}, interp: freshInterp(), coach: freshCoach(), cardOpen: true };
+  }
+  // blank Clinician boxes take the practitioner's name; boxes still holding the previous name (was) follow a name change
+  function fillPractitioner(was) {
+    var nm = userName(), changed = false;
+    if (!nm || !state) return false;
+    Object.keys(NAME_FIELDS).forEach(function (t) {
+      var m = state[t] && state[t].meta;
+      if (!m) return;
+      var f = NAME_FIELDS[t], cur = String(m[f] == null ? '' : m[f]).trim();
+      if ((cur === '' || (was && cur === was)) && m[f] !== nm) { m[f] = nm; changed = true; }
+    });
+    if (changed) saveDraft();
+    return changed;
   }
   function loadDraft() {
     try {
@@ -477,7 +504,10 @@
     strip.classList.toggle('stuck', window.pageYOffset > 0 && strip.getBoundingClientRect().top <= appbarH + 0.5);
   }
   function measureBar() {                              // --appbar-h: the app bar's height here (landscape, portrait and phone differ)
-    var h = Math.round(els.appbar.getBoundingClientRect().height);
+    var hb = Math.round(els.appbar.getBoundingClientRect().height);
+    // v13: the store's status bar sticks under the app bar, so the strip and scroll padding sit under both
+    var hc = els.cloudBar && !els.cloudBar.hidden ? Math.round(els.cloudBar.getBoundingClientRect().height) : 0, h = hb + hc;
+    if (hc) document.documentElement.style.setProperty('--cloud-top', hb + 'px');
     if (h && h !== appbarH) { appbarH = h; document.documentElement.style.setProperty('--appbar-h', h + 'px'); }
     checkStuck();
   }
@@ -1693,7 +1723,7 @@
     return { results: n, any: n > 0 || details || !!s.importLog, name: String(s.meta.name || '').trim() };
   }
   function setBackgroundInert(on) {
-    ['.appbar', '.workspace', '#dock'].forEach(function (sel) {
+    ['.appbar', '.workspace', '#dock', '#signin', '#cloudBar'].forEach(function (sel) {
       var el = document.querySelector(sel);
       if (!el) return;
       if (on) el.setAttribute('inert', ''); else el.removeAttribute('inert');
@@ -2031,7 +2061,7 @@
     if (why) return fail(why, { blocker: true });
     if (!DATA.ai || !DATA.ai.model) return fail('The AI settings file (interpretation.json) didn’t load. Reopen the app while online.');
     var key = aiKey();
-    if (!key) { openAiSettings(draftInterp, 'To draft interpretations, the app needs a Claude API key. You only need to do this once on each device.'); return; }
+    if (!key) { openAiSettings(draftInterp, 'To draft interpretations, the app needs a Claude API key. ' + ONCE_NOTE()); return; }
     if (navigator.onLine === false) return fail('No internet connection. Connect to draft with AI, or type your own interpretation.', { offline: true });
     var payload = interpPayload(t, c), basis = hashStr(payload), gen = aiGen;
     aiBusy = t; interpUndo = null;
@@ -2057,6 +2087,9 @@
     });
   }
   var KEY_NOTE = 'The key is saved only on this device and is only sent to Anthropic when you use Draft with AI or Scan notes.';
+  // v13, cloud mode: the key lives in the clinic store (meta/settings) and is cached on each device for offline use
+  var KEY_NOTE_CLOUD = 'The key is shared by the clinic: saved once, it reaches every signed-in device. It is kept on this device too and is only sent to Anthropic when you use Draft with AI or Scan notes.';
+  function ONCE_NOTE() { return CLOUD ? 'You only need to do this once for the clinic.' : 'You only need to do this once on each device.'; }
   // then: what to do once a key is saved (e.g. carry on drafting or scanning)
   function openAiSettings(then, lead) {
     aiThen = typeof then === 'function' ? then : null;
@@ -2064,8 +2097,9 @@
     els.aiKey.value = '';
     els.aiErr.hidden = true;
     els.aiRemove.hidden = !k;
-    els.aiKeyState.textContent = k ? 'A key ending in ' + k.slice(-4) + ' is saved on this device. Paste a new one to replace it.' : KEY_NOTE;
-    els.aiLead.textContent = lead || 'Drafting interpretations and reading scanned notes or VALD screenshots use Claude through the clinic’s own Claude API key.';
+    els.aiKeyState.textContent = k ? 'A key ending in ' + k.slice(-4) + ' is saved ' + (CLOUD ? 'for the clinic' : 'on this device') + '. Paste a new one to replace it.' : (CLOUD ? KEY_NOTE_CLOUD : KEY_NOTE);
+    els.aiLead.textContent = lead || ('Drafting interpretations and reading scanned notes or VALD screenshots use Claude through the clinic’s own Claude API key.' +
+      (CLOUD ? ' The key is shared by the clinic through the clinic store.' : ''));
     openModal(els.aiDialog, els.aiKey);
   }
   function saveAiKey() {
@@ -2080,18 +2114,31 @@
     try { localStorage.setItem(AI_KEY_STORE, v); } catch (e) {
       els.aiErr.textContent = 'This device wouldn’t save the key (storage is blocked).'; els.aiErr.hidden = false; return;
     }
+    if (CLOUD) { CLOUD.setting(v); CLOUD.sync(); }      // shared through meta/settings (queued like any other write)
     els.aiKey.value = '';
     var then = aiThen;
     aiThen = null;
     closeModal();
-    toast('API key saved on this device');
+    toast(CLOUD ? 'API key saved for the clinic' : 'API key saved on this device');
     if (then) then();
   }
   function removeAiKey() {
     try { localStorage.removeItem(AI_KEY_STORE); } catch (e) { /* storage unavailable */ }
+    if (CLOUD) { CLOUD.setting(''); CLOUD.sync(); }
     els.aiRemove.hidden = true;
-    els.aiKeyState.textContent = 'Key removed. ' + KEY_NOTE;
+    els.aiKeyState.textContent = (CLOUD ? 'Key removed for the clinic. ' : 'Key removed. ') + (CLOUD ? KEY_NOTE_CLOUD : KEY_NOTE);
     els.aiKey.focus();
+  }
+  // the clinic's key as pulled from meta/settings: kept in the same place as a key pasted here, so it works offline
+  function applyCloudKey(k) {
+    if (k == null) return;                             // no settings document yet: whatever this device has stays
+    var cur = aiKey();
+    if (k === cur) return;
+    try { if (k) localStorage.setItem(AI_KEY_STORE, k); else localStorage.removeItem(AI_KEY_STORE); } catch (e) { /* storage unavailable */ }
+    if (openModalEl === els.aiDialog) {                // the dialog is open: its state line follows
+      els.aiRemove.hidden = !k;
+      els.aiKeyState.textContent = k ? 'A key ending in ' + k.slice(-4) + ' is saved for the clinic. Paste a new one to replace it.' : KEY_NOTE_CLOUD;
+    }
   }
 
   // ------------------------------------------------------------------ scan notes (photo -> results)
@@ -2232,8 +2279,8 @@
     if (!photos.length) return fail(exm ? 'That file isn’t a photo. Choose a photo of the exercise page.' : 'That file isn’t a photo. Choose a photo of your notes.');
     if (!aiKey()) {
       openAiSettings(function () { if (state.tool === t) startScan(files); }, exm
-        ? 'To read photos of a handwritten exercise page, the app needs a Claude API key. You only need to do this once on each device.'
-        : 'To read photos of your notes or VALD screenshots, the app needs a Claude API key. You only need to do this once on each device.');
+        ? 'To read photos of a handwritten exercise page, the app needs a Claude API key. ' + ONCE_NOTE()
+        : 'To read photos of your notes or VALD screenshots, the app needs a Claude API key. ' + ONCE_NOTE());
       return;
     }
     if (navigator.onLine === false) return fail(exm ? 'No internet connection. Connect to scan the exercise page, or type the exercises in.' : 'No internet connection. Connect to scan your notes, or type the results in.');
@@ -2449,7 +2496,7 @@
   var ICON_DOWN = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M6 13l6 6 6-6"/></svg>';
   var ICON_X = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/></svg>';
 
-  function freshEx() { return { meta: { name: '', date: todayIso(), practitioner: '' }, title: '', instructions: '', items: [], seq: 1, scanned: {}, cardOpen: true }; }
+  function freshEx() { return { meta: { name: '', date: todayIso(), practitioner: userName() }, title: '', instructions: '', items: [], seq: 1, scanned: {}, cardOpen: true }; }
   function exStr(v) { return typeof v === 'string' ? v : (typeof v === 'number' && isFinite(v) ? String(v) : ''); }
   // drafts from v9 and earlier have no program; anything malformed in a stored one is tidied
   function tidyEx() {
@@ -2862,26 +2909,31 @@
   }
 
   // ------------------------------------------------------------------ client records
-  // Each PDF created saves that session under the client's name, on this device only. Next time the
-  // name is typed, the saved client is offered; loading fills the Previous results per metric from the
-  // most recent earlier session where that metric was tested, and the report gets a Progress table.
+  // Each PDF created saves that session under the client's name: on this device only (local mode), or in the clinic
+  // store with a full copy cached on the device (v13, cloud mode: `clients` is then the cache from cloud.js, and every
+  // save is queued for Firestore too). Next time the name is typed, the saved client is offered; loading fills the
+  // Previous results per metric from the most recent earlier session where that metric was tested, and the report gets
+  // a Progress table.
   var HIST = 'bh-athlete-report-clients-v1';
   var clients = { v: 1, clients: {} };
   var SCORE_UNITS = { xBW: '× BW', xBWf: '× BW', pctBW: '% BW', Nkg: 'N/kg', reps: 'reps', ratio: '' };
   var PREFILL = { screen: ['sex', 'age', 'sport', 'tester'], str: ['sport', 'tester'], ham: ['injured', 'doi', 'clinician', 'sport'], acl: ['injured', 'dos', 'graft', 'surgeon', 'sport'] };
   var SAME_TOOL_ONLY = { injured: true, doi: true, dos: true, graft: true, surgeon: true, clinician: true };
-  function loadClients() {
+  function loadLocalClients() {                        // the records kept on this device (local mode; before v13 in cloud mode)
     try {
       var c = JSON.parse(localStorage.getItem(HIST));
       if (c && c.v === 1 && c.clients && typeof c.clients === 'object') return c;
     } catch (e) { /* none saved */ }
     return { v: 1, clients: {} };
   }
+  function loadClients() { return CLOUD ? CLOUD.cache : loadLocalClients(); }
   function saveClients() {
+    if (CLOUD) return CLOUD.saveCache();
     try { localStorage.setItem(HIST, JSON.stringify(clients)); } catch (e) { return false; }
     try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(function () {}); } catch (e2) { /* optional */ }
     return true;
   }
+  function recordWord() { return CLOUD ? 'clinic record' : 'client record'; }
   function clientFor(name) { var k = E.nameKey(name); return k ? clients.clients[k] || null : null; }
   function currentResults(t, c) {
     var out = {};
@@ -2915,13 +2967,20 @@
     if (coachSet(co)) meta.coach = { status: co.status, mods: String(co.mods || '').trim(), retest: co.retest };
     var sess = { tool: t, date: date, savedAt: new Date().toISOString(), meta: meta, values: compactValues(t), results: currentResults(t, c),
       mass: E.parseInput(m.mass), interp: blank(state[t].interp.text) ? '' : String(state[t].interp.text).trim() };
+    if (userName()) sess.savedBy = userName();         // v13: who saved it (the practitioner's name on this device)
     var cl = clients.clients[key] || (clients.clients[key] = { name: name, sessions: [] });
     cl.name = name;
-    var replaced = false;
-    cl.sessions = cl.sessions.filter(function (x) { if (x.tool === t && x.date === date) { replaced = true; return false; } return true; });
+    var replaced = false, old = null;
+    cl.sessions = cl.sessions.filter(function (x) { if (x.tool === t && x.date === date) { replaced = true; old = x; return false; } return true; });
     cl.sessions.push(sess);
     cl.sessions = E.sortSessions(cl.sessions);
-    return { ok: saveClients(), name: name, replaced: replaced, count: cl.sessions.length };
+    var ok = saveClients();
+    if (CLOUD) {                                       // to the clinic store: the version being replaced goes to history first
+      if (old) CLOUD.historyCopy(key, name, old);
+      CLOUD.putSession(key, name, sess);
+      CLOUD.sync();
+    }
+    return { ok: ok, name: name, replaced: replaced, count: cl.sessions.length };
   }
   function earlierCount(cl, t, date) {
     return cl ? cl.sessions.filter(function (x) { return x.tool === t && x.date < date; }).length : 0;
@@ -3032,12 +3091,13 @@
   }
   function clientLine(t) {
     var name = String(state[t].meta.name || '').trim(), cl = clientFor(name);
-    if (!name) return 'Add a name to save this session to a client record.';
+    if (!name) return 'Add a name to save this session to a ' + recordWord() + '.';
     var date = state[t].meta.date || todayIso();
     // one line each (v11); the client bar in the details card says how many sessions there are
-    if (!cl) return 'Saves to ' + name + '’s client record on this device.';
+    var where = CLOUD ? '’s clinic record.' : '’s client record on this device.';
+    if (!cl) return 'Saves to ' + name + where;
     var same = cl.sessions.some(function (x) { return x.tool === t && x.date === date; });
-    return same ? 'Updates ' + cl.name + '’s client record for this date.' : 'Saves to ' + cl.name + '’s client record on this device.';
+    return same ? 'Updates ' + cl.name + '’s ' + recordWord() + ' for this date.' : 'Saves to ' + cl.name + where;
   }
   function progressData(t, c) {
     var m = state[t].meta, cl = clientFor(m.name);
@@ -3064,6 +3124,7 @@
   function openClientsDialog(mode) {
     var pick = mode === 'pick' && TOOLS.indexOf(state.tool) >= 0;
     clientsMode = pick ? 'pick' : 'manage';
+    if (CLOUD) CLOUD.sync({ throttle: true });         // v13: another device may have saved something (the list redraws when it lands)
     els.clientsSearch.value = '';
     els.clientsTitle.textContent = pick ? 'Choose client' : 'Clients';
     els.clientsNew.hidden = !pick;
@@ -3088,7 +3149,7 @@
     keys.forEach(function (k) { total += clients.clients[k].sessions.length; });
     els.clientsSummary.textContent = !keys.length ? 'No saved clients yet. A record starts when you create a report with a name filled in.'
       : pick ? 'Loading a client fills in their details and their results from last time.'
-        : keys.length + (keys.length === 1 ? ' client, ' : ' clients, ') + total + (total === 1 ? ' session' : ' sessions') + ', saved on this device.';
+        : keys.length + (keys.length === 1 ? ' client, ' : ' clients, ') + total + (total === 1 ? ' session' : ' sessions') + (CLOUD ? ', in the clinic store.' : ', saved on this device.');
     els.clientsSearchWrap.hidden = !keys.length;
     var shown = q ? keys.filter(function (k) { return k.indexOf(q) >= 0; }) : keys;
     if (!keys.length) { els.clientsList.innerHTML = ''; return; }
@@ -3133,9 +3194,13 @@
       return;
     }
     clearTimeout(delTimer);
-    var name = clients.clients[key] ? clients.clients[key].name : key;
+    var cl = clients.clients[key], name = cl ? cl.name : key;
     delete clients.clients[key];
     saveClients();
+    if (CLOUD && cl) {                                 // v13: a tombstone per session (the data stays in the store, hidden)
+      cl.sessions.forEach(function (x) { CLOUD.tombstone(key, cl.name, x); });
+      CLOUD.sync();
+    }
     renderClientsList();
     refresh();
     toast('Deleted ' + name + '’s record');
@@ -3143,11 +3208,36 @@
   function backupClients() {
     if (!Object.keys(clients.clients).length) { toast('No client records to back up yet'); return; }
     var name = 'BASE_Health_client_records_' + todayIso() + '.json';
-    var blob = new Blob([JSON.stringify(clients, null, 1)], { type: 'application/json' });
+    var blob = new Blob([JSON.stringify({ v: 1, clients: clients.clients }, null, 1)], { type: 'application/json' });   // the same file either mode
     var file = new File([blob], name, { type: 'application/json' });
     if (canShare(file)) {
       navigator.share({ files: [file], title: 'BASE Health client records' }).catch(function (err) { if (err && err.name !== 'AbortError') downloadBlob(blob, name); });
     } else downloadBlob(blob, name);
+  }
+  // records from elsewhere (a backup file, or this device's pre-v13 records) merged in: a session is added when the client
+  // has none for that tool and date, replaced when the incoming one was saved later, skipped otherwise. In cloud mode
+  // every session added or replaced is queued for the store (the replaced version goes to history first).
+  function mergeRecords(data) {
+    var added = 0, updated = 0, fresh = 0;
+    Object.keys(data.clients).forEach(function (k) {
+      var src = data.clients[k];
+      if (!src || !Array.isArray(src.sessions)) return;
+      var key = E.nameKey(src.name || k);
+      if (!key) return;
+      var cl = clients.clients[key];
+      if (!cl) { cl = clients.clients[key] = { name: String(src.name || k), sessions: [] }; fresh++; }
+      src.sessions.forEach(function (x) {
+        if (!x || !x.tool || !x.date) return;
+        var i = -1;
+        cl.sessions.forEach(function (y, j) { if (y.tool === x.tool && y.date === x.date) i = j; });
+        if (i < 0) { cl.sessions.push(x); added++; }
+        else if ((x.savedAt || '') > (cl.sessions[i].savedAt || '')) { if (CLOUD) CLOUD.historyCopy(key, cl.name, cl.sessions[i]); cl.sessions[i] = x; updated++; }
+        else return;
+        if (CLOUD) CLOUD.putSession(key, cl.name, x);
+      });
+      cl.sessions = E.sortSessions(cl.sessions);
+    });
+    return { added: added, updated: updated, fresh: fresh };
   }
   function restoreClients(fileList) {
     var f = fileList && fileList[0];
@@ -3155,28 +3245,212 @@
     f.text().then(function (text) {
       var data = JSON.parse(text);
       if (!data || data.v !== 1 || !data.clients || typeof data.clients !== 'object') throw new Error('that isn’t a BASE Health client backup');
-      var added = 0, updated = 0, fresh = 0;
-      Object.keys(data.clients).forEach(function (k) {
-        var src = data.clients[k];
-        if (!src || !Array.isArray(src.sessions)) return;
-        var key = E.nameKey(src.name || k);
-        if (!key) return;
-        var cl = clients.clients[key];
-        if (!cl) { cl = clients.clients[key] = { name: String(src.name || k), sessions: [] }; fresh++; }
-        src.sessions.forEach(function (x) {
-          if (!x || !x.tool || !x.date) return;
-          var i = -1;
-          cl.sessions.forEach(function (y, j) { if (y.tool === x.tool && y.date === x.date) i = j; });
-          if (i < 0) { cl.sessions.push(x); added++; }
-          else if ((x.savedAt || '') > (cl.sessions[i].savedAt || '')) { cl.sessions[i] = x; updated++; }
-        });
-        cl.sessions = E.sortSessions(cl.sessions);
-      });
+      var r = mergeRecords(data), added = r.added, updated = r.updated, fresh = r.fresh;
       if (!saveClients()) throw new Error('this device wouldn’t save the records');
+      if (CLOUD) CLOUD.sync();
       renderClientsList();
       refresh();
       toast('Restored: ' + added + (added === 1 ? ' session added' : ' sessions added') + (updated ? ', ' + updated + ' updated' : '') + (fresh ? ', ' + fresh + (fresh === 1 ? ' new client' : ' new clients') : ''));
     }).catch(function (err) { toast('Couldn’t restore: ' + (err && err.message ? err.message : 'unreadable file')); });
+  }
+
+  // ------------------------------------------------------------------ the clinic store (v13, cloud mode only)
+  // One clinic login on every device (cloud.js does the talking). Signed out: the sign-in card in place of the workspace.
+  // Signed in: the records are the cache, every save is queued and pushed, a pull brings the other devices' saves, the
+  // slim bar under the app bar says when results are waiting to upload, and the ⋯ menu shows who is signed in.
+  var signinBusy = false, legacyAsked = false;
+  function signinError(msg) {
+    els.signinErr.textContent = msg || '';
+    els.signinErr.hidden = !msg;
+  }
+  function signinMessage(err) {
+    var c = err && err.code ? String(err.code) : '';
+    if (c === 'INVALID_LOGIN_CREDENTIALS' || c === 'EMAIL_NOT_FOUND' || c === 'INVALID_PASSWORD' || c === 'INVALID_EMAIL' || c === 'MISSING_PASSWORD') return 'That email or password isn’t right.';
+    if (c === 'TOO_MANY_ATTEMPTS_TRY_LATER') return 'Too many attempts. Wait a few minutes and try again.';
+    if (c === 'network') return 'You’re offline. Connect to the internet to sign in for the first time.';
+    return 'Couldn’t sign in (' + (err && err.message ? err.message : (c || 'unknown error')) + ').';
+  }
+  function signinBusySet(on) {
+    signinBusy = on;
+    els.signinBtn.disabled = on;
+    els.signinBtn.textContent = on ? 'Signing in…' : 'Sign in';
+  }
+  function showSignIn(msg) {
+    closeMenu(false);
+    closeModal(false);
+    if (!els.sheet.hidden) closeReport();
+    document.documentElement.classList.add('signed-out');
+    els.signin.hidden = false;
+    els.signinName.value = userName();
+    els.signinPassword.value = '';
+    signinBusySet(false);
+    signinError(msg || '');
+    renderCloudBar();
+    measureBar();
+    window.scrollTo(0, 0);
+    focusQuiet(els.signinEmail.value ? els.signinPassword : els.signinEmail);
+  }
+  function showApp() {
+    document.documentElement.classList.remove('signed-out');
+    els.signin.hidden = true;
+    signinError('');
+    renderMenuAccount();
+    renderCloudBar();
+    measureBar();
+  }
+  function onSignIn(e) {
+    if (e) e.preventDefault();
+    if (signinBusy) return;
+    var email = els.signinEmail.value.trim().toLowerCase(), pw = els.signinPassword.value, name = clean1(els.signinName.value);
+    if (!email) { signinError('Type the clinic email.'); els.signinEmail.focus(); return; }
+    if (!pw) { signinError('Type the password.'); els.signinPassword.focus(); return; }
+    if (!name) { signinError('Add your name — it’s shown on the results you save.'); els.signinName.focus(); return; }
+    if (navigator.onLine === false) { signinError(signinMessage({ code: 'network' })); return; }
+    signinError('');
+    signinBusySet(true);
+    CLOUD.signIn(email, pw).then(function () {
+      var was = userName();
+      CLOUD.setUserName(name);
+      els.signinPassword.value = '';
+      clients = CLOUD.cache;
+      legacyAsked = false;
+      fillPractitioner(was);
+      showApp();
+      render();
+      window.scrollTo(0, 0);
+      CLOUD.sync();
+    }, function (err) {
+      signinBusySet(false);
+      signinError(signinMessage(err));
+      focusQuiet(err && err.code === 'network' ? els.signinBtn : els.signinPassword);
+    });
+  }
+  function togglePassword() {
+    var show = els.signinPassword.type === 'password';
+    els.signinPassword.type = show ? 'text' : 'password';
+    els.signinShow.textContent = show ? 'Hide' : 'Show';
+    els.signinShow.setAttribute('aria-pressed', String(show));
+    focusQuiet(els.signinPassword);
+  }
+  // the ⋯ menu's account line and items (stamped from the template in cloud mode)
+  function renderMenuAccount() {
+    var line = $('menuAccount'), a = CLOUD.account();
+    if (!line) return;
+    line.innerHTML = a ? 'Signed in as <b>' + esc(a.email) + '</b> · ' + esc(userName() || 'no name yet') : '';
+  }
+  function openNameDialog() {
+    els.nameBox.value = userName();
+    els.nameErr.hidden = true;
+    openModal(els.nameDialog, els.nameBox);
+    try { els.nameBox.select(); } catch (e) { /* not selectable */ }
+  }
+  function saveName() {
+    var nm = clean1(els.nameBox.value);
+    if (!nm) { els.nameErr.textContent = 'Add your name.'; els.nameErr.hidden = false; els.nameBox.focus(); return; }
+    var was = userName();
+    CLOUD.setUserName(nm);
+    closeModal();
+    renderMenuAccount();
+    if (fillPractitioner(was)) render();
+    toast(nm === was ? 'Name unchanged' : 'Your name is now ' + nm);
+  }
+  function askSignOut() {
+    var n = CLOUD.pendingCount();
+    if (!n) { signOutNow(); return; }
+    els.signOutText.textContent = n + (n === 1 ? ' result is' : ' results are') + ' still waiting to upload — sign out anyway?';
+    openModal(els.signOutDialog, els.signOutCancel);
+  }
+  function signOutNow() {
+    closeModal(false);
+    CLOUD.signOut();                                   // cloud.js drops the login and the cache, then says so (onCloudChange)
+  }
+  // the slim bar under the app bar: waiting uploads while offline / after a failed push, or a permission refusal
+  function renderCloudBar() {
+    var bar = els.cloudBar;
+    if (!bar) return;
+    var s = CLOUD.status(), text = '', cls = 'cloud-bar';
+    var n = s.pending + (s.pending === 1 ? ' result' : ' results');
+    if (!CLOUD.signedIn()) text = '';
+    else if (s.denied) { text = 'The clinic store refused this device (permission). Results are kept on this device until it is fixed.'; cls += ' denied'; }
+    else if (s.pending && s.offline) text = 'Offline — ' + n + ' will upload when you’re back online.';
+    else if (s.pending && s.failed) text = n + ' waiting to upload — the clinic store didn’t answer. The app will try again shortly.';
+    var was = bar.hidden;
+    bar.textContent = text;
+    bar.className = cls;
+    bar.hidden = !text;
+    if (was !== bar.hidden) measureBar();
+  }
+  // records saved on this device before the clinic store: offered for upload once the first pull is in
+  function maybeLegacyPrompt() {
+    if (legacyAsked || !CLOUD.signedIn() || openModalEl || !els.sheet.hidden) return;
+    if (clients.legacy === 'never' || clients.legacy === 'uploaded') return;
+    var old = loadLocalClients(), keys = Object.keys(old.clients), n = 0;
+    keys.forEach(function (k) { n += Array.isArray(old.clients[k].sessions) ? old.clients[k].sessions.length : 0; });
+    if (!keys.length) return;
+    legacyAsked = true;
+    els.legacyText.textContent = 'This device has ' + keys.length + (keys.length === 1 ? ' client (' : ' clients (') + n + (n === 1 ? ' session)' : ' sessions)') + ' saved before the clinic store. Upload them?';
+    openModal(els.legacyDialog, els.legacyUpload);
+  }
+  function legacyUpload() {
+    var old = loadLocalClients(), r = mergeRecords(old);
+    if (!saveClients()) { toast('This device wouldn’t save the records'); return; }
+    try {
+      var raw = localStorage.getItem(HIST);
+      if (raw != null) localStorage.setItem('bh-athlete-report-clients-legacy-v1', raw);
+      localStorage.removeItem(HIST);
+    } catch (e) { /* storage unavailable */ }
+    clients.legacy = 'uploaded';
+    saveClients();
+    closeModal();
+    refresh();
+    CLOUD.sync();
+    var n = r.added + r.updated;
+    toast(n ? 'Uploading ' + n + (n === 1 ? ' session' : ' sessions') + ' to the clinic store' + (r.fresh ? ' (' + r.fresh + (r.fresh === 1 ? ' new client)' : ' new clients)') : '') : 'Those records are already in the clinic store');
+  }
+  function legacyNever() {
+    clients.legacy = 'never';
+    saveClients();
+    closeModal();
+  }
+  function onCloudChange(evt) {
+    clients = CLOUD.cache;                             // a new object after a sign-out or sign-in
+    if (evt.kind === 'cache') {
+      if (!state) return;
+      if (openModalEl === els.clientsDialog) renderClientsList();
+      refresh();
+    } else if (evt.kind === 'status') {
+      renderCloudBar();
+    } else if (evt.kind === 'uploaded') {
+      renderCloudBar();
+      toast('Uploaded ' + evt.n + (evt.n === 1 ? ' waiting result' : ' waiting results'));
+    } else if (evt.kind === 'settings') {
+      applyCloudKey(evt.key);
+    } else if (evt.kind === 'synced') {
+      if (state) maybeLegacyPrompt();
+    } else if (evt.kind === 'signout') {
+      showSignIn(evt.message || '');
+    }
+  }
+  function initCloud() {
+    if (els.accountTpl && !$('menuAccount')) els.moreMenu.insertBefore(document.importNode(els.accountTpl.content, true), els.moreMenu.firstChild);
+    els.clientsFine.textContent = 'Records are kept in the clinic store and shared by every signed-in device; this device keeps a copy for when the Wi‑Fi is poor. Back up records… in the ⋯ menu still saves a file.';
+    CLOUD.onChange(onCloudChange);
+    els.signinForm.addEventListener('submit', onSignIn);
+    els.signinShow.addEventListener('click', togglePassword);
+    var nameItem = $('nameItem'), signOutItem = $('signOutItem');
+    if (nameItem) nameItem.addEventListener('click', menuAction(openNameDialog));
+    if (signOutItem) signOutItem.addEventListener('click', menuAction(askSignOut));
+    els.nameCancel.addEventListener('click', function () { closeModal(); });
+    els.nameSave.addEventListener('click', saveName);
+    els.nameBox.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); saveName(); } });
+    els.signOutCancel.addEventListener('click', function () { closeModal(); });
+    els.signOutConfirm.addEventListener('click', signOutNow);
+    els.legacyLater.addEventListener('click', function () { closeModal(); });
+    els.legacyUpload.addEventListener('click', legacyUpload);
+    els.legacyNever.addEventListener('click', legacyNever);
+    [els.nameDialog, els.signOutDialog].forEach(function (d) { d.addEventListener('click', function (e) { if (e.target === d) closeModal(); }); });
+    if (CLOUD.signedIn()) { showApp(); CLOUD.sync(); }
+    else showSignIn('');
   }
 
   // ------------------------------------------------------------------ boot
@@ -3198,6 +3472,7 @@
       testsPref = loadTestsPref();
       state = loadDraft() || { v: 1, tool: 'screen', screen: freshTool('screen'), str: freshTool('str'), ham: freshTool('ham'), acl: freshTool('acl'), ex: freshEx() };
       tidyState();
+      if (CLOUD && CLOUD.signedIn()) fillPractitioner('');   // v13: blank Clinician boxes take this device's practitioner name
       els.entry.addEventListener('input', onInput);
       els.entry.addEventListener('change', onChange);
       els.entry.addEventListener('click', onClick);
@@ -3275,6 +3550,7 @@
         if (!stuckFrame) stuckFrame = requestAnimationFrame(function () { stuckFrame = 0; checkStuck(); });
       }, { passive: true });
       render();
+      if (CLOUD) initCloud();                          // v13: the sign-in card while signed out, else the first sync
     }).catch(function (err) {
       els.entry.innerHTML = '<section class="card error-card"><div class="card-head"><h2>Norms not found</h2></div>' +
         '<p>The app couldn’t load its norms files (' + esc(err.message) + '). Check that norms.json, strength_norms.json, hamstring_norms.json and acl_norms.json sit next to index.html, then reload. ' +
