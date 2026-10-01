@@ -677,11 +677,21 @@ html.signed-out .workspace, html.signed-out .dock, html.signed-out .tools, html.
 .interp textarea[readonly] { opacity: .6; }
 .interp textarea::placeholder { color: color-mix(in srgb, var(--muted) 85%, transparent); }
 .interp-privacy { margin: 8px 2px 0; }
-.interp-flag { width: 100%; min-height: 36px; margin: 0 0 10px; font-size: 14px; gap: 6px; }
+.interp-flag, .ex-flag { width: 100%; min-height: 36px; margin: 0 0 10px; font-size: 14px; gap: 6px; }
 p.interp-flag { display: flex; align-items: center; justify-content: center; color: var(--muted); font-weight: 600; }   /* v18: drafting… */
-.interp-flag svg { width: 16px; height: 16px; }
-.interp-flag.ok { color: var(--green-ink); }
-.interp-flag.stale { color: var(--amber-ink); }
+.interp-flag svg, .ex-flag svg { width: 16px; height: 16px; }
+.interp-flag.ok, .ex-flag.ok { color: var(--green-ink); }
+.interp-flag.stale, .ex-flag.stale { color: var(--amber-ink); }
+/* v19: the report and the exercise program together (a report's summary line; the builder's linked panel) */
+.ex-flag svg { flex: none; }
+.sum-foot .interp-flag + .ex-flag { margin-top: -6px; }   /* the AI line and the exercise line, one under the other */
+.ex-link { margin: 4px 0 10px; padding: 10px 12px 6px; border: 1px solid color-mix(in srgb, var(--teal) 30%, var(--line)); border-radius: 12px; background: color-mix(in srgb, var(--teal) 7%, var(--surface)); }
+.ex-linkline { display: flex; align-items: flex-start; gap: 8px; margin: 0; font-size: 14px; font-weight: 600; line-height: 1.35; color: var(--fg); }
+.ex-linkline svg { flex: none; width: 16px; height: 16px; margin-top: 1px; color: var(--teal-ink); }
+.ex-linkacts { display: flex; flex-wrap: wrap; gap: 0 2px; margin: 2px 0 0 -8px; }
+.ex-linkacts .quiet { min-height: 36px; font-size: 14px; }
+.f input[readonly] { border-style: dashed; background: transparent; }   /* v19: the linked program's name and date (the report's) */
+.f input[readonly]:focus { box-shadow: none; border-color: var(--line-strong); }
 
 /* ---------- scan notes: photo of handwritten results -> boxes filled and highlighted */
 .head-actions { display: flex; gap: 8px; flex-wrap: wrap; }
@@ -1503,13 +1513,13 @@ html.row-dragging, html.row-dragging * { cursor: grabbing !important; user-selec
 
 <div class="toast" id="toast" role="status" hidden></div>
 
-<script src="engine.js?v=18" defer></script>
-<script src="report-fonts.js?v=18" defer></script>
-<script src="jspdf.umd.min.js?v=18" defer></script>
-<script src="qrcode.js?v=18" defer></script>
-<script src="report.js?v=18" defer></script>
-<script src="cloud-config.js?v=18" defer></script>
-<script src="cloud.js?v=18" defer></script>
-<script src="app.js?v=18" defer></script>
+<script src="engine.js?v=19" defer></script>
+<script src="report-fonts.js?v=19" defer></script>
+<script src="jspdf.umd.min.js?v=19" defer></script>
+<script src="qrcode.js?v=19" defer></script>
+<script src="report.js?v=19" defer></script>
+<script src="cloud-config.js?v=19" defer></script>
+<script src="cloud.js?v=19" defer></script>
+<script src="app.js?v=19" defer></script>
 </body>
 </html>

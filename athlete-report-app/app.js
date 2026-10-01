@@ -151,6 +151,7 @@
     return JSON.stringify(state, function (k, v) { return k === 'editing' && this === state.ex ? undefined : v; });
   }
   function saveDraft() {
+    followReport();                                    // v19: a linked program keeps the report's name and date
     clearTimeout(saveTimer);
     saveTimer = setTimeout(function () {
       try { localStorage.setItem(STORE, draftJson()); } catch (e) { /* storage unavailable */ }
@@ -259,10 +260,11 @@
     r.tests.forEach(function (t) { r.byId[t.id] = t; });
     return r;
   }
-  function compute() {
-    if (state.tool === 'screen') return computeScreen();
-    if (state.tool === 'str') return computeStrength();
-    return computeRehab(state.tool);
+  function compute() { return computeFor(state.tool); }
+  function computeFor(t) {                             // v19: any report tool's results (the builder makes the linked report too)
+    if (t === 'screen') return computeScreen();
+    if (t === 'str') return computeStrength();
+    return computeRehab(t);
   }
 
   // ------------------------------------------------------------------ rendering: entry column
@@ -332,7 +334,7 @@
       (o.type ? ' type="' + o.type + '"' : ' type="text"') +
       (o.mode ? ' inputmode="' + o.mode + '"' : '') +
       (o.placeholder ? ' placeholder="' + esc(o.placeholder) + '"' : '') +
-      (o.words ? ' autocapitalize="words"' : '') + ' autocomplete="off" spellcheck="false" enterkeyhint="next"></label>';
+      (o.words ? ' autocapitalize="words"' : '') + (o.readonly ? ' readonly aria-readonly="true"' : '') + ' autocomplete="off" spellcheck="false" enterkeyhint="next"></label>';
     // the name field offers saved clients as you type (o.plain: a name box without suggestions, on the Exercises tab)
     if (key === 'name' && !o.plain) html ='<div class="f' + (o.cls ? ' ' + o.cls : '') + ' name-wrap">' + html.replace(' ' + o.cls, '') + '<div class="suggest" id="' + id + '-sugg" hidden></div></div>';
     return html;
@@ -809,6 +811,7 @@
   function render() {
     var t = state.tool, section = t === 'ex' ? 'ex' : 'screening';
     document.querySelectorAll('.tools button').forEach(function (b) { b.setAttribute('aria-selected', String(b.dataset.section === section)); });
+    followReport();                                    // v19: a linked program shows the report's name and date
     if (t === 'ex') { renderExPage(); return; }
     els.entry.innerHTML = '<div class="pagehead">' + pickHtml(t) + '<p>' + esc(HEAD[t][1]) + '</p></div>' + athleteCard() + testsBarHtml(t) +
       (t === 'str' ? strengthGroupHtml() : groupsHtml(t)) + (t === 'acl' ? rtsCardHtml() : '') + coachCardHtml() + interpCardHtml() +
@@ -1354,12 +1357,13 @@
 
   // ------------------------------------------------------------------ rendering: summary + dock
   var TALLY = { screen: E.TALLY_WORDS.target, rehab: E.TALLY_WORDS.rehab };
-  function blocker(c) {
-    if (state.tool === 'str') {
+  function blocker(c, tool) {                           // v19: tool (default the one on screen)
+    var t = tool || state.tool;
+    if (t === 'str') {
       if (c.rows.length) return '';
       return c.tests.length ? 'Add body mass (kg) to score these results.' : 'Enter at least one result to create the report.';
     }
-    var t = state.tool, none = t === 'screen' ? 'Enter at least one result to create the report.' : 'Enter at least one result to create the rehab report.';
+    var none = t === 'screen' ? 'Enter at least one result to create the report.' : 'Enter at least one result to create the rehab report.';
     var need = t === 'screen' ? (c.pop.population ? '' : 'Choose Male or Female (or a sport population)') : rehabNeed(t);
     if (!hasResults(t)) return none;                  // v18: until then the details card's prompt is the only one
     if (need) return need + ' to score the results.';
@@ -1449,7 +1453,7 @@
         : c.radarPicked.length <= 4 ? 'Bars on the report; pick 5 or 6 for a radar.' : 'A radar on the report; pick 3 or 4 for bars.') + '</p>';
     }
     var why = blocker(c);
-    html += '</div><div class="sum-foot">' + checkFlagHtml() + interpFlagHtml(t, c) + '<button type="button" class="primary make" data-action="report"' + (why ? ' disabled' : '') + '>Create report</button>' +
+    html += '</div><div class="sum-foot">' + checkFlagHtml() + interpFlagHtml(t, c) + exLinkHtml(t) + '<button type="button" class="primary make" data-action="report"' + (why ? ' disabled' : '') + '>Create report</button>' +
       '<p class="fine">' + esc(why || 'Preview, then share or save.') + '</p>' +
       '<p class="fine client-line">' + esc(clientLine(t)) + '</p></div></div>';
     els.summary.innerHTML = html;
@@ -1514,6 +1518,11 @@
     if (b.dataset.action === 'choose-client') { openClientsDialog('pick'); return; }
     if (b.dataset.action === 'import-menu') { var im = importMenu(); setImportMenu(!!im && im.hidden, true); return; }   // v18
     if (b.dataset.action === 'tests-today') { openTestsDialog(); return; }
+    if (b.dataset.action === 'add-program') { linkProgram(t); return; }          // v19: the report and the program together
+    if (b.dataset.action === 'goto-program') { gotoProgram(); return; }
+    if (b.dataset.action === 'back-to-report') { backToReport(); return; }
+    if (b.dataset.action === 'unlink-program') { unlinkProgram(); return; }
+    if (b.dataset.action === 'link-report') { linkFromBuilder(b.dataset.tool); return; }
     if (t === 'ex' && exPageButton(b)) return;         // v15: the library and templates pages, library links in the builder
     if (t === 'ex' && exButton(b)) return;
     if (b.dataset.action === 'explain') {
@@ -1683,13 +1692,13 @@
     }
     return fontsReady;
   }
-  function fileName(suffix) {
-    var n = (state[state.tool].meta.name || person(state.tool)).trim() || person(state.tool);
+  function fileName(suffix, tool) {
+    var t = tool || state.tool, n = (state[t].meta.name || person(t)).trim() || person(t);
     return n.replace(/[\\/:*?"<>|]+/g, '-').replace(/ /g, '_') + suffix;
   }
-  function buildReport() {
-    var t = state.tool, c = compute(), m = state[t].meta;
-    if (blocker(c)) return null;
+  function buildReport(tool) {                         // v19: any report tool (the builder makes the linked report)
+    var t = tool || state.tool, c = computeFor(t), m = state[t].meta;
+    if (blocker(c, t)) return null;
     var it = state[t].interp, interp = blank(it.text) ? null : { text: String(it.text).trim(), ai: !!it.ai };
     var progress = progressData(t, c);
     // each priority carries its plain-English explainer (printed under it in smaller text)
@@ -1698,7 +1707,7 @@
     }
     if (t === 'str') {
       return {
-        file: fileName('_strength.pdf'),
+        file: fileName('_strength.pdf', t),
         rep: window.BHReport.strength({
           meta: { name: m.name, date: E.displayIso(m.date), mass: m.mass, sport: m.sport, tester: m.tester, notes: m.notes },
           tests: c.tests, counts: c.counts, prios: explained(c.prios, function (r) { return r.id; }), amberPct: DATA.str.amber_pct, interp: interp, progress: progress,
@@ -1710,7 +1719,7 @@
       var labels = {};
       c.radarOptions.forEach(function (o) { labels[o[0]] = o[1]; });
       return {
-        file: fileName('_report.pdf'),
+        file: fileName('_report.pdf', t),
         rep: window.BHReport.screening({
           meta: { name: m.name, date: E.displayIso(m.date), sport: m.sport, tester: m.tester, age: m.age, sex: m.sex, mass: m.mass, notes: m.notes },
           popLabel: c.pop.label, groups: c.groups, counts: c.counts, prios: explained(c.prios, function (r) { return r.name; }),
@@ -1721,7 +1730,7 @@
     var auto = function (fromIso, div) { var d = daysBetween(fromIso, m.date); return d !== null && d >= 0 ? String(Math.floor(d / div)) : ''; };
     if (t === 'ham') {
       return {
-        file: fileName('_hamstring.pdf'),
+        file: fileName('_hamstring.pdf', t),
         rep: window.BHReport.rehab({
           kind: 'ham', phase: state.ham.phase, groups: c.groups, counts: c.counts, disclaimer: DATA.ham.disclaimer || '', interp: interp, progress: progress, coach: coachData(t),
           meta: { name: m.name, date: E.displayIso(m.date), injured: m.injured, clinician: m.clinician, weeks: blank(m.weeks) ? auto(m.doi, 7) : m.weeks, sport: m.sport, notes: m.notes }
@@ -1729,7 +1738,7 @@
       };
     }
     return {
-      file: fileName('_acl.pdf'),
+      file: fileName('_acl.pdf', t),
       rep: window.BHReport.rehab({
         kind: 'acl', phase: state.acl.phase, sex: state.acl.sex, groups: c.groups, counts: c.counts, disclaimer: DATA.acl.disclaimer || '', interp: interp, progress: progress,
         coach: coachData(t), rts: rtsData(c),
@@ -1737,24 +1746,134 @@
       })
     };
   }
+  // ------------------------------------------------------------------ the report and the exercise program together (v19)
+  // Matthew: testing, then the exercise prescription, both written on paper, should end in one document. A report's
+  // summary offers "Add an exercise program": the Exercises builder opens with the patient's name and date (and a blank
+  // Clinician box filled in) and the program is linked to that report. While linked, the program's name and date are the
+  // report's (the builder shows them read-only), the report's summary says "Exercise program included", and Create report
+  // (or "Create report + exercises" in the builder) makes ONE PDF: the report's pages, then the program's, and saves both to
+  // the client's record. The link ends when the report's page is cleared for another client (New client, or another client
+  // chosen while it holds entries), when another client is chosen in the builder, at Return home, at Clear all, or with
+  // "Print on its own" in the builder. A name typed or chosen on a report page holding nothing else is a correction, so the
+  // program follows it. The other way round, the builder offers to print a named program with that patient's report when
+  // one of the Screening tools holds it.
+  var EX_ICON = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="4.5" width="14" height="16.5" rx="2"/><path d="M9 3h6v3H9zM9 11h6M9 15h4"/></svg>';
+  function linkedTool() {                              // the Screening tool the program prints after, or ''
+    var l = state.ex && state.ex.link;
+    return TOOLS.indexOf(l) >= 0 ? l : '';
+  }
+  function followReport() {                            // while linked, the program's patient is the report's
+    var lt = state && state.ex ? linkedTool() : '';
+    if (!lt) return;
+    var m = state[lt].meta, x = state.ex.meta;
+    if (x.name !== (m.name || '')) x.name = m.name || '';
+    if (x.date !== (m.date || '')) x.date = m.date || '';
+  }
+  // + Add an exercise program (a report's summary): link, carry the patient over, open the builder. A program already
+  // there for this patient (or with no name yet) is kept; another patient's is cleared first, with Undo.
+  function linkProgram(t) {
+    if (TOOLS.indexOf(t) < 0) return;
+    var m = state[t].meta, x = state.ex, was = clean1(x.meta.name), moved = x.link && x.link !== t ? x.link : '';
+    var other = !blank(x.meta.name) && E.nameKey(x.meta.name) !== E.nameKey(m.name);
+    var undo = other && clientContent('ex', true) ? clearForClient('ex') : null;
+    if (other && !undo) x.meta.name = '';             // only a name there: nothing to keep
+    x = state.ex;
+    x.link = t;
+    followReport();
+    var who = NAME_FIELDS[t] ? m[NAME_FIELDS[t]] : '';   // the clinician (not on ACL: that box is the surgeon's)
+    if (blank(x.meta.practitioner) && !blank(who)) x.meta.practitioner = clean1(who);
+    state.exPage = 'builder';
+    foldBeforeRender('ex');
+    closePick(false);
+    switchTool('ex');
+    saveDraft();
+    focusQuiet(pickBtn());                             // the page heading (no keyboard, no scroll)
+    if (undo) toast('Cleared ' + (was || 'the last client') + '’s program for ' + (clean1(m.name) || 'this client'), { label: 'Undo', run: undo });
+    else if (moved) toast('The program now prints after the ' + TOOL_NAMES[t] + ' report', { label: 'Undo', run: function () {
+      if (state.ex !== x || x.link !== t) return;
+      x.link = moved; followReport(); render(); saveDraft();
+    } });
+  }
+  function gotoProgram() {                             // ✓ Exercise program included: to the builder
+    closePick(false);
+    state.exPage = 'builder';
+    switchTool('ex');
+    saveDraft();
+    focusQuiet(pickBtn());
+  }
+  function backToReport() {                            // the builder's ‹ Back to the report
+    var lt = linkedTool();
+    if (!lt) return;
+    closePick(false);
+    switchTool(lt);
+    focusQuiet(pickBtn());
+  }
+  function unlinkProgram() {                           // the builder's Print on its own
+    var lt = linkedTool(), x = state.ex;
+    if (!lt) return;
+    x.link = '';
+    render();
+    saveDraft();
+    toast('The program will print on its own', { label: 'Undo', run: function () {
+      if (state.ex !== x || x.link || E.nameKey(state[lt].meta.name) !== E.nameKey(x.meta.name)) return;
+      x.link = lt; followReport(); render(); saveDraft();
+    } });
+  }
+  // the other way round: a named program in the builder, and that patient's results on a Screening tool
+  function reportFor() {
+    var key = E.nameKey(state.ex.meta.name);
+    if (!key || linkedTool()) return '';
+    var list = TOOLS.filter(function (t) { return E.nameKey(state[t].meta.name) === key && hasResults(t); });
+    return list.indexOf(state.screenTool) >= 0 ? state.screenTool : (list[0] || '');
+  }
+  function linkFromBuilder(t) {
+    if (TOOLS.indexOf(t) < 0 || reportFor() !== t) return;
+    state.ex.link = t;
+    followReport();
+    render();
+    saveDraft();
+    focusQuiet(els.summary.querySelector('[data-action="report"]'));
+  }
+  // one PDF: the report's pages, then the program's (each part keeps its own header and footer)
+  function buildBoth(rt) {
+    var r = buildReport(rt), h = buildHandout();
+    if (!r || !h) return null;
+    var parts = r.rep.title.split(' — '), base = parts.shift(), who = parts.join(' — ');
+    return {
+      file: r.file.replace(/\.pdf$/i, '') + '_and_exercises.pdf', program: h.program, both: rt,
+      rep: { pages: r.rep.pages.concat(h.rep.pages), title: base + ' + Exercise Program' + (who ? ' — ' + who : '') }
+    };
+  }
+  // the results and the program into the client's record (two sessions, as when they are made apart)
+  function saveBoth(rt, program) {
+    var a = saveSession(rt, computeFor(rt)), b = saveProgram(program);
+    if (!a && !b) return null;                         // no name: nothing to save
+    if (a && a.ok) markSaved(rt);
+    if (b && b.ok) markSaved('ex');
+    var ok = !!(a && a.ok) && !!(b && b.ok), name = (a || b).name;
+    return { ok: ok, name: name, both: true, replaced: !!(a && a.replaced && b && b.replaced), count: ((b && b.ok) ? b : a).count };
+  }
   function canShare(file) {
     try { return !!(navigator.share && navigator.canShare && navigator.canShare({ files: [file] })); } catch (e) { return false; }
   }
   function openReport() {
-    var ex = state.tool === 'ex', t = state.tool;
-    var built = ex ? buildHandout() : buildReport();
+    var ex = state.tool === 'ex', t = state.tool, lt = linkedTool();
+    // v19: a report with its linked program (made from either side) is one PDF, the report's pages first
+    var both = lt && (ex || lt === t) && exCounts().exercises > 0 ? lt : '';
+    var built = both ? buildBoth(both) : ex ? buildHandout() : buildReport(t);
     if (!built) return;
     // v15: the exercise handout is saved to the client's record too (the program as printed)
-    var saved = ex ? saveProgram(built.program) : saveSession(state.tool, compute());
+    var saved = both ? saveBoth(both, built.program) : ex ? saveProgram(built.program) : saveSession(state.tool, compute());
     if (saved) {
       if (!saved.ok) toast('The session couldn’t be saved to the client record (storage is full or blocked).');
       else {
-        markSaved(t);                                  // v16: what is in the record now (Return home compares with it)
-        toast(saved.replaced ? 'Updated ' + saved.name + '’s record for this date' : 'Saved to ' + saved.name + '’s record (' + saved.count + (saved.count === 1 ? ' session)' : ' sessions)'));
+        if (!both) markSaved(t);                       // v16: what is in the record now (Return home compares with it)
+        toast(both ? (saved.replaced ? 'Updated ' + saved.name + '’s record for this date' : 'Saved the report and the program to ' + saved.name + '’s record')
+          : saved.replaced ? 'Updated ' + saved.name + '’s record for this date' : 'Saved to ' + saved.name + '’s record (' + saved.count + (saved.count === 1 ? ' session)' : ' sessions)'));
       }
       refresh();
     }
-    homeFrom = { tool: t, name: saved && saved.ok ? saved.name : '', saved: !!(saved && saved.ok) };
+    homeFrom = { tool: both || t, name: saved && saved.ok ? saved.name : '', saved: !!(saved && saved.ok) };
     els.back.textContent = '‹ ' + (ex ? 'Back to the program' : 'Back to results');
     current = { file: null, blob: null, title: built.rep.title };
     els.sheetTitle.innerHTML = esc(built.rep.title) + '<small>' + esc(built.file) + '</small>';
@@ -1861,10 +1980,15 @@
   }
   // the tools (and the program) holding entries that aren't in a client record as they are now
   function unsavedTools() {
-    return TOOLS.concat(['ex']).filter(function (t) { return clientContent(t) && state[t].savedSig !== contentSig(t); });
+    return TOOLS.concat(['ex']).filter(function (t) {
+      // v19: a linked program's name and date are the report's, so only exercises (or a title) count as its own
+      var has = t === 'ex' && linkedTool() ? exHasContent() : clientContent(t);
+      return has && state[t].savedSig !== contentSig(t);
+    });
   }
   // a tool emptied for the next client: the practitioner's name stays (Tester / Clinician / Practitioner)
   function resetTool(t) {
+    if (state.ex && state.ex.link === t) state.ex.link = '';   // v19: that report has gone, so the program prints on its own
     if (t === 'ex') {
       var p = state.ex.meta.practitioner;
       state.ex = freshEx();
@@ -1878,7 +2002,7 @@
   // v18: a clean page on this tool for another client (New client, or a different client chosen while the page holds
   // someone's entries), as Return home does for every tool: the practitioner's name stays. Gives back the Undo.
   function clearForClient(t) {
-    var snap = JSON.parse(JSON.stringify(state[t])), wasLoaded = exLoaded;
+    var snap = JSON.parse(JSON.stringify(state[t])), wasLoaded = exLoaded, link0 = state.ex.link;
     resetTool(t);
     tidyState();
     var fresh = state[t];
@@ -1887,6 +2011,8 @@
     return function () {
       if (state[t] !== fresh) return;                // replaced again since (Return home, Clear all, another client)
       state[t] = snap;
+      // v19: the program linked to this report goes with it again, if it is still this client's
+      if (t !== 'ex' && link0 === t && !state.ex.link && E.nameKey(state.ex.meta.name) === E.nameKey(snap.meta.name)) state.ex.link = t;
       tidyState();
       if (t === 'ex') exLoaded = wasLoaded;
       dropPending(t);
@@ -2373,6 +2499,17 @@
   }
   // the summary's interpretation line. v18: 'Add an AI interpretation' drafts straight away (until v17 it scrolled down to
   // a second button); it shows once there is something to interpret, and says when a draft is under way or didn't work
+  // v19: the exercise program on a report's summary: Add an exercise program (once the page has a name), or while
+  // linked, Exercise program included (a tap opens it in the builder)
+  function exLinkHtml(t) {
+    if (linkedTool() === t) {
+      var n = exCounts().exercises;
+      return n ? '<button type="button" class="quiet ex-flag ok" data-action="goto-program">✓ Exercise program included · ' + n + (n === 1 ? ' exercise' : ' exercises') + '</button>'
+        : '<button type="button" class="quiet ex-flag stale" data-action="goto-program">' + EX_ICON + 'Exercise program: no exercises yet</button>';
+    }
+    if (blank(state[t].meta.name)) return '';
+    return '<button type="button" class="quiet ex-flag" data-action="add-program">' + EX_ICON + 'Add an exercise program</button>';
+  }
   function interpFlagHtml(t, c) {
     var it = state[t].interp;
     if (aiBusy === t) return '<p class="interp-flag busy" role="status">' + SPARKLE + 'Drafting the interpretation…</p>';
@@ -2923,7 +3060,8 @@
   var ICON_TRASH = '<svg viewBox="0 0 24 24" width="19" height="19" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M10 11v6M14 11v6M5.5 7l1 12a2 2 0 0 0 2 1.8h7a2 2 0 0 0 2-1.8l1-12M9 7V4.5h6V7"/></svg>';
   var GRIP = '<svg class="grip-dots" viewBox="0 0 10 16" width="10" height="16" aria-hidden="true" focusable="false" fill="currentColor"><circle cx="2.5" cy="3" r="1.5"/><circle cx="7.5" cy="3" r="1.5"/><circle cx="2.5" cy="8" r="1.5"/><circle cx="7.5" cy="8" r="1.5"/><circle cx="2.5" cy="13" r="1.5"/><circle cx="7.5" cy="13" r="1.5"/></svg>';
 
-  function freshEx() { return { meta: { name: '', date: todayIso(), practitioner: userName() }, title: '', instructions: '', items: [], seq: 1, scanned: {}, cardOpen: true }; }
+  // link (v19): the Screening tool whose report this program prints after ('' when it prints on its own)
+  function freshEx() { return { meta: { name: '', date: todayIso(), practitioner: userName() }, title: '', instructions: '', items: [], seq: 1, scanned: {}, cardOpen: true, link: '' }; }
   function exStr(v) { return typeof v === 'string' ? v : (typeof v === 'number' && isFinite(v) ? String(v) : ''); }
   // drafts from v9 and earlier have no program; anything malformed in a stored one is tidied
   function tidyEx() {
@@ -2956,6 +3094,7 @@
     Object.keys(sc).forEach(function (k) { if (sc[k] === true && (k === 'title' || k === 'instructions' || seen[k])) keep[k] = true; });
     x.scanned = keep;
     x.cardOpen = x.cardOpen !== false;                 // v11: the patient card open unless folded into the strip
+    x.link = TOOLS.indexOf(x.link) >= 0 ? x.link : ''; // v19: the report it prints after (drafts from v18: none)
     delete x.editing;                                  // v18: no Edit mode (v11–v17 kept it off the draft anyway)
   }
   function newExRow(o) {
@@ -3002,11 +3141,12 @@
   // v15: the patient card has Choose client and the name box offers saved clients, as on the report tools; picking one
   // loads that client's last saved program. The client bar under the card or strip says what the record holds.
   function exPatientCard() {
+    var lt = linkedTool();                             // v19: while linked, the name and date are the report's
     return '<section class="card athlete ex-patient" id="athleteCard" tabindex="-1" aria-labelledby="exPatientH"' + (state.ex.cardOpen === false ? ' hidden' : '') + '>' + cardHead('ex', 'exPatientH') +
       '<div class="fields">' +
-      field('ex', 'name', 'Patient name', { cls: 'wide', words: true }) + field('ex', 'date', 'Date', { type: 'date' }) +
+      field('ex', 'name', 'Patient name', { cls: 'wide', words: true, readonly: !!lt }) + field('ex', 'date', 'Date', { type: 'date', readonly: !!lt }) +
       field('ex', 'practitioner', 'Clinician', { words: true }) +
-      '</div></section>' + stripHtml('ex') + '<div class="scan-bar" id="scanBar" role="status" aria-live="polite" hidden></div><div class="client-bar" id="clientBar" hidden></div>';
+      '</div>' + (lt ? '<p class="note ex-linknote">The name and date come from the ' + TOOL_NAMES[lt] + ' report.</p>' : '') + '</section>' + stripHtml('ex') + '<div class="scan-bar" id="scanBar" role="status" aria-live="polite" hidden></div><div class="client-bar" id="clientBar" hidden></div>';
   }
   // v18: the exercises first. The title, general instructions and Save as template sit under them (folded to
   // "+ Title and instructions" while both are empty); Start from template sits with the add buttons while the program is
@@ -3183,6 +3323,14 @@
   function andList(a) { return a.length > 1 ? a.slice(0, -1).join(', ') + ' and ' + a[a.length - 1] : (a[0] || ''); }
   function renderExSummary(c) {
     var why = c.exercises ? '' : 'Add at least one exercise to create the handout.';
+    // v19: linked to a report: one PDF with both, so the report has to be ready too (else its reason shows)
+    var lt = linkedTool(), cand = reportFor(), nm = clean1(state.ex.meta.name), whose = nm ? nm + '’s ' : 'the ';
+    if (lt && !why) { var rb = blocker(computeFor(lt), lt); if (rb) why = TOOL_NAMES[lt] + ' report: ' + rb.charAt(0).toLowerCase() + rb.slice(1); }
+    var make = lt ? 'Create report + exercises' : 'Create handout';
+    var linkHtml = lt ? '<div class="ex-link"><p class="ex-linkline">' + EX_ICON + '<span>Prints after ' + esc(whose + TOOL_NAMES[lt]) + ' report</span></p>' +
+        '<div class="ex-linkacts"><button type="button" class="quiet" data-action="back-to-report">‹ Back to the report</button>' +
+        '<button type="button" class="quiet" data-action="unlink-program">Print on its own</button></div></div>'
+      : cand ? '<button type="button" class="quiet ex-flag" data-action="link-report" data-tool="' + cand + '">' + EX_ICON + 'Print with ' + esc(whose + TOOL_NAMES[cand]) + ' report</button>' : '';
     var cols = exColumns(), later = EX_DETAIL.filter(function (f) { return cols.indexOf(f) < 0; }).map(function (f) { return EX_LABEL[f]; });
     var laterText = later.length ? (later.length > 1 ? later.slice(0, -1).join(', ') + ' and ' + later[later.length - 1] : later[0]) + (later.length > 1 ? ' are' : ' is') + ' added when used.' : '';
     // v15: how many filled rows are linked to the library, and how many of those print a video QR code
@@ -3194,12 +3342,12 @@
     var prints = 'Prints ' + andList(cols.slice(1).map(function (f) { return EX_LABEL[f]; })) + '.' + (laterText ? ' ' + laterText : '');
     els.summary.innerHTML = '<div class="sum ex-sum"><div class="sum-scroll"><h2>Exercise handout</h2>' +
       '<p class="ex-sumline">' + esc(counts) + '</p><p class="fine ex-prints">' + esc(prints) + '</p>' +
-      '</div><div class="sum-foot"><button type="button" class="primary make" data-action="report"' + (why ? ' disabled' : '') + '>Create handout</button>' +
+      '</div><div class="sum-foot">' + linkHtml + '<button type="button" class="primary make" data-action="report"' + (why ? ' disabled' : '') + '>' + make + '</button>' +
       (why ? '<p class="fine">' + esc(why) + '</p>' : '') +
       '<p class="fine client-line">' + esc(clientLine('ex')) + '</p></div></div>';
     els.dock.innerHTML = '<div class="dt"><span class="ex-dock"><b>' + c.exercises + '</b> ' + (c.exercises === 1 ? 'exercise' : 'exercises') +
       (c.sections ? ' · <b>' + c.sections + '</b> ' + (c.sections === 1 ? 'section' : 'sections') : '') + '</span></div>' +
-      '<button type="button" class="primary" data-action="report"' + (why ? ' disabled' : '') + '>Create handout</button>';
+      '<button type="button" class="primary" data-action="report"' + (why ? ' disabled' : '') + '>' + make + '</button>';
     els.dock.classList.remove('has-check');
   }
 
@@ -3207,6 +3355,8 @@
   function onExInput(el) {
     var x = state.ex;
     if (el.dataset.meta) {
+      // v19: while linked the name and date are the report's (read-only; an iPad may still open the date wheel)
+      if (linkedTool() && (el.dataset.meta === 'name' || el.dataset.meta === 'date')) { followReport(); el.value = x.meta[el.dataset.meta]; return; }
       x.meta[el.dataset.meta] = el.value;
       refreshEx();
       if (el.dataset.meta === 'name') suggestClients('ex', el.value);   // v15: saved clients, as on the report tools
@@ -4851,6 +5001,8 @@
     if (t === 'ex' && state.exPage !== 'builder') state.exPage = 'builder';   // v18: from the library or templates page
     var cur = E.nameKey(state[t].meta.name), was = clean1(state[t].meta.name);
     var undo = cur && cur !== key && clientContent(t, true) ? clearForClient(t) : null;
+    // v19: another client chosen in the builder: the program no longer goes with that report (its name stops following)
+    if (t === 'ex' && state.ex.link && key !== E.nameKey(state.ex.meta.name)) state.ex.link = '';
     if (t === 'ex') loadProgramFor(key, true, undo, was);   // v15: their last saved program
     else loadHistory(t, key, true, undo, was);
     focusQuiet(state[t].cardOpen === false ? document.querySelector('#athleteStrip [data-action="edit-athlete"]') : document.querySelector('#athleteCard [data-action="choose-client"]'));
