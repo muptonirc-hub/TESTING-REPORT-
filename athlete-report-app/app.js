@@ -94,7 +94,7 @@
 
   // ------------------------------------------------------------------ state
   var TOOLS = ['screen', 'str', 'ham', 'acl'];         // the four reports (the Exercises tab, 'ex', is handled on its own)
-  var TOOL_NAMES = { screen: 'Screening', str: 'LL Strength', ham: 'Hamstring rehab', acl: 'ACL rehab', ex: 'Exercises' };
+  var TOOL_NAMES = { screen: 'Performance screen', str: 'LL Strength', ham: 'Hamstring rehab', acl: 'ACL rehab', ex: 'Exercises' };   // v14: 'Screening' is the section
   function freshInterp() { return { text: '', ai: false, basis: '' }; }
   // For the coach (v8): the clinician's call on training, printed as a band on the report. Never worked out by the
   // app, never filled in from records and never sent to Claude.
@@ -175,6 +175,8 @@
     });
     tidyEx();                                          // v10: the exercise program (drafts from v9 and earlier have none)
     if (TOOLS.indexOf(state.tool) < 0 && state.tool !== 'ex') state.tool = 'screen';
+    // v14: the screening tool the Screening tab returns to (the one in use, or the last one used before Exercises)
+    if (TOOLS.indexOf(state.screenTool) < 0) state.screenTool = TOOLS.indexOf(state.tool) >= 0 ? state.tool : 'screen';
   }
   function val(tool, name) {
     var v = state[tool].values;
@@ -712,20 +714,30 @@
     testsDirty = true;
   }
 
-  // the tab row scrolls sideways when the five tabs don't fit (a small phone, larger text): keep the chosen one in view
-  function showTab() {
-    var bar = document.querySelector('.tools'), b = bar && bar.querySelector('[aria-selected="true"]');
-    if (!b || bar.scrollWidth <= bar.clientWidth + 1) return;
-    var r = bar.getBoundingClientRect(), q = b.getBoundingClientRect();
-    if (q.left < r.left + 16) bar.scrollLeft -= r.left + 16 - q.left;
-    else if (q.right > r.right - 16) bar.scrollLeft += q.right - (r.right - 16);
+  // v14: the two tabs in the bar (Screening holds the four tools, Exercises the program builder); inside Screening the
+  // page heading is the tool picker: a menu button listing the tools, the current one ticked
+  var TOOL_BLURB = {
+    screen: 'ForceDecks, NordBord, ForceFrame, DynaMo and SmartSpeed results against the norms for age & sex or sport.',
+    str: 'Each leg\u2019s load, force or reps: asymmetry and capacity against the targets.',
+    ham: 'Injured-limb results against the targets for the chosen rehab phase.',
+    acl: 'Injured-limb and symmetry results against ACLR norms for the phase and sex.'
+  };
+  function pickHtml(t) {
+    return '<div class="pick-wrap"><h1 class="pick-h"><button type="button" class="tool-pick" id="toolPick" data-tool="' + t + '" aria-haspopup="menu" aria-expanded="false" aria-controls="toolMenu" title="Choose a screening tool">' +
+      '<span class="pick-text">' + esc(HEAD[t][0]) + '</span>' +
+      '<span class="pick-chev" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></span></button></h1>' +
+      '<div class="menu tool-menu" id="toolMenu" role="menu" aria-label="Screening tools" hidden>' +
+      TOOLS.map(function (k) {
+        return '<button type="button" class="menu-item tool-item" id="pick-' + k + '" role="menuitemradio" aria-checked="' + (k === t) + '" data-pick="' + k + '" tabindex="-1">' +
+          '<svg class="ti-tick" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>' +
+          '<span class="ti-text"><b>' + esc(HEAD[k][0]) + '</b><small>' + esc(TOOL_BLURB[k]) + '</small></span></button>';
+      }).join('') + '</div></div>';
   }
   function render() {
-    var t = state.tool;
-    document.querySelectorAll('.tools button').forEach(function (b) { b.setAttribute('aria-selected', String(b.dataset.tool === t)); });
-    showTab();
+    var t = state.tool, section = t === 'ex' ? 'ex' : 'screening';
+    document.querySelectorAll('.tools button').forEach(function (b) { b.setAttribute('aria-selected', String(b.dataset.section === section)); });
     if (t === 'ex') { renderEx(); return; }
-    els.entry.innerHTML = '<div class="pagehead"><h1>' + esc(HEAD[t][0]) + '</h1><p>' + esc(HEAD[t][1]) + '</p></div>' + athleteCard() + testsBarHtml(t) +
+    els.entry.innerHTML = '<div class="pagehead">' + pickHtml(t) + '<p>' + esc(HEAD[t][1]) + '</p></div>' + athleteCard() + testsBarHtml(t) +
       (t === 'str' ? strengthGroupHtml() : groupsHtml(t)) + (t === 'acl' ? rtsCardHtml() : '') + coachCardHtml() + interpCardHtml() +
       '<span id="explainHint" hidden>Shows what this test measures.</span>';
     if (t === 'screen' && state.screen.importLog) showImportLog(state.screen.importLog);
@@ -1388,6 +1400,8 @@
   }
   function onButton(b) {
     var t = state.tool;
+    if (b.id === 'toolPick') { if (pickOpen()) closePick(true); else openPick(false); return; }   // v14
+    if (b.dataset.pick) { pickTool(b.dataset.pick); return; }
     if (b.dataset.action === 'edit-athlete') { openCard(); return; }
     if (b.dataset.action === 'done-athlete') { closeCard(); return; }
     if (b.dataset.action === 'choose-client') { openClientsDialog('pick'); return; }
@@ -1674,14 +1688,60 @@
   function switchTool(tool) {
     if (tool === state.tool) return;
     state.tool = tool;
+    if (TOOLS.indexOf(tool) >= 0) state.screenTool = tool;   // v14: where the Screening tab comes back to
     render();
     window.scrollTo(0, 0);
+  }
+  // the Screening tab (v14): from Exercises it returns to the screening tool last in use; a second tap, already in
+  // Screening, opens the tool picker so the other tools are one tap away
+  function onSectionTab(section) {
+    if (section === 'ex') { closePick(false); switchTool('ex'); return; }
+    if (state.tool === 'ex') { switchTool(state.screenTool); return; }
+    window.scrollTo(0, 0);
+    openPick(false);
+  }
+  // the tool picker's menu (v14): the same manners as the ⋯ menu
+  function pickBtn() { return $('toolPick'); }
+  function pickMenu() { return $('toolMenu'); }
+  function pickOpen() { var m = pickMenu(); return !!m && !m.hidden; }
+  function pickItems() { var m = pickMenu(); return m ? Array.prototype.slice.call(m.querySelectorAll('[role="menuitemradio"]')) : []; }
+  function openPick(last) {
+    var m = pickMenu(), b = pickBtn();
+    if (!m || !b) return;
+    closeMenu(false);
+    m.hidden = false;
+    b.setAttribute('aria-expanded', 'true');
+    var items = pickItems(), on = items.filter(function (x) { return x.getAttribute('aria-checked') === 'true'; })[0];
+    focusQuiet(last ? items[items.length - 1] : (on || items[0]));
+  }
+  function closePick(focusButton) {
+    var m = pickMenu(), b = pickBtn();
+    if (!m || m.hidden) return;
+    m.hidden = true;
+    if (b) b.setAttribute('aria-expanded', 'false');
+    if (focusButton) focusQuiet(b);
+  }
+  function onPickKey(e) {
+    var items = pickItems(), n = items.length, i = items.indexOf(document.activeElement);
+    if (e.key === 'Escape') { e.preventDefault(); closePick(true); return; }
+    if (e.key === 'Tab') { closePick(false); return; }
+    var to = e.key === 'ArrowDown' ? (i + 1) % n : e.key === 'ArrowUp' ? (i < 0 ? n - 1 : (i + n - 1) % n) : e.key === 'Home' ? 0 : e.key === 'End' ? n - 1 : -1;
+    if (to < 0) return;
+    e.preventDefault();
+    items[to].focus();
+  }
+  function pickTool(tool) {
+    closePick(false);
+    if (tool === state.tool) { focusQuiet(pickBtn()); return; }
+    switchTool(tool);
+    focusQuiet(pickBtn());                             // the new page's heading, for keyboard users (no scroll, no keyboard)
   }
   // the ⋯ menu (v11): Clear all data…, Back up records…, Restore records…, AI settings…. Arrow keys move between the items;
   // a tap outside, Escape or choosing an item closes it. Items that open a pop-up hand focus back to ⋯ when it closes.
   function menuOpen() { return !els.moreMenu.hidden; }
   function menuItems() { return Array.prototype.slice.call(els.moreMenu.querySelectorAll('[role="menuitem"]')); }
   function openMenu(last) {
+    closePick(false);
     els.moreMenu.hidden = false;
     els.moreBtn.setAttribute('aria-expanded', 'true');
     var items = menuItems();
@@ -3480,8 +3540,17 @@
       els.summary.addEventListener('click', onClick);
       els.dock.addEventListener('click', onClick);
       document.querySelector('.tools').addEventListener('click', function (e) {
-        var b = e.target.closest('button[data-tool]');
-        if (b) { switchTool(b.dataset.tool); keepAwake(); }
+        var b = e.target.closest('button[data-section]');
+        if (b) { onSectionTab(b.dataset.section); keepAwake(); }
+      });
+      // the tool picker (v14): arrow keys from the heading open it, the arrows move within it, a tap elsewhere closes it
+      els.entry.addEventListener('keydown', function (e) {
+        if (e.target.id === 'toolPick' && (e.key === 'ArrowDown' || e.key === 'ArrowUp') && !pickOpen()) { e.preventDefault(); openPick(e.key === 'ArrowUp'); return; }
+        if (pickOpen() && e.target.closest('#toolMenu')) onPickKey(e);
+      });
+      els.entry.addEventListener('focusout', function (e) {
+        var to = e.relatedTarget, m = pickMenu();
+        if (pickOpen() && to && !m.contains(to) && to !== pickBtn()) closePick(false);
       });
       // the ⋯ menu (v11)
       els.moreBtn.addEventListener('click', function () { if (menuOpen()) closeMenu(true); else openMenu(false); });
@@ -3490,6 +3559,8 @@
       });
       document.addEventListener('pointerdown', function (e) {       // a tap anywhere else closes it
         if (menuOpen() && !els.moreMenu.contains(e.target) && !els.moreBtn.contains(e.target)) closeMenu(false);
+        var pm = pickMenu(), pb = pickBtn();                          // and the tool picker (v14)
+        if (pickOpen() && !pm.contains(e.target) && !(pb && pb.contains(e.target))) closePick(false);
       }, true);
       els.moreMenu.addEventListener('focusout', function (e) {
         var to = e.relatedTarget;
