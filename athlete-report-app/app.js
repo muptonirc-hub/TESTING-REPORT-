@@ -2780,7 +2780,8 @@
   var EX_WORDS = { name: 1, load: 1, side: 1, notes: 1 };                              // boxes that start with a capital
   var ICON_UP = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M6 11l6-6 6 6"/></svg>';
   var ICON_DOWN = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M6 13l6 6 6-6"/></svg>';
-  var ICON_X = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/></svg>';
+  // v17: delete is a bin (it shows on every row now, beside More, so it reads as delete rather than close)
+  var ICON_TRASH = '<svg viewBox="0 0 24 24" width="19" height="19" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M10 11v6M14 11v6M5.5 7l1 12a2 2 0 0 0 2 1.8h7a2 2 0 0 0 2-1.8l1-12M9 7V4.5h6V7"/></svg>';
   var GRIP = '<svg class="grip-dots" viewBox="0 0 10 16" width="10" height="16" aria-hidden="true" focusable="false" fill="currentColor"><circle cx="2.5" cy="3" r="1.5"/><circle cx="7.5" cy="3" r="1.5"/><circle cx="2.5" cy="8" r="1.5"/><circle cx="7.5" cy="8" r="1.5"/><circle cx="2.5" cy="13" r="1.5"/><circle cx="7.5" cy="13" r="1.5"/></svg>';
 
   function freshEx() { return { meta: { name: '', date: todayIso(), practitioner: userName() }, title: '', instructions: '', items: [], seq: 1, scanned: {}, cardOpen: true }; }
@@ -2804,6 +2805,7 @@
         EX_FIELDS.forEach(function (f) { o[f] = exStr(it[f]); });
         o.open = it.open === true;
         o.lib = typeof it.lib === 'string' && LIB_ID.test(it.lib) ? it.lib : '';   // v15: the library exercise it came from
+        if (!o.lib && typeof it.libWas === 'string' && LIB_ID.test(it.libWas)) o.libWas = it.libWas;   // v17: its link before the name was typed over
       }
       list.push(o);
     });
@@ -2869,7 +2871,8 @@
   }
   function exProgramCard() {
     var x = state.ex;
-    // Edit (v11): shows the move and delete buttons on every row (Done hides them again); not kept in the draft
+    // Edit (v11): shows the move buttons and the link actions on every row (Done hides them again); not kept in the draft.
+    // v17: every row's delete shows all the time
     return '<section class="card ex-prog" id="exCard" aria-labelledby="exProgH"><div class="card-head"><h2 id="exProgH">Program</h2><div class="ex-headr"><span class="ex-count" id="exCount"></span>' +
       '<button type="button" class="ghost ex-edit" id="exEdit" data-action="ex-edit"' + (x.items.length ? '' : ' hidden') + '>' + (x.editing ? 'Done' : 'Edit') + '</button></div></div>' +
       '<div class="ex-top"><label class="f" for="ex-title"><span>Title</span><input id="ex-title" data-ex="title" type="text" value="' + esc(x.title) + '" maxlength="' + EX_LEN.title + '"' +
@@ -2897,11 +2900,31 @@
   }
   // in the row's details (More) and in Edit mode: Unlink, or Link to an exercise of the same name, or Save to library
   function exLibActHtml(it) {
-    if (exLinked(it)) return '<button type="button" class="quiet el-act" data-action="ex-unlink">Unlink<span class="vh"> from the library</span></button>';
+    // v17: Swap (any row with an exercise in it): another exercise from the library in this row's place, its dose kept
+    var swap = blank(it.name) && !exLinked(it) ? '' : '<button type="button" class="quiet el-act" data-action="ex-swap" aria-haspopup="dialog">Swap for another exercise</button>';
+    if (exLinked(it)) return swap + '<button type="button" class="quiet el-act" data-action="ex-unlink">Unlink<span class="vh"> from the library</span></button>';
     if (blank(it.name)) return '';
     var m = E.libMatch(it.name, libList());
-    return m ? '<button type="button" class="quiet el-act" data-action="ex-linkto" data-lib="' + esc(m.id) + '">Link to “' + esc(m.name) + '”</button>'
-      : '<button type="button" class="quiet el-act" data-action="ex-savelib" aria-haspopup="dialog">Save to library</button>';
+    return swap + (m ? '<button type="button" class="quiet el-act" data-action="ex-linkto" data-lib="' + esc(m.id) + '">Link to “' + esc(m.name) + '”</button>'
+      : '<button type="button" class="quiet el-act" data-action="ex-savelib" aria-haspopup="dialog">Save to library</button>');
+  }
+  // v17: the link follows the name. A linked row whose name is typed over keeps its exercise while the name still holds
+  // that exercise's name (or one of its other names) as whole words, e.g. "Split squat (DB)", and isn't exactly another
+  // library exercise ("Rear-foot elevated split squat"); otherwise the link goes, so the handout never prints another
+  // exercise's cues or video, and it comes back if the name returns to it. Only typing does this: a library exercise
+  // renamed later doesn't unlink its rows. (A suggestion, Link to, Unlink, Swap and Save to library are chosen by hand and
+  // forget the old link.)
+  function nameHolds(name, e) {
+    var k = ' ' + E.libKey(name) + ' ';
+    return [e.name].concat(Array.isArray(e.aliases) ? e.aliases : []).some(function (n) { var nk = E.libKey(n); return !!nk && k.indexOf(' ' + nk + ' ') >= 0; });
+  }
+  function exRelink(it) {
+    var cur = it.lib ? libGet(it.lib) : null, was = !it.lib && it.libWas ? libGet(it.libWas) : null, e = cur || was;
+    if (!e) return false;
+    var m = E.libMatch(it.name, libList()), holds = nameHolds(it.name, e) && (!m || m.id === e.id);
+    if (cur && !holds) { it.libWas = cur.id; it.lib = ''; return true; }
+    if (was && holds) { it.lib = was.id; delete it.libWas; return true; }
+    return false;
   }
   // The name and the notes wrap (a one-line box that grows, so a long name can be checked against the page in full);
   // Return still moves to the next box. The other boxes are ordinary one-line inputs.
@@ -2940,7 +2963,7 @@
           (it.open ? 'Less' : 'More') + '<span class="vh"> details, ' + lower + '</span></button>') +
         '<button type="button" class="ex-btn" id="' + id + '-up" data-action="ex-up" aria-label="Move ' + lower + ' up"' + (i === 0 ? ' disabled' : '') + '>' + ICON_UP + '</button>' +
         '<button type="button" class="ex-btn" id="' + id + '-down" data-action="ex-down" aria-label="Move ' + lower + ' down"' + (i === last ? ' disabled' : '') + '>' + ICON_DOWN + '</button>' +
-        '<button type="button" class="ex-btn ex-del" id="' + id + '-del" data-action="ex-del" aria-label="Delete ' + lower + '">' + ICON_X + '</button></div>';
+        '<button type="button" class="ex-btn ex-del" id="' + id + '-del" data-action="ex-del" aria-label="Delete ' + lower + '">' + ICON_TRASH + '</button></div>';
       if (sec) {
         html += '<div class="ex-row ex-sec" id="' + id + '" data-id="' + it.id + '" role="group" aria-label="' + who + '">' + gripHtml(it, lower, '') +
           '<input class="ex-in ex-heading" id="' + id + '-heading" data-f="heading" type="text" value="' + esc(it.heading) + '" maxlength="' + EX_LEN.heading + '"' +
@@ -3060,9 +3083,12 @@
     if (x.scanned[it.id]) { delete x.scanned[it.id]; row.classList.remove('scanned'); }   // edited: checked
     if (EX_DETAIL.indexOf(f) >= 0) syncExDetails(row);
     if (it.kind === 'ex' && f === 'name') {             // v15: the library's suggestions, and Link to / Save to library follow the name
+      var relinked = exRelink(it);                     // v17: and so does the link itself
       exSuggest(row, el, it);
       var act = $('ex-' + it.id + '-libact'), ah = exLibActHtml(it);
       if (act && act._h !== ah) { act.innerHTML = ah; act._h = ah; }
+      var lst = relinked && $('ex-' + it.id + '-lib'), lsh = relinked ? exLibStripHtml(it) : '';
+      if (lst) { lst.innerHTML = lsh; lst._h = lsh; lst.hidden = !lsh; }
     }
     refreshEx();
     if (it.kind === 'ex' && !blank(el.value)) foldNow('ex', true);   // the program under way: the patient card folds (v11)
@@ -3089,6 +3115,7 @@
     var row = b.closest('.ex-row'), it = row && exItem(row.dataset.id), e = libGet(b.dataset.libSugg);
     if (!it || !e) return;
     it.name = e.name; it.lib = e.id;
+    delete it.libWas;                                  // v17: a link chosen by hand
     DOSE.forEach(function (f) { if (blank(it[f])) it[f] = e.dose[f] || ''; });
     delete state.ex.scanned[it.id];
     hideSuggest();
@@ -3105,7 +3132,7 @@
       focusEx('ex-' + add.id + '-' + (add.kind === 'ex' ? 'name' : 'heading'));
       return true;
     }
-    if (a === 'ex-edit') {                             // Edit / Done (v11): the move and delete buttons on every row
+    if (a === 'ex-edit') {                             // Edit / Done (v11): the move buttons and link actions on every row
       x.editing = !x.editing;
       b.textContent = x.editing ? 'Done' : 'Edit';
       var tbl = $('exTable');
@@ -3124,12 +3151,14 @@
       var to = a === 'ex-linkto' ? libGet(b.dataset.lib) : null;
       if (a === 'ex-linkto' && !to) return true;
       it.lib = to ? to.id : '';
+      delete it.libWas;                                // v17: chosen by hand (a typed name won't bring the old link back)
       renderExTable();
       var back = $('ex-' + it.id + '-libact');           // keep the place: the row's new link action (no keyboard)
       focusQuiet(back && back.querySelector('button'));
       toast(to ? 'Linked to ' + to.name : 'Unlinked ' + (clean1(it.name) || 'the exercise') + ' from the library');
       return true;
     }
+    if (a === 'ex-swap') { openLibPick(b, '', it.id); return true; }   // v17: another library exercise in this row's place
     if (a === 'ex-savelib') {
       var d = {};
       DOSE.forEach(function (f) { d[f] = it[f]; });
@@ -3759,7 +3788,7 @@
       instructions: v.instructions, video: v.video, checked: v.checked, updatedBy: CLOUD ? userName() : '', updatedAt: new Date().toISOString() }, false);
     if (!entry) return;
     var ok = writeItem('library', entry.id, entry), row = libEdit.row ? exItem(libEdit.row) : null;
-    if (row) { row.lib = entry.id; saveDraft(); }      // Save to library: that row is linked to the new exercise
+    if (row) { row.lib = entry.id; delete row.libWas; saveDraft(); }   // Save to library: that row is linked to the new exercise
     libEdit = null;
     afterLibChange();
     closeModal();
@@ -3831,31 +3860,38 @@
     refreshEx();
   }
 
-  // ---- + From library (#libPickDialog): tick exercises, Add N exercises (to the end, or into the section it was opened from)
-  var pickView = { q: '', area: '' }, pickOrder = [], pickAfter = '', pickFrom = null;
-  function openLibPick(from, after) {
+  // ---- + From library (#libPickDialog): tick exercises, Add N exercises (to the end, or into the section it was opened from).
+  // v17: opened from a row's Swap (pickSwap: that row's id), one exercise is chosen and Swap puts it in the row's place.
+  var pickView = { q: '', area: '' }, pickOrder = [], pickAfter = '', pickFrom = null, pickSwap = '';
+  function openLibPick(from, after, swap) {
     pickView = { q: '', area: '' };
     pickOrder = [];
     pickAfter = after || '';
     pickFrom = from || null;
+    var sw = swap ? exItem(swap) : null, was = sw ? clean1(sw.name) || (exLinked(sw) || {}).name || '' : '';
+    pickSwap = sw ? sw.id : '';
+    $('libPickTitle').textContent = !sw ? 'Add from the library' : was ? 'Swap “' + was + '” for…' : 'Swap for…';
     $('libPickSearch').value = '';
     $('libPickChips').innerHTML = areaChipsHtml('', 'data-pick-area');
     renderLibPickList();
-    openModal(els.libPickDialog, els.libPickDialog.querySelector('#libPickList input') || $('libPickCancel'), function (restore) {
+    openModal(els.libPickDialog, els.libPickDialog.querySelector('#libPickList input:not(:disabled)') || $('libPickCancel'), function (restore) {
       if (restore && pickFrom && document.body.contains(pickFrom)) focusQuiet(pickFrom);
       return true;
     });
   }
   function renderLibPickList() {
     var box = $('libPickList'), all = libList(), shown = libFilter(all, { q: pickView.q, area: pickView.area }), q = clean1(pickView.q);
+    var cur = pickSwap ? (exItem(pickSwap) || {}).lib || '' : '';
     els.libPickDialog.querySelectorAll('[data-pick-area]').forEach(function (c) { c.setAttribute('aria-pressed', String(c.dataset.pickArea === pickView.area)); });
     if (!all.length) box.innerHTML = '<p class="client-none">The library is empty. Add exercises on the Exercise library page.</p>';
     else if (!shown.length) box.innerHTML = '<p class="client-none" role="status">' + (q.length >= 2 ? 'No exercises match “' + esc(q) + '”.' : 'No exercises match this area.') + '</p>';
     else {
       box.innerHTML = '<ul class="lp-list">' + shown.map(function (e) {
         var d = doseLine(e.dose);
-        return '<li><label class="lp-row"><input type="checkbox" data-lib="' + esc(e.id) + '"' + (pickOrder.indexOf(e.id) >= 0 ? ' checked' : '') + '>' +
-          '<span class="lp-main"><b>' + esc(e.name) + '</b>' + (d ? '<span>' + esc(d) + '</span>' : '') + '</span>' +
+        // v17: a Swap chooses one (round buttons); the exercise already in that row can't be chosen
+        var now = !!pickSwap && e.id === cur, input = pickSwap ? '<input type="radio" name="libPickOne"' : '<input type="checkbox"';
+        return '<li><label class="lp-row' + (now ? ' lp-now' : '') + '">' + input + ' data-lib="' + esc(e.id) + '"' + (pickOrder.indexOf(e.id) >= 0 ? ' checked' : '') + (now ? ' disabled' : '') + '>' +
+          '<span class="lp-main"><b>' + esc(e.name) + '</b>' + (now ? '<span>In this row now</span>' : d ? '<span>' + esc(d) + '</span>' : '') + '</span>' +
           (hasVideo(e) ? '<span class="lp-vid">' + PLAY + '<span class="vh">Has a video</span></span>' : '') + '</label></li>';
       }).join('') + '</ul>';
     }
@@ -3863,10 +3899,11 @@
   }
   function libPickCount() {
     var n = pickOrder.length, b = $('libPickAdd');
-    b.textContent = 'Add ' + n + (n === 1 ? ' exercise' : ' exercises');
+    b.textContent = pickSwap ? 'Swap' : 'Add ' + n + (n === 1 ? ' exercise' : ' exercises');
     b.disabled = !n;
   }
   function libPickAdd() {
+    if (pickSwap) { libPickSwap(); return; }
     var x = state.ex, ids = pickOrder.filter(function (id) { return libGet(id); });
     if (!ids.length) return;
     var rows = ids.map(function (id) {                 // in the order ticked: the name, the default dose and the link; no notes
@@ -3883,6 +3920,40 @@
     var first = $('ex-' + rows[0].id + '-name');       // scrolled into view, not focused (no keyboard)
     if (first) first.scrollIntoView({ block: 'center', behavior: reducedMotion() ? 'auto' : 'smooth' });
     toast('Added ' + rows.length + (rows.length === 1 ? ' exercise' : ' exercises'));
+  }
+  // v17: Swap: the chosen exercise takes the row's place: its name and link (so its cues and video), and its default dose
+  // in any box still blank. The row's own sets, reps, load, rest, tempo, side and notes stay. Undo puts the old one back.
+  function libPickSwap() {
+    var x = state.ex, it = exItem(pickSwap), e = libGet(pickOrder[0]);
+    if (!it || !e) { closeModal(); return; }
+    var before = { name: it.name, lib: it.lib, libWas: it.libWas, filled: [], scanned: !!x.scanned[it.id] };
+    var old = clean1(it.name) || (exLinked(it) || {}).name || 'the exercise';
+    it.name = e.name; it.lib = e.id;
+    delete it.libWas;
+    DOSE.forEach(function (f) { if (blank(it[f]) && !blank(e.dose[f])) { it[f] = e.dose[f]; before.filled.push(f); } });
+    delete x.scanned[it.id];                           // the name was chosen here, not read from the page
+    closeModal(false);
+    renderExTable();
+    focusSwapped(it);
+    toast('Swapped ' + old + ' for ' + e.name, { label: 'Undo', run: function () { undoSwap(x, it, e.id, before); } });
+  }
+  function focusSwapped(it) {                          // the row's handle: no keyboard, and a tap on the arrows moves it
+    var g = $('ex-' + it.id + '-grip'), row = $('ex-' + it.id);
+    if (row) { row.classList.remove('moved'); void row.offsetWidth; row.classList.add('moved'); }
+    if (g) { focusQuiet(g); var r = g.getBoundingClientRect(); if (r.top < 120 || r.bottom > window.innerHeight - 110) g.scrollIntoView({ block: 'center', behavior: reducedMotion() ? 'auto' : 'smooth' }); }
+  }
+  // Undo a Swap, unless Clear all replaced the program, the row has gone, or its name has been changed again since
+  function undoSwap(prog, it, to, before) {
+    if (state.ex !== prog || exIndex(it.id) < 0 || it.lib !== to) return;
+    it.name = before.name; it.lib = before.lib;
+    if (before.libWas) it.libWas = before.libWas; else delete it.libWas;
+    var e = libGet(to);
+    before.filled.forEach(function (f) { if (e && it[f] === e.dose[f]) it[f] = ''; });
+    if (before.scanned) prog.scanned[it.id] = true;
+    if (state.tool !== 'ex' || state.exPage !== 'builder') { saveDraft(); return; }
+    renderExTable();
+    focusSwapped(it);
+    toast('Back as it was');
   }
 
   // ---- the video dialog (#videoDialog): the player for YouTube and Vimeo (youtube-nocookie / do-not-track), else or
@@ -4217,6 +4288,7 @@
     });
     p.addEventListener('change', function (e) {
       var cb = e.target;
+      if (cb.matches('input[type=radio][data-lib]')) { pickOrder = cb.checked ? [cb.dataset.lib] : []; libPickCount(); return; }   // v17: Swap
       if (!cb.matches('input[type=checkbox][data-lib]')) return;
       var i = pickOrder.indexOf(cb.dataset.lib);
       if (cb.checked && i < 0) pickOrder.push(cb.dataset.lib);

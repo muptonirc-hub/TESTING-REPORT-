@@ -52,6 +52,7 @@
   --font-display: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --font-brand: "Rajdhani", "SF Pro Display", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;   /* the site's heading face (OFL, bundled) */
   --r: 14px;
+  --date-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%235F6B75' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3.5' y='5' width='17' height='15.5' rx='2.5'/%3E%3Cpath d='M3.5 10h17M8 3v4M16 3v4'/%3E%3C/svg%3E");   /* v17: the date box's calendar (iPad / iPhone), in --muted */
   color-scheme: light;
 }
 @media (prefers-color-scheme: dark) {
@@ -68,6 +69,7 @@
     --seg-on: #34444F;
     --tab-on-fg: #FFFFFF;
     --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 6px 20px rgba(0, 0, 0, .25);
+    --date-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2398A4AD' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3.5' y='5' width='17' height='15.5' rx='2.5'/%3E%3Cpath d='M3.5 10h17M8 3v4M16 3v4'/%3E%3C/svg%3E");
     color-scheme: dark;
   }
 }
@@ -84,6 +86,7 @@
   --seg-on: #34444F;
   --tab-on-fg: #FFFFFF;
   --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 6px 20px rgba(0, 0, 0, .25);
+  --date-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2398A4AD' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3.5' y='5' width='17' height='15.5' rx='2.5'/%3E%3Cpath d='M3.5 10h17M8 3v4M16 3v4'/%3E%3C/svg%3E");
   color-scheme: dark;
 }
 
@@ -298,6 +301,14 @@ html.signed-out .workspace, html.signed-out .dock, html.signed-out .tools, html.
   background-position: calc(100% - 18px) 19px, calc(100% - 13px) 19px; background-size: 5px 5px; background-repeat: no-repeat; }
 .f input:focus, .f select:focus { border-color: var(--teal); outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--teal) 25%, transparent); }
 .f input::placeholder { color: color-mix(in srgb, var(--muted) 85%, transparent); }   /* at least 3:1 on the field */
+/* v17: a date box keeps to its column. iPad and iPhone Safari give a native date box a minimum width (the widest date it
+   could show, plus padding), so in a narrow column Test date ran over the box beside it (Body mass). Without the native
+   look it is as wide as its column, like every other box; tapping it still opens the date picker. */
+.f input[type="date"] { -webkit-appearance: none; appearance: none; }
+@supports (-webkit-touch-callout: none) {           /* iPad / iPhone: the date at the left, a calendar at the right */
+  .f input[type="date"] { padding-right: 40px; background-image: var(--date-icon); background-repeat: no-repeat; background-position: right 12px center; background-size: 18px 18px; }
+  .f input[type="date"]::-webkit-date-and-time-value { margin: 0; text-align: left; }
+}
 .seg { display: flex; gap: 4px; padding: 3px; background: var(--field); border: 1px solid var(--line); border-radius: 10px; height: 44px; }
 .seg button { flex: 1; border: 0; background: transparent; border-radius: 7px; font-weight: 600; color: var(--muted); min-width: 0; }
 .seg button[aria-pressed="true"] { background: var(--seg-on); color: var(--fg); box-shadow: 0 1px 3px rgba(0, 0, 0, .16); }
@@ -684,7 +695,8 @@ html.signed-out .workspace, html.signed-out .dock, html.signed-out .tools, html.
 .coach-help { margin: 0 0 12px; color: var(--muted); font-size: 13.5px; max-width: 70ch; }
 .coach-fields { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 12px; }
 .coach-mods { grid-column: 1 / -1; }
-.coach-seg button { white-space: nowrap; padding: 0 6px; }
+.coach-seg { height: auto; min-height: 44px; }   /* v17: a choice wraps onto two lines rather than spilling out (a phone) */
+.coach-seg button { padding: 4px 6px; line-height: 1.15; overflow-wrap: anywhere; }
 .coach-seg button[aria-pressed="true"][data-look="Green"] { background: var(--green-soft); color: var(--green-ink); box-shadow: inset 0 0 0 1.5px var(--green); }
 .coach-seg button[aria-pressed="true"][data-look="Amber"] { background: var(--amber-soft); color: var(--amber-ink); box-shadow: inset 0 0 0 1.5px var(--amber); }
 .coach-seg button[aria-pressed="true"][data-look="Red"] { background: var(--red-soft); color: var(--red-ink); box-shadow: inset 0 0 0 1.5px var(--red); }
@@ -806,13 +818,12 @@ html.row-dragging, html.row-dragging * { cursor: grabbing !important; user-selec
 .ex-row.scanned .ex-in:focus { border-color: var(--teal); box-shadow: 0 0 0 3px color-mix(in srgb, var(--teal) 25%, transparent); }
 .ex-row.scanned .ex-num { color: var(--scan-ink); }
 .ex-add { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; }
-/* v11: rows show their boxes and More; the move and delete buttons (and a section's delete) show in Edit mode */
+/* v11: rows show their boxes and More; the move buttons show in Edit mode. v17: every row's delete (a bin) shows all the time */
 .ex-headr { display: flex; align-items: center; gap: 12px; margin-left: auto; }
 .ex-edit { min-height: 36px; padding: 6px 16px; font-size: 14.5px; }
-.ex-table:not(.editing) .ex-btn:not(.ex-more) { display: none; }
-.ex-table:not(.editing) .ex-acts { grid-template-columns: 52px; }
-.ex-table:not(.editing) .ex-sec { grid-template-columns: 32px minmax(0, 1fr); grid-template-areas: "num head"; }
-.ex-table:not(.editing) .ex-sec .ex-acts { display: none; }
+.ex-table:not(.editing) .ex-btn:not(.ex-more):not(.ex-del) { display: none; }
+.ex-table:not(.editing) .ex-acts { grid-template-columns: 52px 40px; }
+.ex-table:not(.editing) .ex-sec .ex-acts { grid-template-columns: 40px; }
 .ex-add-in { padding: 0 0 6px 40px; }                 /* "+ Exercise" under the last row of a section */
 .ex-add-in .quiet { min-height: 36px; padding-inline: 6px; font-size: 14.5px; }
 @media (min-width: 600px) {                          /* a little more compact on an iPad (phones keep 44 px boxes) */
@@ -839,8 +850,9 @@ html.row-dragging, html.row-dragging * { cursor: grabbing !important; user-selec
   .ex-sec { grid-template-columns: 32px minmax(0, 1fr) 178px; grid-template-areas: "num head acts"; }
   .ex-sec .ex-acts { grid-template-columns: 52px 40px 40px 40px; }
   .ex-sec .ex-acts > span:first-child { display: block; }
-  .ex-table:not(.editing) .ex-cols, .ex-table:not(.editing) .ex-row:not(.ex-sec) { grid-template-columns: 32px minmax(0, 1fr) 56px 80px 116px 56px; }
-  .ex-table:not(.editing) .ex-sec { grid-template-columns: 32px minmax(0, 1fr); grid-template-areas: "num head"; }
+  .ex-table:not(.editing) .ex-cols, .ex-table:not(.editing) .ex-row:not(.ex-sec) { grid-template-columns: 32px minmax(0, 1fr) 56px 80px 116px 94px; }
+  .ex-table:not(.editing) .ex-sec { grid-template-columns: 32px minmax(0, 1fr) 94px; }   /* its bin under the rows' bins */
+  .ex-table:not(.editing) .ex-sec .ex-acts > span:first-child { display: none; }
   .ex-det > .ex-cell { flex: 0 1 104px; }
   .ex-det > .c-side { flex-basis: 132px; }
   .ex-det > .c-notes { flex: 1 1 220px; }
@@ -921,7 +933,7 @@ html.row-dragging, html.row-dragging * { cursor: grabbing !important; user-selec
   border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--teal-ink);
 }
 .el-play:active { background: var(--field); }
-.ex-libact { display: none; padding-left: 3px; }
+.ex-libact { display: none; flex-wrap: wrap; column-gap: 4px; padding-left: 3px; }
 .ex-libact.on:not(:empty), .ex-table.editing .ex-libact:not(:empty) { display: flex; }
 .ex-libact .quiet { min-height: 34px; padding-inline: 8px; font-size: 14px; white-space: normal; text-align: left; }
 /* an exercise name's suggestions sit in the flow under its box (pushing the row down while open), so they never cover the
@@ -963,6 +975,8 @@ html.row-dragging, html.row-dragging * { cursor: grabbing !important; user-selec
 .lp-main b { font-weight: 650; font-size: 15px; line-height: 1.3; }
 .lp-main span { font-size: 12.5px; color: var(--muted); }
 .lp-vid { flex: none; display: inline-flex; color: var(--teal-ink); }
+.lp-row.lp-now { cursor: default; }                  /* v17: Swap: the exercise already in the row */
+.lp-row.lp-now .lp-main b { color: var(--muted); }
 /* the video */
 .video-card { max-width: 760px; }
 .video-box { position: relative; height: 0; padding-top: 56.25%; margin-top: 12px; border-radius: 12px; overflow: hidden; background: #000; }
@@ -1450,13 +1464,13 @@ html.row-dragging, html.row-dragging * { cursor: grabbing !important; user-selec
 
 <div class="toast" id="toast" role="status" hidden></div>
 
-<script src="engine.js?v=16" defer></script>
-<script src="report-fonts.js?v=16" defer></script>
-<script src="jspdf.umd.min.js?v=16" defer></script>
-<script src="qrcode.js?v=16" defer></script>
-<script src="report.js?v=16" defer></script>
-<script src="cloud-config.js?v=16" defer></script>
-<script src="cloud.js?v=16" defer></script>
-<script src="app.js?v=16" defer></script>
+<script src="engine.js?v=17" defer></script>
+<script src="report-fonts.js?v=17" defer></script>
+<script src="jspdf.umd.min.js?v=17" defer></script>
+<script src="qrcode.js?v=17" defer></script>
+<script src="report.js?v=17" defer></script>
+<script src="cloud-config.js?v=17" defer></script>
+<script src="cloud.js?v=17" defer></script>
+<script src="app.js?v=17" defer></script>
 </body>
 </html>
