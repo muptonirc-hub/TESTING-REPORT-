@@ -525,6 +525,9 @@ html.signed-out .workspace, html.signed-out .dock, html.signed-out .tools, html.
 .sheet-title { flex: 1; min-width: 0; font-weight: 700; font-size: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .sheet-title small { display: block; font-weight: 500; font-size: 12.5px; color: #AAB5BD; }
 .sheet-actions { display: flex; gap: 8px; }
+/* v16: Return home: an outline button until the PDF has been shared or saved, then the main (filled) one */
+.sheet-bar .home-btn { padding-inline: 14px 16px; }
+.sheet-bar .home-btn svg { flex: none; }
 .sheet-body { flex: 1; overflow: auto; -webkit-overflow-scrolling: touch; padding: 20px max(16px, env(safe-area-inset-right, 0px)) calc(28px + env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px)); }
 .pages { display: flex; flex-direction: column; gap: 18px; align-items: center; }
 .pages svg { width: 100%; max-width: 860px; height: auto; background: #fff; border-radius: 4px; box-shadow: 0 2px 10px rgba(0, 0, 0, .16); }
@@ -744,11 +747,27 @@ html.signed-out .workspace, html.signed-out .dock, html.signed-out .tools, html.
 .ex-cols { display: none; }
 .ex-row {
   display: grid; align-items: start; column-gap: 8px; row-gap: 8px; padding: 10px 0; border-top: 1px solid var(--line);
-  grid-template-columns: 24px minmax(0, .8fr) minmax(0, 1fr) minmax(0, 1.3fr);
+  grid-template-columns: 32px minmax(0, .8fr) minmax(0, 1fr) minmax(0, 1.3fr);
   grid-template-areas: "num name name name" ". sets reps load" ". det det det" ". acts acts acts";
 }
 .ex-row:has(> .ex-det[hidden]) { grid-template-areas: "num name name name" ". sets reps load" ". acts acts acts"; }   /* no empty details row */
-.ex-num { grid-area: num; text-align: center; line-height: 44px; font-size: 13px; font-weight: 700; color: var(--muted); font-variant-numeric: tabular-nums; }
+/* v16: the row's handle (its number with a grip): press and slide the row up or down; 42 px wide, reaching into the card's margin */
+.ex-grip {
+  grid-area: num; justify-self: stretch; align-self: start; display: inline-flex; align-items: center; justify-content: center; gap: 4px;
+  height: 44px; margin-left: -10px; padding: 0; border: 0; border-radius: 9px; background: transparent; color: var(--muted);
+  cursor: grab; touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
+}
+.ex-grip .grip-dots { flex: none; opacity: .5; }
+.ex-grip:active, .ex-row.dragging .ex-grip { background: var(--field); cursor: grabbing; }
+.ex-grip:active .grip-dots, .ex-row.dragging .grip-dots { opacity: 1; color: var(--teal-ink); }
+.ex-num { font-size: 13px; font-weight: 700; line-height: 1; color: inherit; font-variant-numeric: tabular-nums; }
+.ex-table { position: relative; }
+.ex-row.dragging { position: relative; z-index: 6; background: var(--surface); border-radius: 12px; box-shadow: 0 12px 28px rgba(0, 0, 0, .2), 0 0 0 1px var(--line-strong); }
+.ex-sec.dragging { background: var(--field); }
+.ex-drop { position: absolute; left: 0; right: 0; height: 3px; margin-top: -2px; border-radius: 2px; background: var(--teal); pointer-events: none; z-index: 5; }
+html.row-dragging, html.row-dragging * { cursor: grabbing !important; user-select: none; -webkit-user-select: none; }
+@keyframes ex-moved { from { background-color: color-mix(in srgb, var(--teal) 18%, transparent); } }
+.ex-row.moved { animation: ex-moved 1.1s ease-out; }
 .ex-row > .ex-namecol { grid-area: name; }          /* v15: the name box, its library strip and link action */
 .ex-row > .c-sets { grid-area: sets; }
 .ex-row > .c-reps { grid-area: reps; }
@@ -767,8 +786,9 @@ html.signed-out .workspace, html.signed-out .dock, html.signed-out .tools, html.
 .ex-in::placeholder { color: color-mix(in srgb, var(--muted) 85%, transparent); }
 .ex-wrap { display: block; min-height: 44px; padding: 10px; line-height: 22px; font-family: inherit; resize: none; overflow: hidden; }
 .ex-name { font-weight: 600; }
-.ex-sec { grid-template-columns: 24px minmax(0, 1fr) auto; grid-template-areas: "num head acts"; align-items: center; margin-top: 10px; padding: 6px 0; border-top: 0; border-radius: 12px; background: var(--field); }
-.ex-sec::before { content: ""; grid-area: num; justify-self: center; width: 4px; height: 26px; border-radius: 2px; background: var(--teal); }
+.ex-sec { grid-template-columns: 32px minmax(0, 1fr) auto; grid-template-areas: "num head acts"; align-items: center; margin-top: 10px; padding: 6px 0; border-top: 0; border-radius: 12px; background: var(--field); }
+.ex-sec .ex-grip { align-self: center; margin-left: -8px; color: var(--teal); }   /* the section band's own grip, in teal (40 px: 8 px into the margin) */
+.ex-sec .ex-grip .grip-dots { opacity: .9; }
 .ex-sec .ex-acts { grid-template-columns: 40px 40px 40px; }
 .ex-sec .ex-acts > span:first-child { display: none; }
 .ex-heading { grid-area: head; font-weight: 700; background: var(--surface); }
@@ -791,19 +811,19 @@ html.signed-out .workspace, html.signed-out .dock, html.signed-out .tools, html.
 .ex-edit { min-height: 36px; padding: 6px 16px; font-size: 14.5px; }
 .ex-table:not(.editing) .ex-btn:not(.ex-more) { display: none; }
 .ex-table:not(.editing) .ex-acts { grid-template-columns: 52px; }
-.ex-table:not(.editing) .ex-sec { grid-template-columns: 24px minmax(0, 1fr); grid-template-areas: "num head"; }
+.ex-table:not(.editing) .ex-sec { grid-template-columns: 32px minmax(0, 1fr); grid-template-areas: "num head"; }
 .ex-table:not(.editing) .ex-sec .ex-acts { display: none; }
-.ex-add-in { padding: 0 0 6px 32px; }                 /* "+ Exercise" under the last row of a section */
+.ex-add-in { padding: 0 0 6px 40px; }                 /* "+ Exercise" under the last row of a section */
 .ex-add-in .quiet { min-height: 36px; padding-inline: 6px; font-size: 14.5px; }
 @media (min-width: 600px) {                          /* a little more compact on an iPad (phones keep 44 px boxes) */
   .ex-row { row-gap: 6px; padding: 6px 0; }
   .ex-in, .ex-btn { height: 40px; }
   .ex-wrap { min-height: 40px; padding: 8px 10px; }
-  .ex-num { line-height: 40px; }
+  .ex-grip { height: 40px; }
 }
 /* wide (iPad): one line per exercise under the column header; a second line for the details when there are any */
 @container extable (min-width: 660px) {
-  .ex-cols, .ex-row { grid-template-columns: 24px minmax(0, 1fr) 56px 80px 116px 178px; }
+  .ex-cols, .ex-row { grid-template-columns: 32px minmax(0, 1fr) 56px 80px 116px 178px; }
   .ex-cols {
     display: grid; column-gap: 8px; grid-template-areas: "num name sets reps load acts"; padding: 0 0 6px;
     font-size: 11.5px; font-weight: 700; letter-spacing: .6px; text-transform: uppercase; color: var(--muted);
@@ -816,11 +836,11 @@ html.signed-out .workspace, html.signed-out .dock, html.signed-out .tools, html.
   .ex-row { grid-template-areas: "num name sets reps load acts" ". det det det det det"; }
   .ex-row:has(> .ex-det[hidden]) { grid-template-areas: "num name sets reps load acts"; }
   .ex-row > .ex-cell .ex-cl { display: none; }
-  .ex-sec { grid-template-columns: 24px minmax(0, 1fr) 178px; grid-template-areas: "num head acts"; }
+  .ex-sec { grid-template-columns: 32px minmax(0, 1fr) 178px; grid-template-areas: "num head acts"; }
   .ex-sec .ex-acts { grid-template-columns: 52px 40px 40px 40px; }
   .ex-sec .ex-acts > span:first-child { display: block; }
-  .ex-table:not(.editing) .ex-cols, .ex-table:not(.editing) .ex-row:not(.ex-sec) { grid-template-columns: 24px minmax(0, 1fr) 56px 80px 116px 56px; }
-  .ex-table:not(.editing) .ex-sec { grid-template-columns: 24px minmax(0, 1fr); grid-template-areas: "num head"; }
+  .ex-table:not(.editing) .ex-cols, .ex-table:not(.editing) .ex-row:not(.ex-sec) { grid-template-columns: 32px minmax(0, 1fr) 56px 80px 116px 56px; }
+  .ex-table:not(.editing) .ex-sec { grid-template-columns: 32px minmax(0, 1fr); grid-template-areas: "num head"; }
   .ex-det > .ex-cell { flex: 0 1 104px; }
   .ex-det > .c-side { flex-basis: 132px; }
   .ex-det > .c-notes { flex: 1 1 220px; }
@@ -1163,9 +1183,27 @@ html.signed-out .workspace, html.signed-out .dock, html.signed-out .tools, html.
     <div class="sheet-actions">
       <button class="ghost" id="savePdf" type="button">Save PDF</button>
       <button class="primary" id="sharePdf" type="button">Share PDF</button>
+      <!-- v16: finished with this client: the session is in their record (and uploaded), the page empties, back to Screening -->
+      <button class="ghost home-btn" id="homeBtn" type="button">
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 11.5 12 4.5l8.5 7"/><path d="M5.5 10v9.5h5v-5.5h3v5.5h5V10"/></svg>
+        <span id="homeLabel">Return home</span>
+      </button>
     </div>
   </div>
   <div class="sheet-body"><div class="pages" id="pages"></div></div>
+</div>
+
+<!-- v16: Return home found entries that aren't in a client record (another tool, or a report without a name) -->
+<div class="modal" id="homeDialog" role="alertdialog" aria-modal="true" aria-labelledby="homeTitle" aria-describedby="homeIntro" hidden>
+  <div class="modal-card">
+    <h2 id="homeTitle">Not saved yet</h2>
+    <p id="homeIntro">These entries aren’t in a client record. Keep them on this device for later, or clear them with the rest?</p>
+    <ul class="clear-list" id="homeList"></ul>
+    <div class="modal-actions">
+      <button class="ghost" id="homeKeep" type="button">Keep them</button>
+      <button class="danger" id="homeClear" type="button">Clear them</button>
+    </div>
+  </div>
 </div>
 
 <div class="modal" id="clearDialog" role="alertdialog" aria-modal="true" aria-labelledby="clearTitle" aria-describedby="clearIntro" hidden>
@@ -1412,13 +1450,13 @@ html.signed-out .workspace, html.signed-out .dock, html.signed-out .tools, html.
 
 <div class="toast" id="toast" role="status" hidden></div>
 
-<script src="engine.js?v=15" defer></script>
-<script src="report-fonts.js?v=15" defer></script>
-<script src="jspdf.umd.min.js?v=15" defer></script>
-<script src="qrcode.js?v=15" defer></script>
-<script src="report.js?v=15" defer></script>
-<script src="cloud-config.js?v=15" defer></script>
-<script src="cloud.js?v=15" defer></script>
-<script src="app.js?v=15" defer></script>
+<script src="engine.js?v=16" defer></script>
+<script src="report-fonts.js?v=16" defer></script>
+<script src="jspdf.umd.min.js?v=16" defer></script>
+<script src="qrcode.js?v=16" defer></script>
+<script src="report.js?v=16" defer></script>
+<script src="cloud-config.js?v=16" defer></script>
+<script src="cloud.js?v=16" defer></script>
+<script src="app.js?v=16" defer></script>
 </body>
 </html>

@@ -10,7 +10,9 @@
    client records live in Firestore (cloud.js), cached on the device; the draft stays on the device as before.
    v15: the Exercises tab has three pages chosen from its heading (Program builder, Exercise library, Program templates);
    programs can be built from the clinic's exercise library (cues and video links print on the handout), saved as
-   templates, and each handout created with a patient name is saved to that client's record. */
+   templates, and each handout created with a patient name is saved to that client's record.
+   v16: the report view has Return home: the session is already in the client's record, so it makes sure it has reached
+   the clinic store, empties the page for the next client and goes back to the Screening tab (Undo for a few seconds). */
 (function () {
   'use strict';
   var E = window.BHEngine;
@@ -23,6 +25,8 @@
   var els = {
     entry: $('entry'), summary: $('summary'), dock: $('dock'), sheet: $('sheet'), pages: $('pages'),
     sheetTitle: $('sheetTitle'), share: $('sharePdf'), save: $('savePdf'), back: $('sheetBack'),
+    // v16: Return home in the report view, and the check it asks when some entries aren't in a client record
+    home: $('homeBtn'), homeLabel: $('homeLabel'), homeDialog: $('homeDialog'), homeList: $('homeList'), homeKeep: $('homeKeep'), homeClear: $('homeClear'),
     toast: $('toast'), clearAll: $('clearAll'), clearDialog: $('clearDialog'), clearList: $('clearList'),
     clearCancel: $('clearCancel'), clearConfirm: $('clearConfirm'),
     aiDialog: $('aiDialog'), aiKey: $('aiKey'), aiSave: $('aiSave'), aiCancel: $('aiCancel'), aiRemove: $('aiRemove'),
@@ -178,8 +182,10 @@
       co.mods = typeof co.mods === 'string' ? co.mods : '';
       co.retest = typeof co.retest === 'string' && E.parseDate(co.retest, ['Y-m-d']) ? co.retest : '';
       state[t].cardOpen = state[t].cardOpen !== false;   // v11: drafts from before the strip have the card open
+      if (typeof state[t].savedSig !== 'string') delete state[t].savedSig;   // v16: what the client record holds
     });
     tidyEx();                                          // v10: the exercise program (drafts from v9 and earlier have none)
+    if (typeof state.ex.savedSig !== 'string') delete state.ex.savedSig;
     if (TOOLS.indexOf(state.tool) < 0 && state.tool !== 'ex') state.tool = 'screen';
     // v14: the screening tool the Screening tab returns to (the one in use, or the last one used before Exercises)
     if (TOOLS.indexOf(state.screenTool) < 0) state.screenTool = TOOLS.indexOf(state.tool) >= 0 ? state.tool : 'screen';
@@ -1654,24 +1660,32 @@
     try { return !!(navigator.share && navigator.canShare && navigator.canShare({ files: [file] })); } catch (e) { return false; }
   }
   function openReport() {
-    var ex = state.tool === 'ex';
+    var ex = state.tool === 'ex', t = state.tool;
     var built = ex ? buildHandout() : buildReport();
     if (!built) return;
     // v15: the exercise handout is saved to the client's record too (the program as printed)
     var saved = ex ? saveProgram(built.program) : saveSession(state.tool, compute());
     if (saved) {
       if (!saved.ok) toast('The session couldn’t be saved to the client record (storage is full or blocked).');
-      else toast(saved.replaced ? 'Updated ' + saved.name + '’s record for this date' : 'Saved to ' + saved.name + '’s record (' + saved.count + (saved.count === 1 ? ' session)' : ' sessions)'));
+      else {
+        markSaved(t);                                  // v16: what is in the record now (Return home compares with it)
+        toast(saved.replaced ? 'Updated ' + saved.name + '’s record for this date' : 'Saved to ' + saved.name + '’s record (' + saved.count + (saved.count === 1 ? ' session)' : ' sessions)'));
+      }
       refresh();
     }
+    homeFrom = { tool: t, name: saved && saved.ok ? saved.name : '', saved: !!(saved && saved.ok) };
     els.back.textContent = '‹ ' + (ex ? 'Back to the program' : 'Back to results');
     current = { file: null, blob: null, title: built.rep.title };
     els.sheetTitle.innerHTML = esc(built.rep.title) + '<small>' + esc(built.file) + '</small>';
     els.pages.innerHTML = '<p class="sheet-msg">Building the report…</p>';
-    els.share.disabled = true; els.save.disabled = true;
+    els.share.disabled = true; els.save.disabled = true; els.home.disabled = true;
+    els.share.className = 'primary';                   // v16: Share leads until the PDF is out, then Return home does
+    els.home.className = 'ghost home-btn'; els.homeLabel.textContent = 'Return home';
     els.sheet.hidden = false;
     document.documentElement.style.overflow = 'hidden';
+    var gen = ++reportGen;
     ensureFonts().then(function () {
+      if (gen !== reportGen) return;                   // v16: the page was cleared (or another report opened) meanwhile
       var pdf = window.BHReport.toPdf(built.rep);
       var blob = pdf.output('blob');
       current.blob = blob;
@@ -1683,10 +1697,12 @@
       // and plain downloads are unreliable in home-screen apps, so Share is the only button there.
       els.save.hidden = share && IS_IOS;
       els.save.className = share ? 'ghost' : 'primary';
-      els.share.disabled = false; els.save.disabled = false;
+      els.share.disabled = false; els.save.disabled = false; els.home.disabled = false;
       (share ? els.share : els.save).focus();
     }).catch(function (err) {
+      if (gen !== reportGen) return;
       els.pages.innerHTML = '<p class="sheet-msg">The PDF couldn’t be built: ' + esc(err && err.message) + '</p>';
+      els.home.disabled = false;                       // the session was saved all the same
     });
   }
   function closeReport() {
@@ -1703,12 +1719,160 @@
   function savePdf() {
     if (!current.blob) return;
     downloadBlob(current.blob, current.file.name);
+    homeFirst();
   }
   function sharePdf() {
     if (!current.file) return;
-    navigator.share({ files: [current.file], title: current.title }).catch(function (err) {
+    navigator.share({ files: [current.file], title: current.title }).then(function () { homeFirst(); }, function (err) {
       if (err && err.name !== 'AbortError') { toast('Sharing didn’t work here, so the PDF was saved instead.'); savePdf(); }
     });
+  }
+
+  // ------------------------------------------------------------------ Return home (v16)
+  // Finished with a client. Create report (or Create handout) has already put the session in their record; Return home,
+  // in the report view, makes sure it has reached the clinic store, empties the page for the next client and goes back
+  // to the Screening tab (on the tool last used there), at the top. The other tools and the program are emptied too, so
+  // the next client starts clean, except entries that aren't in any client record (another tool's results not reported
+  // yet, or a report made without a name): those are listed first, to keep for later or clear. The practitioner's name
+  // stays and the dates become today. Undo (a few seconds) puts everything back as it was.
+  var reportGen = 0;                                   // a report still being built when the page is cleared is dropped
+  var homeFrom = null;                                 // the report on screen: { tool, name (as in the record), saved }
+  // the PDF is out (shared, or saved as a file): Return home becomes the main button
+  function homeFirst() {
+    if (els.sheet.hidden) return;
+    els.share.className = 'ghost';
+    els.save.className = 'ghost';
+    els.home.className = 'primary home-btn';
+    focusQuiet(els.home);
+  }
+  // what a tool holds that goes into a client record, as one string: the same entries give the same string whatever
+  // order they were typed in. Kept as savedSig when the record is saved; anything typed since makes them differ.
+  function sortedPairs(o) {
+    return Object.keys(o || {}).sort().filter(function (k) { var v = o[k]; return v != null && typeof v !== 'object' && !blank(v); })
+      .map(function (k) { return [k, String(o[k]).trim()]; });
+  }
+  function contentSig(t) {
+    if (t === 'ex') {
+      var x = state.ex, rows = [];
+      x.items.forEach(function (it) {
+        if (it.kind === 'section') { if (!blank(it.heading)) rows.push(['s', clean1(it.heading)]); }
+        else if (exFilled(it)) rows.push(['e', it.lib || ''].concat(EX_FIELDS.map(function (f) { return clean1(it[f]); })));
+      });
+      return JSON.stringify([sortedPairs(x.meta), clean1(x.title), String(x.instructions || '').trim(), rows]);
+    }
+    var s = state[t], vals = compactValues(t);
+    return JSON.stringify([sortedPairs(s.meta), Object.keys(vals).sort().map(function (k) { return [k, sortedPairs(vals[k])]; }),
+      String((s.interp && s.interp.text) || '').trim(), sortedPairs(s.coach), s.pop || '', s.phase || '', s.sex || '']);
+  }
+  function markSaved(t) {
+    state[t].savedSig = contentSig(t);
+    saveDraft();
+  }
+  // anything of a client's in a tool: a name, a result, a detail, a note, a summary or the coach's call (the
+  // practitioner's own name and the date don't count); for the program, a name or anything in it
+  function clientContent(t) {
+    if (t === 'ex') return !blank(state.ex.meta.name) || exHasContent();
+    var s = state[t], pf = NAME_FIELDS[t];
+    if (Object.keys(compactValues(t)).length) return true;
+    if (Object.keys(s.meta).some(function (k) { return k !== 'date' && k !== pf && !blank(s.meta[k]); })) return true;
+    return !blank(s.interp && s.interp.text) || coachSet(s.coach);
+  }
+  // the tools (and the program) holding entries that aren't in a client record as they are now
+  function unsavedTools() {
+    return TOOLS.concat(['ex']).filter(function (t) { return clientContent(t) && state[t].savedSig !== contentSig(t); });
+  }
+  // a tool emptied for the next client: the practitioner's name stays (Tester / Clinician / Practitioner)
+  function resetTool(t) {
+    if (t === 'ex') {
+      var p = state.ex.meta.practitioner;
+      state.ex = freshEx();
+      if (!blank(p)) state.ex.meta.practitioner = p;
+      return;
+    }
+    var keep = {}, f = NAME_FIELDS[t];
+    if (f && !blank(state[t].meta[f])) keep[f] = state[t].meta[f];
+    state[t] = freshTool(t, keep);
+  }
+  function onHome() {
+    if (els.home.disabled || els.sheet.hidden) return;
+    var list = unsavedTools();
+    if (!list.length) { goHome(false); return; }
+    els.homeList.innerHTML = list.map(function (t) {
+      return '<li class="has-data"><span class="cl-t">' + TOOL_NAMES[t] + '</span><span class="cl-d">' + esc(contentLine(t)) + '</span></li>';
+    }).join('');
+    openModal(els.homeDialog, els.homeKeep);
+  }
+  // the clinic store has the session, or can't take it now: at once when nothing is waiting, else after one sync (at most
+  // 4 s; past that the queue carries on in the background and the bar at the top says what is waiting)
+  function afterUpload(done) {
+    if (!CLOUD || !CLOUD.signedIn()) { done(null); return; }
+    if (!CLOUD.status().pending) { done(CLOUD.status()); return; }
+    var over = false, timer = setTimeout(finish, 4000);
+    function finish() { if (over) return; over = true; clearTimeout(timer); done(CLOUD.status()); }
+    els.home.disabled = true; els.homeLabel.textContent = 'Uploading…';
+    CLOUD.sync().then(finish, finish);
+  }
+  // clearUnsaved: Clear them (the entries listed as not in a record go too); else Keep them (they stay as they are)
+  function goHome(clearUnsaved) {
+    closeModal(false);
+    var from = homeFrom || { tool: state.tool, name: '', saved: false };
+    afterUpload(function (st) {
+      els.home.disabled = false; els.homeLabel.textContent = 'Return home';
+      if (els.sheet.hidden) return;                    // the report was closed meanwhile (Back, Escape, a sign-out)
+      var unsaved = clearUnsaved ? [] : unsavedTools(), gone = {};
+      var snap = JSON.parse(draftJson()), wasLoaded = exLoaded;
+      TOOLS.concat(['ex']).forEach(function (t) { if (unsaved.indexOf(t) < 0) { gone[t] = 1; resetTool(t); } });
+      tidyState();
+      if (gone.ex) exLoaded = null;
+      Object.keys(gone).forEach(function (t) { delete cardPin[t]; });
+      // an AI summary or a scan still on its way belongs to the client just cleared: drop it when it arrives
+      if (aiBusy && gone[aiBusy]) { aiGen++; aiBusy = null; }
+      if (interpMsg.tool && gone[interpMsg.tool]) interpMsg = { tool: null, kind: '', text: '' };
+      if (interpUndo && gone[interpUndo.tool]) interpUndo = null;
+      if (scanBusy && gone[scanBusy]) { scanGen++; scanBusy = null; }
+      if (scanInfo && gone[scanInfo.tool]) scanInfo = null;
+      // the report and its preview go (they hold the client's details)
+      reportGen++;
+      homeFrom = null;
+      current = { file: null, blob: null, title: '' };
+      els.pages.innerHTML = '';
+      els.sheetTitle.textContent = 'Report';
+      closeReport();
+      state.tool = TOOLS.indexOf(state.screenTool) >= 0 ? state.screenTool : 'screen';
+      // saved straight away, so closing the app now can't bring the old entries back
+      clearTimeout(saveTimer);
+      try { localStorage.setItem(STORE, draftJson()); } catch (e) { /* storage unavailable */ }
+      closePick(false);
+      render();
+      window.scrollTo(0, 0);
+      keepAwake();                                     // nothing entered now: the screen may sleep again
+      focusQuiet(pickBtn());
+      toast(homeMessage(from, st, !gone[from.tool]), { label: 'Undo', run: function () { undoHome(snap, wasLoaded); } });
+    });
+  }
+  // 'Uploaded to Jane Doe’s clinic record — ready for the next client' and the like
+  function homeMessage(from, st, kept) {
+    var who = from.name ? from.name + '’s' : 'the client’s', lead;
+    if (!from.saved) lead = 'Not saved to a client record';
+    else if (!CLOUD) lead = 'Saved to ' + who + ' record on this device';
+    else if (st && !st.pending) lead = 'Uploaded to ' + who + ' clinic record';
+    else if (st && st.denied) lead = 'Saved on this device, not uploaded (see the bar at the top)';
+    else if (st && st.offline) lead = 'Saved on this device, uploads when back online';
+    else lead = 'Saved, still uploading';
+    return lead + (kept ? ' — kept on this device for later' : ' — ready for the next client');
+  }
+  function undoHome(snap, wasLoaded) {
+    state = snap;
+    tidyState();
+    exLoaded = wasLoaded;
+    clearTimeout(saveTimer);
+    try { localStorage.setItem(STORE, draftJson()); } catch (e) { /* storage unavailable */ }
+    closePick(false);
+    render();
+    window.scrollTo(0, 0);
+    keepAwake();
+    focusQuiet(pickBtn());
+    toast('Back as it was');
   }
 
   // ------------------------------------------------------------------ top bar
@@ -1882,14 +2046,19 @@
     else if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
     else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
   }
+  // one tool's line in a list: 'Example Athlete · 14 results', 'no name · details only', 'nothing entered'
+  // (Clear all data, and v16's Return home check)
+  function contentLine(t) {
+    var c = toolContent(t), u = c.unit || ['result', 'results'];
+    return !c.any ? 'nothing entered'
+      : (c.name || 'no name') + ' · ' + (c.results ? c.results + ' ' + (c.results === 1 ? u[0] : u[1]) : 'details only');
+  }
   function openClearDialog() {
     var any = false;
     els.clearList.innerHTML = TOOLS.concat(['ex']).map(function (t) {
-      var c = toolContent(t), u = c.unit || ['result', 'results'];
+      var c = toolContent(t);
       if (c.any) any = true;
-      var d = !c.any ? 'nothing entered'
-        : (c.name || 'no name') + ' · ' + (c.results ? c.results + ' ' + (c.results === 1 ? u[0] : u[1]) : 'details only');
-      return '<li' + (c.any ? ' class="has-data"' : '') + '><span class="cl-t">' + TOOL_NAMES[t] + '</span><span class="cl-d">' + esc(d) + '</span></li>';
+      return '<li' + (c.any ? ' class="has-data"' : '') + '><span class="cl-t">' + TOOL_NAMES[t] + '</span><span class="cl-d">' + esc(contentLine(t)) + '</span></li>';
     }).join('');
     if (!any) { toast('Nothing to clear — every section is already empty'); return; }
     openModal(els.clearDialog, els.clearCancel);
@@ -1905,7 +2074,9 @@
     aiBusy = null; interpMsg = { tool: null, kind: '', text: '' }; interpUndo = null;
     scanBusy = null; scanInfo = null; scanGen++;
     releaseWake();                                     // nothing entered now: the screen may sleep again
-    // drop the last report built (it holds the athlete's details) and its preview
+    // drop the last report built (it holds the athlete's details) and its preview, and one still being built (v16)
+    reportGen++;
+    homeFrom = null;
     current = { file: null, blob: null, title: '' };
     els.pages.innerHTML = '';
     els.sheetTitle.textContent = 'Report';
@@ -2610,6 +2781,7 @@
   var ICON_UP = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M6 11l6-6 6 6"/></svg>';
   var ICON_DOWN = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M6 13l6 6 6-6"/></svg>';
   var ICON_X = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/></svg>';
+  var GRIP = '<svg class="grip-dots" viewBox="0 0 10 16" width="10" height="16" aria-hidden="true" focusable="false" fill="currentColor"><circle cx="2.5" cy="3" r="1.5"/><circle cx="7.5" cy="3" r="1.5"/><circle cx="2.5" cy="8" r="1.5"/><circle cx="7.5" cy="8" r="1.5"/><circle cx="2.5" cy="13" r="1.5"/><circle cx="7.5" cy="13" r="1.5"/></svg>';
 
   function freshEx() { return { meta: { name: '', date: todayIso(), practitioner: userName() }, title: '', instructions: '', items: [], seq: 1, scanned: {}, cardOpen: true }; }
   function exStr(v) { return typeof v === 'string' ? v : (typeof v === 'number' && isFinite(v) ? String(v) : ''); }
@@ -2708,6 +2880,8 @@
       '<div class="ex-tplbar"><button type="button" class="quiet" id="tplStart" data-action="tpl-start" aria-haspopup="dialog">Start from template</button>' +
       '<button type="button" class="quiet" id="tplSave" data-action="tpl-save" aria-haspopup="dialog">Save as template</button></div></div>' +
       '<div class="ex-table' + (x.editing ? ' editing' : '') + '" id="exTable">' + exTableHtml() + '</div>' +
+      // v16: what a row's handle does (read with it), and where a moved row landed (for screen readers)
+      '<span class="vh" id="exGripHint">Drag up or down, or use the arrow keys.</span><span class="vh" id="exLive" role="status" aria-live="polite"></span>' +
       '<div class="ex-add"><button type="button" class="ghost" id="exAddLib" data-action="ex-lib" aria-haspopup="dialog">+ From library</button>' +
       '<button type="button" class="ghost" id="exAdd" data-action="ex-add">+ Exercise</button>' +
       '<button type="button" class="ghost" id="exAddSec" data-action="ex-add-sec">+ Section</button></div></section>';
@@ -2768,14 +2942,14 @@
         '<button type="button" class="ex-btn" id="' + id + '-down" data-action="ex-down" aria-label="Move ' + lower + ' down"' + (i === last ? ' disabled' : '') + '>' + ICON_DOWN + '</button>' +
         '<button type="button" class="ex-btn ex-del" id="' + id + '-del" data-action="ex-del" aria-label="Delete ' + lower + '">' + ICON_X + '</button></div>';
       if (sec) {
-        html += '<div class="ex-row ex-sec" id="' + id + '" data-id="' + it.id + '" role="group" aria-label="' + who + '">' +
+        html += '<div class="ex-row ex-sec" id="' + id + '" data-id="' + it.id + '" role="group" aria-label="' + who + '">' + gripHtml(it, lower, '') +
           '<input class="ex-in ex-heading" id="' + id + '-heading" data-f="heading" type="text" value="' + esc(it.heading) + '" maxlength="' + EX_LEN.heading + '"' +
           ' placeholder="Section heading, e.g. Warm-up" aria-label="' + who + ' heading" autocapitalize="sentences" autocomplete="off" enterkeyhint="next">' + acts + '</div>';
         return;
       }
       // v15: the name column also holds the library strip and the link actions (the name's suggestions open under its box)
       var strip = exLibStripHtml(it);
-      html += '<div class="ex-row" id="' + id + '" data-id="' + it.id + '" role="group" aria-label="' + who + '"><span class="ex-num" aria-hidden="true">' + n + '</span>' +
+      html += '<div class="ex-row" id="' + id + '" data-id="' + it.id + '" role="group" aria-label="' + who + '">' + gripHtml(it, lower, n) +
         '<div class="ex-namecol"><div class="ex-nameb">' + exInput(it, 'name', who) + '</div>' +
         '<div class="ex-lib" id="' + id + '-lib"' + (strip ? '' : ' hidden') + '>' + strip + '</div>' +
         '<div class="ex-libact' + (it.open ? ' on' : '') + '" id="' + id + '-libact">' + exLibActHtml(it) + '</div></div>' +
@@ -3006,6 +3180,148 @@
     var del = $('ex-' + it.id + '-del');               // keep the place without opening the keyboard
     if (del && del.getClientRects().length) focusEx(del.id);
     else if (it.kind === 'ex') focusEx('ex-' + it.id + '-more');
+  }
+
+  // ---- v16: reorder by sliding a row's handle (the dots beside its number) up or down; a line shows where it will land,
+  // the page scrolls when the finger nears the top or bottom, Escape or a cancelled touch puts it back. With the handle
+  // focused, the up and down arrow keys move the row one place. (Edit mode's up and down buttons still work too.)
+  var exDrag = null;
+  function gripHtml(it, lower, num) {
+    return '<button type="button" class="ex-grip" id="ex-' + it.id + '-grip" aria-label="Reorder ' + lower + '" aria-describedby="exGripHint">' + GRIP +
+      (num ? '<span class="ex-num">' + num + '</span>' : '') + '</button>';
+  }
+  function exMoved(it) {                               // after a move: the row flashes, its handle has focus, screen readers hear where
+    var row = $('ex-' + it.id), i = exIndex(it.id), live = $('exLive');
+    if (row) { row.classList.add('moved'); setTimeout(function () { row.classList.remove('moved'); }, 1200); }
+    focusEx('ex-' + it.id + '-grip');
+    if (live) live.textContent = 'Moved ' + exRowLabel(it, i) + ' to place ' + (i + 1) + ' of ' + state.ex.items.length + '.';
+  }
+  function onGripKey(e) {
+    if (state.tool !== 'ex' || (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') || !e.target.classList || !e.target.classList.contains('ex-grip')) return;
+    e.preventDefault();
+    var x = state.ex, row = e.target.closest('.ex-row'), i = row ? exIndex(row.dataset.id) : -1, j = e.key === 'ArrowUp' ? i - 1 : i + 1;
+    if (i < 0 || j < 0 || j >= x.items.length) return;
+    var it = x.items[i];
+    x.items[i] = x.items[j]; x.items[j] = it;
+    renderExTable();
+    exMoved(it);
+  }
+  // the edges the page scrolls at: under the sticky bars at the top, above the dock (phones) at the bottom
+  function dragEdges() {
+    var top = 0, bottom = window.innerHeight;
+    [els.appbar, els.cloudBar, $('athleteStrip')].forEach(function (el) {
+      if (!el || el.hidden || !el.getClientRects().length) return;
+      var r = el.getBoundingClientRect();
+      if (r.top <= top + 2 && r.bottom > top) top = r.bottom;   // stuck at the top of the screen
+    });
+    if (els.dock && els.dock.getClientRects().length && getComputedStyle(els.dock).display !== 'none') bottom = Math.min(bottom, els.dock.getBoundingClientRect().top);
+    return { top: top, bottom: bottom };
+  }
+  function onGripDown(e) {
+    var g = e.target.closest && e.target.closest('.ex-grip');
+    if (!g || exDrag || state.tool !== 'ex' || (e.pointerType === 'mouse' && e.button !== 0)) return;
+    var tbl = $('exTable'), row = g.closest('.ex-row');
+    if (!tbl || !row || !tbl.contains(row)) return;
+    e.preventDefault();                                // no text selection or page scroll; focus stays where it was
+    hideSuggest();
+    exDrag = { g: g, row: row, tbl: tbl, id: row.dataset.id, pid: e.pointerId, y0: e.clientY, s0: window.scrollY, y: e.clientY, live: false, raf: 0 };
+    try { g.setPointerCapture(e.pointerId); } catch (err) { /* the window listeners follow the finger anyway */ }
+    window.addEventListener('pointermove', onGripMove, true);
+    window.addEventListener('pointerup', onGripUp, true);
+    window.addEventListener('pointercancel', onGripCancel, true);
+    window.addEventListener('keydown', onGripEsc, true);
+  }
+  function gripStart() {                               // the finger has moved: lift the row and measure the others
+    var d = exDrag, rows = Array.prototype.slice.call(d.tbl.querySelectorAll('.ex-row[data-id]')), sy = window.scrollY;
+    d.from = rows.indexOf(d.row);
+    d.to = d.from;
+    d.others = rows.filter(function (r) { return r !== d.row; }).map(function (r) {
+      var b = r.getBoundingClientRect();
+      return { top: b.top + sy, bottom: b.bottom + sy, mid: b.top + sy + b.height / 2 };
+    });
+    var tb = d.tbl.getBoundingClientRect();
+    d.tblTop = tb.top + sy;                            // the table's extent: the row stays within it, and so does the scrolling
+    d.tblBottom = tb.bottom + sy;
+    d.line = document.createElement('div');
+    d.line.className = 'ex-drop';
+    d.line.hidden = true;
+    d.line.setAttribute('aria-hidden', 'true');
+    d.tbl.appendChild(d.line);
+    d.row.classList.add('dragging');
+    d.tbl.classList.add('sorting');
+    document.documentElement.classList.add('row-dragging');
+    d.live = true;
+    d.raf = requestAnimationFrame(gripScroll);
+  }
+  function gripPlace() {                               // the row under the finger, and the line where it would land
+    var d = exDrag, py = Math.max(d.tblTop, Math.min(d.tblBottom, d.y + window.scrollY)), k = 0;
+    d.row.style.transform = 'translateY(' + Math.round(py - (d.y0 + d.s0)) + 'px)';
+    d.others.forEach(function (o) { if (o.mid < py) k++; });
+    d.to = k;
+    if (k === d.from || !d.others.length) { d.line.hidden = true; return; }
+    var y = k < d.others.length ? d.others[k].top : d.others[d.others.length - 1].bottom;
+    d.line.style.top = Math.round(y - d.tblTop) + 'px';
+    d.line.hidden = false;
+  }
+  function gripScroll() {                              // near an edge the page scrolls, faster the closer the finger
+    var d = exDrag;
+    if (!d || !d.live) return;
+    var ed = dragEdges(), zone = 64, v = 0, sy = window.scrollY;
+    // only while there is more of the table out of sight that way (the program's rows are all there is to reach)
+    if (d.y < ed.top + zone && d.tblTop - sy < ed.top + 8) v = -Math.ceil((ed.top + zone - d.y) / 4);
+    else if (d.y > ed.bottom - zone && d.tblBottom - sy > ed.bottom - 8) v = Math.ceil((d.y - (ed.bottom - zone)) / 4);
+    if (v) {
+      var was = window.scrollY;
+      window.scrollBy(0, Math.max(-22, Math.min(22, v)));
+      if (window.scrollY !== was) gripPlace();
+    }
+    d.raf = requestAnimationFrame(gripScroll);
+  }
+  function onGripMove(e) {
+    var d = exDrag;
+    if (!d || e.pointerId !== d.pid) return;
+    e.preventDefault();
+    if (!document.body.contains(d.row)) { endGrip(); return; }   // the table was redrawn under the finger: let it go
+    d.y = e.clientY;
+    if (!d.live) {
+      if (Math.abs(d.y - d.y0) < 5) return;            // a tap, so far
+      gripStart();
+    }
+    gripPlace();
+  }
+  function endGrip() {
+    var d = exDrag;
+    exDrag = null;
+    if (!d) return;
+    window.removeEventListener('pointermove', onGripMove, true);
+    window.removeEventListener('pointerup', onGripUp, true);
+    window.removeEventListener('pointercancel', onGripCancel, true);
+    window.removeEventListener('keydown', onGripEsc, true);
+    cancelAnimationFrame(d.raf);
+    try { if (d.g.hasPointerCapture && d.g.hasPointerCapture(d.pid)) d.g.releasePointerCapture(d.pid); } catch (err) { /* gone */ }
+    d.row.classList.remove('dragging');
+    d.row.style.transform = '';
+    d.tbl.classList.remove('sorting');
+    document.documentElement.classList.remove('row-dragging');
+    if (d.line && d.line.parentNode) d.line.parentNode.removeChild(d.line);
+    return d;
+  }
+  function onGripUp(e) {
+    if (!exDrag || e.pointerId !== exDrag.pid) return;
+    var d = endGrip();
+    if (!d.live) { focusQuiet(d.g); return; }          // a tap: the handle has focus (the arrow keys move the row)
+    var x = state.ex, i = exIndex(d.id);
+    if (d.to === d.from || i !== d.from || !document.body.contains(d.row)) { focusQuiet($('ex-' + d.id + '-grip')); return; }
+    var it = x.items.splice(i, 1)[0];
+    x.items.splice(d.to, 0, it);
+    renderExTable();
+    exMoved(it);
+  }
+  function onGripCancel(e) { if (exDrag && e.pointerId === exDrag.pid) endGrip(); }
+  function onGripEsc(e) {
+    if (e.key !== 'Escape' || !exDrag) return;
+    e.preventDefault(); e.stopPropagation();
+    endGrip();
   }
 
   // ---- the handout
@@ -4670,11 +4986,13 @@
       els.testsAll.addEventListener('click', function () { setAllTests(true); });
       els.testsNone.addEventListener('click', function () { setAllTests(false); });
       els.testsDone.addEventListener('click', function () { closeModal(); });
-      [els.clearDialog, els.aiDialog, els.clientsDialog, els.testsDialog].forEach(function (d) {
+      [els.clearDialog, els.aiDialog, els.clientsDialog, els.testsDialog, els.homeDialog].forEach(function (d) {
         d.addEventListener('click', function (e) { if (e.target === d) closeModal(); });
       });
       // tapping a suggested client must not blur the name box before the tap lands
       els.entry.addEventListener('pointerdown', function (e) { if (e.target.closest('.suggest')) e.preventDefault(); });
+      els.entry.addEventListener('pointerdown', onGripDown);   // v16: slide a program row up or down by its handle
+      els.entry.addEventListener('keydown', onGripKey);        // (or move it with the arrow keys)
       els.entry.addEventListener('focusout', function (e) {
         var t = e.target, ds = t.dataset || {};
         // a client name box, or (v15) an exercise name box with the library's suggestions: its list closes with it
@@ -4690,6 +5008,9 @@
       els.back.addEventListener('click', closeReport);
       els.save.addEventListener('click', savePdf);
       els.share.addEventListener('click', sharePdf);
+      els.home.addEventListener('click', onHome);      // v16: Return home, and its check when some entries aren't saved
+      els.homeKeep.addEventListener('click', function () { goHome(false); });
+      els.homeClear.addEventListener('click', function () { goHome(true); });
       document.addEventListener('keydown', function (e) {
         if (openModalEl) { onModalKey(e); return; }
         if (menuOpen()) { onMenuKey(e); return; }

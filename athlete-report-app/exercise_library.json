@@ -1,6 +1,6 @@
 {
  "v": 1,
- "note": "Starter exercises drafted by Claude for BASE Health Noosa, 1 Oct 2026. Every entry is a draft for a clinician to check: the cues print on patient handouts. Edit in the app (Exercises > Exercise library); edited copies are kept in the clinic store and win over this file.",
+ "note": "Starter exercises drafted by Claude for BASE Health Noosa, 1 Oct 2026. Every entry is a draft for a clinician to check: the cues print on patient handouts. No default dose (v16): sets, reps and rest are left for the clinician. Edit in the app (Exercises > Exercise library); edited copies are kept in the clinic store and win over this file.",
  "areas": [
   "Hip & groin",
   "Knee",
@@ -34,12 +34,12 @@
    "type": "Strength",
    "equipment": "Body weight or dumbbells",
    "dose": {
-    "sets": "3",
-    "reps": "8–12",
+    "sets": "",
+    "reps": "",
     "load": "",
-    "rest": "90 s",
+    "rest": "",
     "tempo": "",
-    "side": "Each side"
+    "side": ""
    },
    "cues": [
     "Front shin stays close to upright",
@@ -63,12 +63,12 @@
    "type": "Strength",
    "equipment": "Bench and dumbbells",
    "dose": {
-    "sets": "3",
-    "reps": "6–10",
+    "sets": "",
+    "reps": "",
     "load": "",
-    "rest": "2 min",
+    "rest": "",
     "tempo": "",
-    "side": "Each side"
+    "side": ""
    },
    "cues": [
     "Back foot on the bench, laces down",
@@ -91,10 +91,10 @@
    "type": "Strength",
    "equipment": "Kettlebell or dumbbell",
    "dose": {
-    "sets": "3",
-    "reps": "8–12",
+    "sets": "",
+    "reps": "",
     "load": "",
-    "rest": "90 s",
+    "rest": "",
     "tempo": "",
     "side": ""
    },
@@ -120,10 +120,10 @@
    "type": "Strength",
    "equipment": "Barbell and rack",
    "dose": {
-    "sets": "4",
-    "reps": "5–8",
+    "sets": "",
+    "reps": "",
     "load": "",
-    "rest": "2–3 min",
+    "rest": "",
     "tempo": "",
     "side": ""
    },
@@ -148,10 +148,10 @@
    "type": "Strength",
    "equipment": "Box or bench",
    "dose": {
-    "sets": "3",
-    "reps": "10",
+    "sets": "",
+    "reps": "",
     "load": "",
-    "rest": "60 s",
+    "rest": "",
     "tempo": "",
     "side": ""
    },
@@ -177,10 +177,10 @@
    "type": "Strength",
    "equipment": "Chair",
    "dose": {
-    "sets": "3",
-    "reps": "10",
+    "sets": "",
+    "reps": "",
     "load": "",
-    "rest": "60 s",
+    "rest": "",
     "tempo": "",
     "side": ""
    },
@@ -204,10 +204,10 @@
    "type": "Isometric",
    "equipment": "Heavy band anchored behind the knees",
    "dose": {
-    "sets": "5",
-    "reps": "45 s",
+    "sets": "",
+    "reps": "",
     "load": "",
-    "rest": "60 s",
+    "rest": "",
     "tempo": "",
     "side": ""
    },
@@ -231,10 +231,10 @@
    "type": "Isometric",
    "equipment": "Wall",
    "dose": {
-    "sets": "3",
-    "reps": "30–45 s",
+    "sets": "",
+    "reps": "",
     "load": "",
-    "rest": "60 s",
+    "rest": "",
     "tempo": "",
     "side": ""
    },
@@ -258,10 +258,10 @@
    "type": "Strength",
    "equipment": "Leg press machine",
    "dose": {
-    "sets": "3",
-    "reps": "8–12",
+    "sets": "",
+    "reps": "",
     "load": "",
-    "rest": "90 s",
+    "rest": "",
     "tempo": "",
     "side": ""
    },
@@ -286,12 +286,12 @@
    "type": "Strength",
    "equipment": "Leg press machine",
    "dose": {
-    "sets": "3",
-    "reps": "8–12",
+    "sets": "",
+    "reps": "",
     "load": "",
-    "rest": "90 s",
+    "rest": "",
     "tempo": "",
-    "side": "Each side"
+    "side": ""
    },
    "cues": [
     "Foot in the middle of the platform",
@@ -314,10 +314,10 @@
    "type": "Strength",
    "equipment": "Knee extension machine",
    "dose": {
-    "sets": "3",
-    "reps": "10–12",
+    "sets": "",
+    "reps": "",
     "load": "",
-    "rest": "90 s",
+    "rest": "",
     "tempo": "",
     "side": ""
    },
@@ -342,12 +342,12 @@
    "type": "Isometric",
    "equipment": "Knee extension machine or band",
    "dose": {
-    "sets": "5",
-    "reps": "45 s",
+    "sets": "",
+    "reps": "",
     "load": "",
-    "rest": "60 s",
+    "rest": "",
     "tempo": "",
-    "side": "Each side"
+    "side": ""
    },
    "cues": [
     "Push into the pad and hold still",
@@ -370,12 +370,12 @@
    "type": "Strength",
    "equipment": "Step or box",
    "dose": {
-    "sets": "3",
-    "reps": "10",
+    "sets": "",
+    "reps": "",
     "load": "",
-    "rest": "60 s",
+    "rest": "",
     "tempo": "",
-    "side": "Each side"
+    "side": ""
    },
    "cues": [
     "Whole foot on the step",
@@ -397,12 +397,12 @@
    "type": "Balance & control",
    "equipment": "Step",
    "dose": {
-    "sets": "3",
-    "reps": "10",
+    "sets": "",
+    "reps": "",
     "load": "",
-    "rest": "60 s",
+    "rest": "",
     "tempo": "",
-    "side": "Each side"
+    "side": ""
    },
    "cues": [
     "Keep your hips level",
@@ -425,12 +425,12 @@
    "type": "Strength",
    "equipment": "Body weight or dumbbells",
    "dose": {
-    "sets": "3",
-    "reps": "8–10",
+    "sets": "",
+    "reps": "",
     "load": "",
-    "rest": "90 s",
+    "rest": "",
     "tempo": "",
-    "side": "Each side"
+    "side": ""
    },
    "cues": [
     "Step back far enough to drop straight down",
@@ -452,12 +452,12 @@
    "type": "Strength",
    "equipment": "Body weight or dumbbells",
    "dose": {
-    "sets": "3",
-    "reps": "10",
+    "sets": "",
+    "reps": "",
     "load": "",
-    "rest": "90 s",
+    "rest": "",
     "tempo": "",
-    "side": "Each side"
+    "side": ""
    },
    "cues": [
     "Long steps, trunk upright",
@@ -479,12 +479,12 @@
    "type": "Strength",
    "equipment": "Body weight or dumbbell",
    "dose": {
-    "sets": "3",
-    "reps": "8",
+    "sets": "",
+    "reps": "",
     "load": "",
-    "rest": "60 s",
+    "rest": "",
     "tempo": "",
-    "side": "Each side"
+    "side": ""
    },
    "cues": [
     "Step wide and sit back over one leg",
@@ -506,12 +506,12 @@
    "type": "Strength",
    "equipment": "Band",
    "dose": {
-    "sets": "3",
-    "reps": "15",
+    "sets": "",
+    "reps": "",
     "load": "",
-    "rest": "45 s",
+    "rest": "",
     "tempo": "",
-    "side": "Each side"
+    "side": ""
    },
    "cues": [
     "Band behind your knee",
@@ -534,8 +534,8 @@
    "type": "Isometric",
    "equipment": "Rolled towel",
    "dose": {
-    "sets": "3",
-    "reps": "10 × 5 s",
+    "sets": "",
+    "reps": "",
     "load": "",
     "rest": "",
     "tempo": "",
@@ -561,12 +561,12 @@
    "type": "Strength",
    "equipment": "Body weight or ankle weight",
    "dose": {
-    "sets": "3",
-    "reps": "10",
+    "sets": "",
+    "reps": "",
     "load": "",
-    "rest": "45 s",
+    "rest": "",
     "tempo": "",
-    "side": "Each side"
+    "side": ""
    },
    "cues": [
     "Tighten your thigh first",
@@ -588,8 +588,8 @@
    "type": "Mobility",
    "equipment": "Towel or slider",
    "dose": {
-    "sets": "3",
-    "reps": "10–15",
+    "sets": "",
+    "reps": "",
     "load": "",
     "rest": "",
     "tempo": "",
@@ -617,12 +617,12 @@
    "type": "Balance & control",
    "equipment": "Box (optional)",
    "dose": {
-    "sets": "3",
-    "reps": "6–8",
+    "sets": "",
+    "reps": "",
     "load": "",
-    "rest": "90 s",
+    "rest": "",
     "tempo": "",
-    "side": "Each side"
+    "side": ""
    },
    "cues": [
     "Sit back as if onto a chair",
@@ -644,12 +644,12 @@
    "type": "Mobility",
    "equipment": "Wall for balance",
    "dose": {
-    "sets": "3",
-    "reps": "30 s",
+    "sets": "",
+    "reps": "",
     "load": "",
     "rest": "",
     "tempo": "",
-    "side": "Each side"
+    "side": ""
    },
    "cues": [
     "Hold your ankle behind you",
@@ -671,10 +671,10 @@
    "type": "Strength",
    "equipment": "Body weight",
    "dose": {
-    "sets": "3",
-    "reps": "12–15",
+    "sets": "",
+    "reps": "",
     "load": "",
-    "rest": "60 s",
+    "rest": "",
     "tempo": "",
     "side": ""
    },
@@ -700,12 +700,12 @@
    "type": "Strength",
    "equipment": "Body weight",
    "dose": {
-    "sets": "3",
-    "reps": "10–12",
+    "sets": "",
+    "reps": "",
     "load": "",
-    "rest": "60 s",
+    "rest": "",
     "tempo": "",
-    "side": "Each side"
+    "side": ""
    },
    "cues": [
     "Keep your hips level",
@@ -727,10 +727,10 @@
    "type": "Strength",
    "equipment": "Bench and barbell",
    "dose": {
-    "sets": "3",
-    "reps": "8–12",
+    "sets": "",
+    "reps": "",
     "load": "",
-    "rest": "90 s",
+    "rest": "",
     "tempo": "",
     "side": ""
    },
@@ -754,12 +754,12 @@
    "type": "Isometric",
    "equipment": "Mat",
    "dose": {
-    "sets": "3",
-    "reps": "20–40 s",
+    "sets": "",
+    "reps": "",
     "load": "",
-    "rest": "45 s",
+    "rest": "",
     "tempo": "",
-    "side": "Each side"
+    "side": ""
    },
    "cues": [
     "Elbow under your shoulder",
@@ -783,12 +783,12 @@
    "type": "Isometric",
    "equipment": "Bench",
    "dose": {
-    "sets": "3",
-    "reps": "15–30 s",
+    "sets": "",
+    "reps": "",
     "load": "",
-    "rest": "60 s",
+    "rest": "",
     "tempo": "",
-    "side": "Each side"
+    "side": ""
    },
    "cues": [
     "Top leg on the bench, body in a straight line",
@@ -811,10 +811,10 @@
    "type": "Isometric",
    "equipment": "Ball or folded pillow",
    "dose": {
-    "sets": "5",
-    "reps": "10 s",
+    "sets": "",
+    "reps": "",
     "load": "",
-    "rest": "20 s",
+    "rest": "",
     "tempo": "",
     "side": ""
    },
@@ -838,12 +838,12 @@
    "type": "Strength",
    "equipment": "Body weight or ankle weight",
    "dose": {
-    "sets": "3",
-    "reps": "12–15",
+    "sets": "",
+    "reps": "",
     "load": "",
-    "rest": "45 s",
+    "rest": "",
     "tempo": "",
-    "side": "Each side"
+    "side": ""
    },
    "cues": [
     "Lie on your side, bottom knee bent",
@@ -867,12 +867,12 @@
    "type": "Strength",
    "equipment": "Mini band",
    "dose": {
-    "sets": "3",
-    "reps": "10 steps",
+    "sets": "",
+    "reps": "",
     "load": "",
-    "rest": "45 s",
+    "rest": "",
     "tempo": "",
-    "side": "Each way"
+    "side": ""
    },
    "cues": [
     "Band around your knees or ankles",
@@ -893,12 +893,12 @@
    "type": "Strength",
    "equipment": "Mini band (optional)",
    "dose": {
-    "sets": "3",
-    "reps": "15",
+    "sets": "",
+    "reps": "",
     "load": "",
-    "rest": "45 s",
+    "rest": "",
     "tempo": "",
-    "side": "Each side"
+    "side": ""
    },
    "cues": [
     "Lie on your side, knees bent, heels together",
@@ -921,12 +921,12 @@
    "type": "Strength",
    "equipment": "Cable or band",
    "dose": {
-    "sets": "3",
-    "reps": "12",
+    "sets": "",
+    "reps": "",
     "load": "",
-    "rest": "45 s",
+    "rest": "",
     "tempo": "",
-    "side": "Each side"
+    "side": ""
    },
    "cues": [
     "Stand tall and hold on for balance",
@@ -948,12 +948,12 @@
    "type": "Mobility",
    "equipment": "Mat",
    "dose": {
-    "sets": "3",
-    "reps": "30 s",
+    "sets": "",
+    "reps": "",
     "load": "",
     "rest": "",
     "tempo": "",
-    "side": "Each side"
+    "side": ""
    },
    "cues": [
     "Tuck your tailbone under",
@@ -975,8 +975,8 @@
    "type": "Mobility",
    "equipment": "Mat",
    "dose": {
-    "sets": "2",
-    "reps": "10",
+    "sets": "",
+    "reps": "",
     "load": "",
     "rest": "",
     "tempo": "",
@@ -1004,10 +1004,10 @@
    "type": "Strength",
    "equipment": "Partner, anchored bar or NordBord",
    "dose": {
-    "sets": "3",
-    "reps": "4–6",
+    "sets": "",
+    "reps": "",
     "load": "",
-    "rest": "2 min",
+    "rest": "",
     "tempo": "",
     "side": ""
    },
@@ -1031,10 +1031,10 @@
    "type": "Strength",
    "equipment": "Barbell or dumbbells",
    "dose": {
-    "sets": "3",
-    "reps": "8",
+    "sets": "",
+    "reps": "",
     "load": "",
-    "rest": "2 min",
+    "rest": "",
     "tempo": "",
     "side": ""
    },
@@ -1061,12 +1061,12 @@
    "type": "Strength",
    "equipment": "Dumbbell or kettlebell",
    "dose": {
-    "sets": "3",
-    "reps": "8",
+    "sets": "",
+    "reps": "",
     "load": "",
-    "rest": "90 s",
+    "rest": "",
     "tempo": "",
-    "side": "Each side"
+    "side": ""
    },
    "cues": [
     "Keep your hips level and square to the floor",
@@ -1089,12 +1089,12 @@
    "type": "Isometric",
    "equipment": "Box or bench",
    "dose": {
-    "sets": "4",
-    "reps": "20–30 s",
+    "sets": "",
+    "reps": "",
     "load": "",
-    "rest": "60 s",
+    "rest": "",
     "tempo": "",
-    "side": "Each side"
+    "side": ""
    },
    "cues": [
     "Heel on the box, knee slightly bent",
@@ -1116,12 +1116,12 @@
    "type": "Strength",
    "equipment": "Box or bench",
    "dose": {
-    "sets": "3",
-    "reps": "8–10",
+    "sets": "",
+    "reps": "",
     "load": "",
-    "rest": "90 s",
+    "rest": "",
     "tempo": "",
-    "side": "Each side"
+    "side": ""
    },
    "cues": [
     "Heel on the box, other leg up",
@@ -1144,10 +1144,10 @@
    "type": "Strength",
    "equipment": "Leg curl machine",
    "dose": {
-    "sets": "3",
-    "reps": "8–12",
+    "sets": "",
+    "reps": "",
     "load": "",
-    "rest": "90 s",
+    "rest": "",
     "tempo": "",
     "side": ""
    },
@@ -1171,10 +1171,10 @@
    "type": "Strength",
    "equipment": "Sliders or towel",
    "dose": {
-    "sets": "3",
-    "reps": "8–10",
+    "sets": "",
+    "reps": "",
     "load": "",
-    "rest": "90 s",
+    "rest": "",
     "tempo": "",
     "side": ""
    },
@@ -1200,10 +1200,10 @@
    "type": "Strength",
    "equipment": "Back-extension bench",
    "dose": {
-    "sets": "3",
-    "reps": "10–12",
+    "sets": "",
+    "reps": "",
     "load": "",
-    "rest": "90 s",
+    "rest": "",
     "tempo": "",
     "side": ""
    },
@@ -1228,10 +1228,10 @@
    "type": "Strength",
    "equipment": "Kettlebell",
    "dose": {
-    "sets": "3",
-    "reps": "12–15",
+    "sets": "",
+    "reps": "",
     "load": "",
-    "rest": "60 s",
+    "rest": "",
     "tempo": "",
     "side": ""
    },
@@ -1257,10 +1257,10 @@
    "type": "Strength",
    "equipment": "Trap bar",
    "dose": {
-    "sets": "4",
-    "reps": "5–6",
+    "sets": "",
+    "reps": "",
     "load": "",
-    "rest": "2–3 min",
+    "rest": "",
     "tempo": "",
     "side": ""
    },
@@ -1284,12 +1284,12 @@
    "type": "Mobility",
    "equipment": "Low step or bench",
    "dose": {
-    "sets": "3",
-    "reps": "30 s",
+    "sets": "",
+    "reps": "",
     "load": "",
     "rest": "",
     "tempo": "",
-    "side": "Each side"
+    "side": ""
    },
    "cues": [
     "Heel up on a low step, knee straight",
@@ -1313,10 +1313,10 @@
    "type": "Strength",
    "equipment": "Step (optional)",
    "dose": {
-    "sets": "3",
-    "reps": "15–20",
+    "sets": "",
+    "reps": "",
     "load": "",
-    "rest": "60 s",
+    "rest": "",
     "tempo": "",
     "side": ""
    },
@@ -1342,12 +1342,12 @@
    "type": "Strength",
    "equipment": "Step, wall for balance",
    "dose": {
-    "sets": "3",
-    "reps": "15–25",
+    "sets": "",
+    "reps": "",
     "load": "",
-    "rest": "60 s",
+    "rest": "",
     "tempo": "",
-    "side": "Each side"
+    "side": ""
    },
    "cues": [
     "Fingertips on the wall for balance only",
@@ -1369,10 +1369,10 @@
    "type": "Strength",
    "equipment": "Machine, or a dumbbell on the knee",
    "dose": {
-    "sets": "3",
-    "reps": "12–15",
+    "sets": "",
+    "reps": "",
     "load": "",
-    "rest": "60 s",
+    "rest": "",
     "tempo": "",
     "side": ""
    },
@@ -1396,12 +1396,12 @@
    "type": "Strength",
    "equipment": "Step or wall",
    "dose": {
-    "sets": "3",
-    "reps": "15",
+    "sets": "",
+    "reps": "",
     "load": "",
-    "rest": "60 s",
+    "rest": "",
     "tempo": "",
-    "side": "Each side"
+    "side": ""
    },
    "cues": [
     "Keep your knee bent the whole time",
@@ -1424,12 +1424,12 @@
    "type": "Strength",
    "equipment": "Step",
    "dose": {
-    "sets": "3",
-    "reps": "15",
+    "sets": "",
+    "reps": "",
     "load": "",
-    "rest": "60 s",
+    "rest": "",
     "tempo": "",
-    "side": "Each side"
+    "side": ""
    },
    "cues": [
     "Rise on both feet, then lower on one",
@@ -1452,12 +1452,12 @@
    "type": "Isometric",
    "equipment": "Step or wall",
    "dose": {
-    "sets": "5",
-    "reps": "30–45 s",
+    "sets": "",
+    "reps": "",
     "load": "",
-    "rest": "60 s",
+    "rest": "",
     "tempo": "",
-    "side": "Each side"
+    "side": ""
    },
    "cues": [
     "Rise to halfway and hold still",
@@ -1479,10 +1479,10 @@
    "type": "Strength",
    "equipment": "Wall",
    "dose": {
-    "sets": "3",
-    "reps": "15–20",
+    "sets": "",
+    "reps": "",
     "load": "",
-    "rest": "45 s",
+    "rest": "",
     "tempo": "",
     "side": ""
    },
@@ -1507,12 +1507,12 @@
    "type": "Mobility",
    "equipment": "Wall",
    "dose": {
-    "sets": "2",
-    "reps": "10",
+    "sets": "",
+    "reps": "",
     "load": "",
     "rest": "",
     "tempo": "",
-    "side": "Each side"
+    "side": ""
    },
    "cues": [
     "Keep your heel flat on the floor",
@@ -1535,12 +1535,12 @@
    "type": "Mobility",
    "equipment": "Wall",
    "dose": {
-    "sets": "3",
-    "reps": "30 s",
+    "sets": "",
+    "reps": "",
     "load": "",
     "rest": "",
     "tempo": "",
-    "side": "Each side"
+    "side": ""
    },
    "cues": [
     "Back leg straight, heel down",
@@ -1564,12 +1564,12 @@
    "type": "Balance & control",
    "equipment": "Cushion (optional)",
    "dose": {
-    "sets": "3",
-    "reps": "30 s",
+    "sets": "",
+    "reps": "",
     "load": "",
     "rest": "",
     "tempo": "",
-    "side": "Each side"
+    "side": ""
    },
    "cues": [
     "Stand tall on one leg",
@@ -1594,12 +1594,12 @@
    "type": "Balance & control",
    "equipment": "Tape marks on the floor (optional)",
    "dose": {
-    "sets": "3",
-    "reps": "5",
+    "sets": "",
+    "reps": "",
     "load": "",
-    "rest": "45 s",
+    "rest": "",
     "tempo": "",
-    "side": "Each side"
+    "side": ""
    },
    "cues": [
     "Balance on one leg with a slight knee bend",
@@ -1621,8 +1621,8 @@
    "type": "Strength",
    "equipment": "",
    "dose": {
-    "sets": "3",
-    "reps": "10 × 5 s",
+    "sets": "",
+    "reps": "",
     "load": "",
     "rest": "",
     "tempo": "",
@@ -1649,12 +1649,12 @@
    "type": "Strength",
    "equipment": "Band",
    "dose": {
-    "sets": "3",
-    "reps": "15",
+    "sets": "",
+    "reps": "",
     "load": "",
-    "rest": "45 s",
+    "rest": "",
     "tempo": "",
-    "side": "Each side"
+    "side": ""
    },
    "cues": [
     "Band around the outside of your foot",
@@ -1678,10 +1678,10 @@
    "type": "Plyometric",
    "equipment": "",
    "dose": {
-    "sets": "3",
-    "reps": "20",
+    "sets": "",
+    "reps": "",
     "load": "",
-    "rest": "60 s",
+    "rest": "",
     "tempo": "",
     "side": ""
    },
@@ -1707,10 +1707,10 @@
    "type": "Plyometric",
    "equipment": "",
    "dose": {
-    "sets": "3",
-    "reps": "5–8",
+    "sets": "",
+    "reps": "",
     "load": "",
-    "rest": "90 s",
+    "rest": "",
     "tempo": "",
     "side": ""
    },
@@ -1733,10 +1733,10 @@
    "type": "Plyometric",
    "equipment": "Box",
    "dose": {
-    "sets": "3",
-    "reps": "5",
+    "sets": "",
+    "reps": "",
     "load": "",
-    "rest": "90 s",
+    "rest": "",
     "tempo": "",
     "side": ""
    },
@@ -1762,10 +1762,10 @@
    "type": "Plyometric",
    "equipment": "Low box",
    "dose": {
-    "sets": "3",
-    "reps": "5",
+    "sets": "",
+    "reps": "",
     "load": "",
-    "rest": "60 s",
+    "rest": "",
     "tempo": "",
     "side": ""
    },
@@ -1791,12 +1791,12 @@
    "type": "Plyometric",
    "equipment": "",
    "dose": {
-    "sets": "3",
-    "reps": "5",
+    "sets": "",
+    "reps": "",
     "load": "",
-    "rest": "60 s",
+    "rest": "",
     "tempo": "",
-    "side": "Each side"
+    "side": ""
    },
    "cues": [
     "Hop forwards and land on the same leg",
@@ -1821,12 +1821,12 @@
    "type": "Plyometric",
    "equipment": "",
    "dose": {
-    "sets": "3",
-    "reps": "6",
+    "sets": "",
+    "reps": "",
     "load": "",
-    "rest": "60 s",
+    "rest": "",
     "tempo": "",
-    "side": "Each side"
+    "side": ""
    },
    "cues": [
     "Push off sideways from one leg",
@@ -1847,10 +1847,10 @@
    "type": "Running drill",
    "equipment": "",
    "dose": {
-    "sets": "3",
-    "reps": "20 m",
+    "sets": "",
+    "reps": "",
     "load": "",
-    "rest": "Walk back",
+    "rest": "",
     "tempo": "",
     "side": ""
    },
@@ -1875,12 +1875,12 @@
    "type": "Running drill",
    "equipment": "Wall",
    "dose": {
-    "sets": "3",
-    "reps": "10",
+    "sets": "",
+    "reps": "",
     "load": "",
-    "rest": "60 s",
+    "rest": "",
     "tempo": "",
-    "side": "Each side"
+    "side": ""
    },
    "cues": [
     "Lean into the wall from your ankles",
@@ -1902,10 +1902,10 @@
    "type": "Conditioning",
    "equipment": "Field or track",
    "dose": {
-    "sets": "8",
-    "reps": "100 m",
-    "load": "About 70% effort",
-    "rest": "Walk back",
+    "sets": "",
+    "reps": "",
+    "load": "",
+    "rest": "",
     "tempo": "",
     "side": ""
    },
@@ -1931,9 +1931,9 @@
    "type": "Conditioning",
    "equipment": "Exercise bike",
    "dose": {
-    "sets": "1",
-    "reps": "10–20 min",
-    "load": "Easy to moderate",
+    "sets": "",
+    "reps": "",
+    "load": "",
     "rest": "",
     "tempo": "",
     "side": ""
@@ -1959,10 +1959,10 @@
    "type": "Isometric",
    "equipment": "Mat",
    "dose": {
-    "sets": "3",
-    "reps": "30–45 s",
+    "sets": "",
+    "reps": "",
     "load": "",
-    "rest": "45 s",
+    "rest": "",
     "tempo": "",
     "side": ""
    },
@@ -1983,10 +1983,10 @@
    "type": "Balance & control",
    "equipment": "Mat",
    "dose": {
-    "sets": "3",
-    "reps": "10",
+    "sets": "",
+    "reps": "",
     "load": "",
-    "rest": "45 s",
+    "rest": "",
     "tempo": "",
     "side": ""
    },
@@ -2009,10 +2009,10 @@
    "type": "Balance & control",
    "equipment": "Mat",
    "dose": {
-    "sets": "3",
-    "reps": "10",
+    "sets": "",
+    "reps": "",
     "load": "",
-    "rest": "45 s",
+    "rest": "",
     "tempo": "",
     "side": ""
    },
@@ -2035,12 +2035,12 @@
    "type": "Isometric",
    "equipment": "Band or cable",
    "dose": {
-    "sets": "3",
-    "reps": "10",
+    "sets": "",
+    "reps": "",
     "load": "",
-    "rest": "45 s",
+    "rest": "",
     "tempo": "",
-    "side": "Each side"
+    "side": ""
    },
    "cues": [
     "Stand side-on to the band’s anchor",
@@ -2063,12 +2063,12 @@
    "type": "Strength",
    "equipment": "Kettlebell or dumbbell",
    "dose": {
-    "sets": "3",
-    "reps": "20–30 m",
+    "sets": "",
+    "reps": "",
     "load": "",
-    "rest": "60 s",
+    "rest": "",
     "tempo": "",
-    "side": "Each side"
+    "side": ""
    },
    "cues": [
     "Weight in one hand, stand tall",
@@ -2091,12 +2091,12 @@
    "type": "Mobility",
    "equipment": "Mat",
    "dose": {
-    "sets": "2",
-    "reps": "10",
+    "sets": "",
+    "reps": "",
     "load": "",
     "rest": "",
     "tempo": "",
-    "side": "Each side"
+    "side": ""
    },
    "cues": [
     "Lie on your side with your knees bent",
@@ -2120,10 +2120,10 @@
    "type": "Strength",
    "equipment": "Body weight",
    "dose": {
-    "sets": "3",
-    "reps": "8–15",
+    "sets": "",
+    "reps": "",
     "load": "",
-    "rest": "60 s",
+    "rest": "",
     "tempo": "",
     "side": ""
    },
@@ -2148,12 +2148,12 @@
    "type": "Strength",
    "equipment": "Dumbbell and bench",
    "dose": {
-    "sets": "3",
-    "reps": "10",
+    "sets": "",
+    "reps": "",
     "load": "",
-    "rest": "60 s",
+    "rest": "",
     "tempo": "",
-    "side": "Each side"
+    "side": ""
    },
    "cues": [
     "Flat back, hand and knee on the bench",
@@ -2176,12 +2176,12 @@
    "type": "Strength",
    "equipment": "Band",
    "dose": {
-    "sets": "3",
-    "reps": "12–15",
-    "load": "Light band",
-    "rest": "45 s",
+    "sets": "",
+    "reps": "",
+    "load": "",
+    "rest": "",
     "tempo": "",
-    "side": "Each side"
+    "side": ""
    },
    "cues": [
     "Elbow tucked into your side",
@@ -2203,10 +2203,10 @@
    "type": "Strength",
    "equipment": "Dumbbells",
    "dose": {
-    "sets": "3",
-    "reps": "8–10",
+    "sets": "",
+    "reps": "",
     "load": "",
-    "rest": "90 s",
+    "rest": "",
     "tempo": "",
     "side": ""
    },
