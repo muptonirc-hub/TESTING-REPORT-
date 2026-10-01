@@ -5,9 +5,12 @@
    so the next test can load their previous results and the report can show progress. "Scan notes" reads a photo
    of handwritten results with Claude and fills the boxes for checking.
    A fifth tab, Exercises (v10), turns a photo of a handwritten exercise page into an editable table and a PDF
-   handout. It is kept in the draft only (never in client records).
+   handout (until v15 it was kept in the draft only).
    v13: with the clinic store configured (cloud-config.js), every device signs in once with the clinic login and the
-   client records live in Firestore (cloud.js), cached on the device; the draft stays on the device as before. */
+   client records live in Firestore (cloud.js), cached on the device; the draft stays on the device as before.
+   v15: the Exercises tab has three pages chosen from its heading (Program builder, Exercise library, Program templates);
+   programs can be built from the clinic's exercise library (cues and video links print on the handout), saved as
+   templates, and each handout created with a patient name is saved to that client's record. */
 (function () {
   'use strict';
   var E = window.BHEngine;
@@ -34,7 +37,10 @@
     signinName: $('signinName'), signinBtn: $('signinBtn'), signinErr: $('signinErr'), accountTpl: $('accountTpl'),
     nameDialog: $('nameDialog'), nameBox: $('nameBox'), nameErr: $('nameErr'), nameCancel: $('nameCancel'), nameSave: $('nameSave'),
     signOutDialog: $('signOutDialog'), signOutText: $('signOutText'), signOutCancel: $('signOutCancel'), signOutConfirm: $('signOutConfirm'),
-    legacyDialog: $('legacyDialog'), legacyText: $('legacyText'), legacyLater: $('legacyLater'), legacyUpload: $('legacyUpload'), legacyNever: $('legacyNever')
+    legacyDialog: $('legacyDialog'), legacyText: $('legacyText'), legacyLater: $('legacyLater'), legacyUpload: $('legacyUpload'), legacyNever: $('legacyNever'),
+    // v15: the exercise library's editor, + From library, the video player and the template dialogs
+    libDialog: $('libDialog'), libPickDialog: $('libPickDialog'), videoDialog: $('videoDialog'),
+    tplSaveDialog: $('tplSaveDialog'), tplPickDialog: $('tplPickDialog'), tplRenameDialog: $('tplRenameDialog')
   };
 
   // ------------------------------------------------------------------ small helpers
@@ -177,6 +183,8 @@
     if (TOOLS.indexOf(state.tool) < 0 && state.tool !== 'ex') state.tool = 'screen';
     // v14: the screening tool the Screening tab returns to (the one in use, or the last one used before Exercises)
     if (TOOLS.indexOf(state.screenTool) < 0) state.screenTool = TOOLS.indexOf(state.tool) >= 0 ? state.tool : 'screen';
+    // v15: the Exercises page the Exercises tab returns to (drafts from v14 and earlier: the builder)
+    if (EX_PAGES.indexOf(state.exPage) < 0) state.exPage = 'builder';
   }
   function val(tool, name) {
     var v = state[tool].values;
@@ -246,8 +254,16 @@
     str: ['Lower-limb strength & capacity', 'Enter each leg\u2019s load, force or reps. Blank tests are left out.'],
     ham: ['Hamstring rehab & return to play', 'Injured-limb results against the targets for the chosen phase.'],
     acl: ['ACL rehab & return to play', 'Injured-limb and symmetry results against ACLR norms for the chosen phase and sex.'],
-    ex: ['Exercise program', 'Photograph the handwritten page (no patient name on it), then check the table.']
+    ex: ['Program builder', 'Add exercises from the library, type them, or scan a handwritten page (no patient name on it).']
   };
+  // v15: the Exercises tab's three pages, chosen from its heading (the same picker as Screening's tools)
+  var EX_PAGES = ['builder', 'library', 'templates'];
+  var EX_PAGE_TITLE = { builder: 'Program builder', library: 'Exercise library', templates: 'Program templates' };
+  function exPageBlurb(p) {
+    if (p === 'builder') return 'Build a patient’s program from the library, by typing, or from a photo of a handwritten page.';
+    if (p === 'library') return 'The clinic’s exercises: default dose, cues for the handout and a video link.';
+    return 'Saved programs to start from, ' + (CLOUD ? 'shared by the whole clinic.' : 'saved on this device.');
+  }
   // v11: metric-group titles in sentence case on screen (the norms files, the PDFs and the AI keep the raw names)
   var GROUP_TITLES = {
     'FORCEDECKS - COUNTERMOVEMENT JUMP (CMJ)': 'ForceDecks · Countermovement jump (CMJ)',
@@ -328,7 +344,7 @@
   function cardHead(t, h2id) {
     var open = state[t].cardOpen !== false;
     var out = '<div class="card-head"><h2 id="' + h2id + '">' + (t === 'ex' ? 'Patient' : Person(t)) + '</h2><div class="head-actions">';
-    if (t !== 'ex') out += '<button type="button" class="ghost choose-btn" data-action="choose-client" aria-haspopup="dialog">' + PEOPLE + 'Choose client</button>';
+    out += '<button type="button" class="ghost choose-btn" data-action="choose-client" aria-haspopup="dialog">' + PEOPLE + 'Choose client</button>';   // v15: Exercises too
     out += '<label class="ghost file-btn scan-btn" id="scanBtn" for="scanFiles">' + CAMERA + '<span data-label>' + (t === 'ex' ? 'Scan exercise page' : 'Scan notes') + '</span>' +
       (open ? scanInputHtml(t) : '') + '</label>';
     if (t === 'screen') {
@@ -722,21 +738,25 @@
     ham: 'Injured-limb results against the targets for the chosen rehab phase.',
     acl: 'Injured-limb and symmetry results against ACLR norms for the phase and sex.'
   };
+  // v15: the Exercises tab's heading is the same picker, listing its three pages (data-page on the button; the items
+  // are #pick-ex-<page> with data-pick-page). Only one picker is ever on screen, so the ids are shared.
   function pickHtml(t) {
-    return '<div class="pick-wrap"><h1 class="pick-h"><button type="button" class="tool-pick" id="toolPick" data-tool="' + t + '" aria-haspopup="menu" aria-expanded="false" aria-controls="toolMenu" title="Choose a screening tool">' +
-      '<span class="pick-text">' + esc(HEAD[t][0]) + '</span>' +
+    var ex = t === 'ex', cur = ex ? state.exPage : t, keys = ex ? EX_PAGES : TOOLS;
+    return '<div class="pick-wrap"><h1 class="pick-h"><button type="button" class="tool-pick" id="toolPick" data-tool="' + t + '"' + (ex ? ' data-page="' + cur + '"' : '') +
+      ' aria-haspopup="menu" aria-expanded="false" aria-controls="toolMenu" title="' + (ex ? 'Choose an Exercises page' : 'Choose a screening tool') + '">' +
+      '<span class="pick-text">' + esc(ex ? EX_PAGE_TITLE[cur] : HEAD[t][0]) + '</span>' +
       '<span class="pick-chev" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></span></button></h1>' +
-      '<div class="menu tool-menu" id="toolMenu" role="menu" aria-label="Screening tools" hidden>' +
-      TOOLS.map(function (k) {
-        return '<button type="button" class="menu-item tool-item" id="pick-' + k + '" role="menuitemradio" aria-checked="' + (k === t) + '" data-pick="' + k + '" tabindex="-1">' +
+      '<div class="menu tool-menu" id="toolMenu" role="menu" aria-label="' + (ex ? 'Exercises pages' : 'Screening tools') + '" hidden>' +
+      keys.map(function (k) {
+        return '<button type="button" class="menu-item tool-item" id="pick-' + (ex ? 'ex-' : '') + k + '" role="menuitemradio" aria-checked="' + (k === cur) + '" ' + (ex ? 'data-pick-page' : 'data-pick') + '="' + k + '" tabindex="-1">' +
           '<svg class="ti-tick" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>' +
-          '<span class="ti-text"><b>' + esc(HEAD[k][0]) + '</b><small>' + esc(TOOL_BLURB[k]) + '</small></span></button>';
+          '<span class="ti-text"><b>' + esc(ex ? EX_PAGE_TITLE[k] : HEAD[k][0]) + '</b><small>' + esc(ex ? exPageBlurb(k) : TOOL_BLURB[k]) + '</small></span></button>';
       }).join('') + '</div></div>';
   }
   function render() {
     var t = state.tool, section = t === 'ex' ? 'ex' : 'screening';
     document.querySelectorAll('.tools button').forEach(function (b) { b.setAttribute('aria-selected', String(b.dataset.section === section)); });
-    if (t === 'ex') { renderEx(); return; }
+    if (t === 'ex') { renderExPage(); return; }
     els.entry.innerHTML = '<div class="pagehead">' + pickHtml(t) + '<p>' + esc(HEAD[t][1]) + '</p></div>' + athleteCard() + testsBarHtml(t) +
       (t === 'str' ? strengthGroupHtml() : groupsHtml(t)) + (t === 'acl' ? rtsCardHtml() : '') + coachCardHtml() + interpCardHtml() +
       '<span id="explainHint" hidden>Shows what this test measures.</span>';
@@ -827,7 +847,7 @@
   }
 
   function refresh() {
-    if (state.tool === 'ex') { refreshEx(); return; }   // e.g. a late AI draft or a client restore while on the Exercises tab
+    if (state.tool === 'ex') { if (state.exPage === 'builder') refreshEx(); return; }   // e.g. a late AI draft or a client restore while on the Exercises tab
     var t = state.tool, c = compute();
     applyRetest(false);
     refreshClientBar(c);
@@ -1366,7 +1386,12 @@
   // ------------------------------------------------------------------ input handling
   function onInput(e) {
     var el = e.target, t = state.tool;
-    if (t === 'ex') { onExInput(el); return; }
+    if (t === 'ex') {
+      if (el.id === 'libSearch') { libView.q = el.value; renderLibList(); return; }   // v15: the library and templates pages
+      if (el.id === 'tplSearch') { tplView.q = el.value; renderTplList(); return; }
+      onExInput(el);
+      return;
+    }
     if (el.id === 'interpText') { onInterpInput(el); return; }
     if (el.dataset.coach) { state[t].coach[el.dataset.coach] = el.value; saveDraft(); keepAwake(); return; }
     unmarkScanned(el);
@@ -1402,10 +1427,12 @@
     var t = state.tool;
     if (b.id === 'toolPick') { if (pickOpen()) closePick(true); else openPick(false); return; }   // v14
     if (b.dataset.pick) { pickTool(b.dataset.pick); return; }
+    if (b.dataset.pickPage) { pickPage(b.dataset.pickPage); return; }   // v15: an Exercises page
     if (b.dataset.action === 'edit-athlete') { openCard(); return; }
     if (b.dataset.action === 'done-athlete') { closeCard(); return; }
     if (b.dataset.action === 'choose-client') { openClientsDialog('pick'); return; }
     if (b.dataset.action === 'tests-today') { openTestsDialog(); return; }
+    if (t === 'ex' && exPageButton(b)) return;         // v15: the library and templates pages, library links in the builder
     if (t === 'ex' && exButton(b)) return;
     if (b.dataset.action === 'explain') {
       var box = document.getElementById(b.getAttribute('aria-controls')), open = b.getAttribute('aria-expanded') !== 'true';
@@ -1630,8 +1657,8 @@
     var ex = state.tool === 'ex';
     var built = ex ? buildHandout() : buildReport();
     if (!built) return;
-    // the exercise handout is never saved to the client's record
-    var saved = ex ? null : saveSession(state.tool, compute());
+    // v15: the exercise handout is saved to the client's record too (the program as printed)
+    var saved = ex ? saveProgram(built.program) : saveSession(state.tool, compute());
     if (saved) {
       if (!saved.ok) toast('The session couldn’t be saved to the client record (storage is full or blocked).');
       else toast(saved.replaced ? 'Updated ' + saved.name + '’s record for this date' : 'Saved to ' + saved.name + '’s record (' + saved.count + (saved.count === 1 ? ' session)' : ' sessions)'));
@@ -1694,11 +1721,36 @@
   }
   // the Screening tab (v14): from Exercises it returns to the screening tool last in use; a second tap, already in
   // Screening, opens the tool picker so the other tools are one tap away
+  // v15: the Exercises tab works the same way: from Screening it returns to the Exercises page last in use; a second
+  // tap, already there, scrolls to the top and opens its page picker
   function onSectionTab(section) {
-    if (section === 'ex') { closePick(false); switchTool('ex'); return; }
-    if (state.tool === 'ex') { switchTool(state.screenTool); return; }
+    var here = section === 'ex' ? state.tool === 'ex' : state.tool !== 'ex';
+    if (!here) {
+      closePick(false);
+      switchTool(section === 'ex' ? 'ex' : state.screenTool);
+      if (section === 'ex') exPageOpened();
+      return;
+    }
     window.scrollTo(0, 0);
     openPick(false);
+  }
+  // an Exercises page chosen from the heading's menu (choosing the one showing just closes the menu)
+  function pickPage(page) {
+    closePick(false);
+    if (page !== state.exPage && EX_PAGES.indexOf(page) >= 0) setExPage(page);
+    focusQuiet(pickBtn());                             // the page's heading, for keyboard users (no scroll, no keyboard)
+  }
+  function setExPage(page) {
+    state.exPage = page;
+    saveDraft();
+    if (state.tool !== 'ex') return;
+    render();
+    window.scrollTo(0, 0);
+    exPageOpened();
+  }
+  // the library and the templates are shared in cloud mode: opening their page asks the store for changes (at most every 30 s)
+  function exPageOpened() {
+    if (CLOUD && state.tool === 'ex' && state.exPage !== 'builder') CLOUD.sync({ throttle: true });
   }
   // the tool picker's menu (v14): the same manners as the ⋯ menu
   function pickBtn() { return $('toolPick'); }
@@ -1844,8 +1896,9 @@
   }
   function clearAllData() {
     TOOLS.forEach(function (t) { state[t] = freshTool(t); });
-    state.ex = freshEx();
+    state.ex = freshEx();                              // v15: the draft program only; the library, templates and records stay
     tidyState();
+    exLoaded = null;
     cardPin = {};                                      // every details card open again (v11); Tests today is kept
     // an AI draft still on its way belongs to the athlete just cleared: drop it when it arrives
     aiGen++;
@@ -2527,7 +2580,8 @@
     var extra = [info.date ? 'test date' : '', info.mass ? 'body mass' : ''].filter(Boolean);
     var html = '<span class="scan-ico">' + CAMERA + '</span>' + (t === 'ex' ? (info.kind === 'empty'
       ? '<span class="scan-msg">No exercises were found on the ' + (info.photos > 1 ? 'photos' : 'photo') + '. Check it’s a photo of the exercise page, or try a clearer photo. Nothing was changed.</span>'
-      : '<span class="scan-msg"><b>Filled ' + info.n + (info.n === 1 ? ' exercise' : ' exercises') + ' from your notes.</b> Check them against the page before creating the handout.</span>')
+      : '<span class="scan-msg"><b>Filled ' + info.n + (info.n === 1 ? ' exercise' : ' exercises') + ' from your notes.</b> Check them against the page before creating the handout.' +
+        (info.matched ? ' ' + info.matched + ' matched your library.' : '') + '</span>')
       : info.kind === 'empty'
       ? '<span class="scan-msg">Nothing on the photo matched the ' + esc(TOOL_NAMES[t]) + ' tests' + (extra.length ? ' (only the ' + extra.join(' and ') + ')' : '') + '. Check you’re on the right tab, or try a clearer photo.</span>'
       : '<span class="scan-msg"><b>Filled ' + info.n + (info.n === 1 ? ' result' : ' results') + (extra.length ? ' and the ' + extra.join(' and ') : '') + ' from your notes.</b> Check the highlighted boxes against the paper or screenshot before creating the report.</span>');
@@ -2545,7 +2599,8 @@
   // a flat list of section headings and exercise rows, so moving a row up or down past a heading moves it into that
   // section. Every value is free text ("8–12", "30 s", "AMRAP", "Red band"). Exercise, Sets, Reps and Load always show;
   // Rest, Tempo, Side and Notes are a row's details, shown when written (as columns only when used anywhere) or opened
-  // with More. The program is kept in the draft only (state.ex) until Clear all: never in the client records.
+  // with More. The program is kept in the draft (state.ex) until Clear all; from v15 Create handout with a patient name
+  // also saves it to the client's record (an Exercises session holding the program as printed).
   var EX_FIELDS = ['name', 'sets', 'reps', 'load', 'rest', 'tempo', 'side', 'notes'];
   var EX_MAIN = ['sets', 'reps', 'load'];
   var EX_DETAIL = ['rest', 'tempo', 'side', 'notes'];
@@ -2573,7 +2628,11 @@
       if (id) { seen[id] = 1; top = Math.max(top, +id.slice(1)); }
       var o = { kind: it.kind, id: id };
       if (it.kind === 'section') o.heading = exStr(it.heading);
-      else { EX_FIELDS.forEach(function (f) { o[f] = exStr(it[f]); }); o.open = it.open === true; }
+      else {
+        EX_FIELDS.forEach(function (f) { o[f] = exStr(it[f]); });
+        o.open = it.open === true;
+        o.lib = typeof it.lib === 'string' && LIB_ID.test(it.lib) ? it.lib : '';   // v15: the library exercise it came from
+      }
       list.push(o);
     });
     var seq = typeof x.seq === 'number' && x.seq % 1 === 0 && x.seq > 0 && x.seq < 1e9 ? x.seq : 1;
@@ -2589,6 +2648,7 @@
   function newExRow(o) {
     var r = { kind: 'ex', id: 'r' + (state.ex.seq++), open: false };
     EX_FIELDS.forEach(function (f) { r[f] = o && o[f] ? o[f] : ''; });
+    r.lib = o && typeof o.lib === 'string' && LIB_ID.test(o.lib) ? o.lib : '';
     return r;
   }
   function newExSection(h) { return { kind: 'section', id: 'r' + (state.ex.seq++), heading: h || '' }; }
@@ -2612,8 +2672,13 @@
   }
 
   // ---- the screen: patient card (with the scan button), program card (title, instructions, the table)
+  function renderExPage() {                            // v15: whichever Exercises page is in use
+    if (state.exPage === 'library') renderLibrary();
+    else if (state.exPage === 'templates') renderTemplates();
+    else renderEx();
+  }
   function renderEx() {
-    els.entry.innerHTML = '<div class="pagehead"><h1>' + esc(HEAD.ex[0]) + '</h1><p>' + esc(HEAD.ex[1]) + '</p></div>' + exPatientCard() + exProgramCard();
+    els.entry.innerHTML = '<div class="pagehead">' + pickHtml('ex') + '<p>' + esc(HEAD.ex[1]) + '</p></div>' + exPatientCard() + exProgramCard();
     fitExNotes();
     fitExWraps();
     applyExMarks();
@@ -2621,12 +2686,14 @@
     refreshEx();
     showCard();
   }
+  // v15: the patient card has Choose client and the name box offers saved clients, as on the report tools; picking one
+  // loads that client's last saved program. The client bar under the card or strip says what the record holds.
   function exPatientCard() {
     return '<section class="card athlete ex-patient" id="athleteCard" tabindex="-1" aria-labelledby="exPatientH"' + (state.ex.cardOpen === false ? ' hidden' : '') + '>' + cardHead('ex', 'exPatientH') +
       '<div class="fields">' +
-      field('ex', 'name', 'Patient name', { cls: 'wide', words: true, plain: true }) + field('ex', 'date', 'Date', { type: 'date' }) +
+      field('ex', 'name', 'Patient name', { cls: 'wide', words: true }) + field('ex', 'date', 'Date', { type: 'date' }) +
       field('ex', 'practitioner', 'Clinician', { words: true }) +
-      '</div></section>' + stripHtml('ex') + '<div class="scan-bar" id="scanBar" role="status" aria-live="polite" hidden></div>';
+      '</div></section>' + stripHtml('ex') + '<div class="scan-bar" id="scanBar" role="status" aria-live="polite" hidden></div><div class="client-bar" id="clientBar" hidden></div>';
   }
   function exProgramCard() {
     var x = state.ex;
@@ -2636,10 +2703,31 @@
       '<div class="ex-top"><label class="f" for="ex-title"><span>Title</span><input id="ex-title" data-ex="title" type="text" value="' + esc(x.title) + '" maxlength="' + EX_LEN.title + '"' +
       ' placeholder="Optional, e.g. Knee rehab – phase 2" autocapitalize="sentences" autocomplete="off" enterkeyhint="next"></label>' +
       '<label class="f" for="ex-instructions"><span>General instructions</span><textarea id="ex-instructions" data-ex="instructions" rows="2" maxlength="' + EX_LEN.instructions + '"' +
-      ' placeholder="Optional, e.g. 3 × per week. Ice after if sore." autocapitalize="sentences">' + esc(x.instructions) + '</textarea></label></div>' +
+      ' placeholder="Optional, e.g. 3 × per week. Ice after if sore." autocapitalize="sentences">' + esc(x.instructions) + '</textarea></label>' +
+      // v15: templates (whole programs to start from)
+      '<div class="ex-tplbar"><button type="button" class="quiet" id="tplStart" data-action="tpl-start" aria-haspopup="dialog">Start from template</button>' +
+      '<button type="button" class="quiet" id="tplSave" data-action="tpl-save" aria-haspopup="dialog">Save as template</button></div></div>' +
       '<div class="ex-table' + (x.editing ? ' editing' : '') + '" id="exTable">' + exTableHtml() + '</div>' +
-      '<div class="ex-add"><button type="button" class="ghost" id="exAdd" data-action="ex-add">+ Exercise</button>' +
+      '<div class="ex-add"><button type="button" class="ghost" id="exAddLib" data-action="ex-lib" aria-haspopup="dialog">+ From library</button>' +
+      '<button type="button" class="ghost" id="exAdd" data-action="ex-add">+ Exercise</button>' +
       '<button type="button" class="ghost" id="exAddSec" data-action="ex-add-sec">+ Section</button></div></section>';
+  }
+  // v15: an exercise row linked to a library exercise (the entry, or null when unlinked or the entry has gone)
+  function exLinked(it) { return it && it.kind === 'ex' && it.lib ? libGet(it.lib) : null; }
+  // under the name of a linked row: the cues (as printed on the handout), Draft while unchecked, and ▶ when there is a video
+  function exLibStripHtml(it) {
+    var e = exLinked(it);
+    if (!e || (!e.cues.length && e.checked && !hasVideo(e))) return '';
+    return '<span class="el-cues">' + esc(e.cues.join(' · ')) + '</span>' + (e.checked ? '' : '<span class="badge draft">Draft</span>') +
+      (hasVideo(e) ? '<button type="button" class="el-play" data-action="ex-video" aria-label="Watch ' + esc(e.name) + ' video">' + PLAY + '</button>' : '');
+  }
+  // in the row's details (More) and in Edit mode: Unlink, or Link to an exercise of the same name, or Save to library
+  function exLibActHtml(it) {
+    if (exLinked(it)) return '<button type="button" class="quiet el-act" data-action="ex-unlink">Unlink<span class="vh"> from the library</span></button>';
+    if (blank(it.name)) return '';
+    var m = E.libMatch(it.name, libList());
+    return m ? '<button type="button" class="quiet el-act" data-action="ex-linkto" data-lib="' + esc(m.id) + '">Link to “' + esc(m.name) + '”</button>'
+      : '<button type="button" class="quiet el-act" data-action="ex-savelib" aria-haspopup="dialog">Save to library</button>';
   }
   // The name and the notes wrap (a one-line box that grows, so a long name can be checked against the page in full);
   // Return still moves to the next box. The other boxes are ordinary one-line inputs.
@@ -2666,8 +2754,9 @@
     var groupEnd = null, groupName = '';
     items.forEach(function (it, i) {
       if (it.kind === 'section' && groupEnd) {
-        html += '<div class="ex-add-in"><button type="button" class="quiet" data-action="ex-add-in" data-after="' + groupEnd + '">+ Exercise<span class="vh"> ' +
-          esc(groupName ? 'in ' + groupName : 'before the first section') + '</span></button></div>';
+        var where = esc(groupName ? 'in ' + groupName : 'before the first section');
+        html += '<div class="ex-add-in"><button type="button" class="quiet" data-action="ex-add-in" data-after="' + groupEnd + '">+ Exercise<span class="vh"> ' + where + '</span></button>' +
+          '<button type="button" class="quiet" data-action="ex-lib-in" data-after="' + groupEnd + '" aria-haspopup="dialog">+ From library<span class="vh"> ' + where + '</span></button></div>';
       }
       if (it.kind === 'section') { groupName = clean1(it.heading) || 'section ' + (s + 1); }
       groupEnd = it.id;
@@ -2684,8 +2773,12 @@
           ' placeholder="Section heading, e.g. Warm-up" aria-label="' + who + ' heading" autocapitalize="sentences" autocomplete="off" enterkeyhint="next">' + acts + '</div>';
         return;
       }
+      // v15: the name column also holds the library strip and the link actions (the name's suggestions open under its box)
+      var strip = exLibStripHtml(it);
       html += '<div class="ex-row" id="' + id + '" data-id="' + it.id + '" role="group" aria-label="' + who + '"><span class="ex-num" aria-hidden="true">' + n + '</span>' +
-        exInput(it, 'name', who) +
+        '<div class="ex-namecol"><div class="ex-nameb">' + exInput(it, 'name', who) + '</div>' +
+        '<div class="ex-lib" id="' + id + '-lib"' + (strip ? '' : ' hidden') + '>' + strip + '</div>' +
+        '<div class="ex-libact' + (it.open ? ' on' : '') + '" id="' + id + '-libact">' + exLibActHtml(it) + '</div></div>' +
         EX_MAIN.map(function (f) { return '<label class="ex-cell c-' + f + '"><span class="ex-cl">' + EX_LABEL[f] + '</span>' + exInput(it, f, who) + '</label>'; }).join('') + acts +
         '<div class="ex-det" id="' + id + '-det"' + (it.open || exHasDet(it) ? '' : ' hidden') + '>' + EX_DETAIL.map(function (f) {
           return '<label class="ex-cell c-' + f + '"' + (it.open || used[f] ? '' : ' hidden') + '><span class="ex-cl">' + EX_LABEL[f] + '</span>' + exInput(it, f, who) + '</label>';
@@ -2738,6 +2831,7 @@
     if (cnt) cnt.textContent = c.exercises ? c.exercises + (c.exercises === 1 ? ' exercise' : ' exercises') + (c.sections ? ' · ' + c.sections + (c.sections === 1 ? ' section' : ' sections') : '') : '';
     if (eb) eb.hidden = !state.ex.items.length;        // Edit only once there are rows
     syncCard(null);
+    refreshExClientBar();
     renderExSummary(c);
     saveDraft();
   }
@@ -2745,14 +2839,19 @@
     var why = c.exercises ? '' : 'Add at least one exercise to create the handout.';
     var cols = exColumns(), later = EX_DETAIL.filter(function (f) { return cols.indexOf(f) < 0; }).map(function (f) { return EX_LABEL[f]; });
     var laterText = later.length ? (later.length > 1 ? later.slice(0, -1).join(', ') + ' and ' + later[later.length - 1] : later[0]) + (later.length > 1 ? ' are' : ' is') + ' added when used.' : '';
+    // v15: how many filled rows are linked to the library, and how many of those print a video QR code
+    var linked = 0, vids = 0;
+    state.ex.items.forEach(function (it) { var e = exFilled(it) && exLinked(it); if (e) { linked++; if (hasVideo(e)) vids++; } });
+    var libText = linked ? linked + ' linked to the library' + (vids ? ' · ' + vids + ' with video (QR codes on the handout)' : '') : '';
     els.summary.innerHTML = '<div class="sum ex-sum"><div class="sum-scroll"><h2>Exercise handout</h2><p class="against">A branded PDF for the patient to take home.</p>' +
       '<div class="tally ex-tally"><div><b>' + c.sections + '</b><span>' + (c.sections === 1 ? 'Section' : 'Sections') + '</span></div>' +
       '<div><b>' + c.exercises + '</b><span>' + (c.exercises === 1 ? 'Exercise' : 'Exercises') + '</span></div></div>' +
       '<h3>Handout columns</h3><p class="ex-colsline">' + esc(cols.map(function (f) { return EX_LABEL[f]; }).join(' · ')) + '</p>' +
       (laterText ? '<p class="fine">' + esc(laterText) + '</p>' : '') +
+      (libText ? '<p class="fine ex-libline">' + esc(libText) + '</p>' : '') +
       '</div><div class="sum-foot"><button type="button" class="primary make" data-action="report"' + (why ? ' disabled' : '') + '>Create handout</button>' +
       '<p class="fine">' + esc(why || 'Preview, then share or save.') + '</p>' +
-      '<p class="fine client-line">Kept until Clear all, not in client records.</p></div></div>';
+      '<p class="fine client-line">' + esc(clientLine('ex')) + '</p></div></div>';
     els.dock.innerHTML = '<div class="dt"><span class="ex-dock"><b>' + c.exercises + '</b> ' + (c.exercises === 1 ? 'exercise' : 'exercises') +
       (c.sections ? ' · <b>' + c.sections + '</b> ' + (c.sections === 1 ? 'section' : 'sections') : '') + '</span></div>' +
       '<button type="button" class="primary" data-action="report"' + (why ? ' disabled' : '') + '>Create handout</button>';
@@ -2762,7 +2861,12 @@
   // ---- editing
   function onExInput(el) {
     var x = state.ex;
-    if (el.dataset.meta) { x.meta[el.dataset.meta] = el.value; refreshEx(); return; }
+    if (el.dataset.meta) {
+      x.meta[el.dataset.meta] = el.value;
+      refreshEx();
+      if (el.dataset.meta === 'name') suggestClients('ex', el.value);   // v15: saved clients, as on the report tools
+      return;
+    }
     if (el.dataset.ex) {                               // the title or the general instructions
       x[el.dataset.ex] = el.value;
       if (x.scanned[el.dataset.ex]) { delete x.scanned[el.dataset.ex]; el.classList.remove('scanned'); }
@@ -2781,8 +2885,42 @@
     it[f] = el.value;
     if (x.scanned[it.id]) { delete x.scanned[it.id]; row.classList.remove('scanned'); }   // edited: checked
     if (EX_DETAIL.indexOf(f) >= 0) syncExDetails(row);
+    if (it.kind === 'ex' && f === 'name') {             // v15: the library's suggestions, and Link to / Save to library follow the name
+      exSuggest(row, el, it);
+      var act = $('ex-' + it.id + '-libact'), ah = exLibActHtml(it);
+      if (act && act._h !== ah) { act.innerHTML = ah; act._h = ah; }
+    }
     refreshEx();
     if (it.kind === 'ex' && !blank(el.value)) foldNow('ex', true);   // the program under way: the patient card folds (v11)
+  }
+  // v15: typing an exercise name offers up to five library exercises under the box (as the client suggestions look); a
+  // row already linked whose name is still the exercise's own offers nothing
+  function exSuggest(row, el, it) {
+    var e = exLinked(it), typed = clean1(el.value), box = row.querySelector('.ex-sugg');
+    var list = typed.length >= 2 && !(e && typed === e.name) ? E.libSuggest(typed, libList(), 5) : [];
+    if (!list.length) { if (box) { box.hidden = true; box.innerHTML = ''; } return; }
+    if (!box) {
+      box = document.createElement('div');
+      box.className = 'suggest ex-sugg';
+      el.parentNode.appendChild(box);
+    }
+    box.innerHTML = list.map(function (x) {
+      var d = doseLine(x.dose);
+      return '<button type="button" data-lib-sugg="' + esc(x.id) + '"><b>' + esc(x.name) + '</b>' + (d ? '<span>' + esc(d) + '</span>' : '') + '</button>';
+    }).join('');
+    box.hidden = false;
+  }
+  // a suggestion tapped: the exercise's name and link, and its default dose in every box still blank (typed values stay)
+  function exTakeSuggestion(b) {
+    var row = b.closest('.ex-row'), it = row && exItem(row.dataset.id), e = libGet(b.dataset.libSugg);
+    if (!it || !e) return;
+    it.name = e.name; it.lib = e.id;
+    DOSE.forEach(function (f) { if (blank(it[f])) it[f] = e.dose[f] || ''; });
+    delete state.ex.scanned[it.id];
+    hideSuggest();
+    renderExTable();
+    var nb = $('ex-' + it.id + '-name');
+    if (nb) { focusEx(nb.id); try { nb.setSelectionRange(nb.value.length, nb.value.length); } catch (err) { /* not focused */ } }
   }
   function exButton(b) {
     var a = b.dataset.action, x = state.ex;
@@ -2801,10 +2939,29 @@
       fitExWraps();                                    // the name column is narrower while editing
       return true;
     }
+    if (a === 'ex-lib' || a === 'ex-lib-in') { openLibPick(b, a === 'ex-lib-in' ? b.dataset.after : ''); return true; }   // v15: + From library
     if (!a || a.indexOf('ex-') !== 0) return false;
     var row = b.closest('.ex-row'), i = row ? exIndex(row.dataset.id) : -1;
     if (i < 0) return true;
     var it = x.items[i];
+    // v15: the row's library link
+    if (a === 'ex-video') { var ve = exLinked(it); if (ve) openVideo(ve.name, ve.video); return true; }
+    if (a === 'ex-unlink' || a === 'ex-linkto') {
+      var to = a === 'ex-linkto' ? libGet(b.dataset.lib) : null;
+      if (a === 'ex-linkto' && !to) return true;
+      it.lib = to ? to.id : '';
+      renderExTable();
+      var back = $('ex-' + it.id + '-libact');           // keep the place: the row's new link action (no keyboard)
+      focusQuiet(back && back.querySelector('button'));
+      toast(to ? 'Linked to ' + to.name : 'Unlinked ' + (clean1(it.name) || 'the exercise') + ' from the library');
+      return true;
+    }
+    if (a === 'ex-savelib') {
+      var d = {};
+      DOSE.forEach(function (f) { d[f] = it[f]; });
+      openLibEditor(null, { name: clean1(it.name), dose: d, row: it.id });
+      return true;
+    }
     if (a === 'ex-up' || a === 'ex-down') {
       var j = a === 'ex-up' ? i - 1 : i + 1;
       if (j < 0 || j >= x.items.length) return true;
@@ -2844,7 +3001,7 @@
     if (state.ex !== prog || prog.items !== list || exIndex(it.id) >= 0) return;
     list.splice(Math.min(at, list.length), 0, it);
     if (wasScanned) prog.scanned[it.id] = true;
-    if (state.tool !== 'ex') { saveDraft(); return; }
+    if (state.tool !== 'ex' || state.exPage !== 'builder') { saveDraft(); return; }
     renderExTable();
     var del = $('ex-' + it.id + '-del');               // keep the place without opening the keyboard
     if (del && del.getClientRects().length) focusEx(del.id);
@@ -2852,26 +3009,36 @@
   }
 
   // ---- the handout
+  // v15: a row linked to a library exercise also prints the exercise's cues and, when it has a video, a QR code of its
+  // link (rows without them lay out exactly as before). `program` is the same program as printed, for the client's record.
   function buildHandout() {
     var x = state.ex;
     if (!exCounts().exercises) return null;
-    var groups = [], cur = null;
+    var groups = [], cur = null, items = [];
     x.items.forEach(function (it) {
-      if (it.kind === 'section') { if (!blank(it.heading)) { cur = { heading: clean1(it.heading), rows: [] }; groups.push(cur); } return; }
+      if (it.kind === 'section') {
+        if (!blank(it.heading)) { cur = { heading: clean1(it.heading), rows: [] }; groups.push(cur); items.push({ kind: 'section', heading: cur.heading }); }
+        return;
+      }
       if (!exFilled(it)) return;
       if (!cur) { cur = { heading: '', rows: [] }; groups.push(cur); }
-      var r = {};
-      EX_FIELDS.forEach(function (f) { r[f] = clean1(it[f]); });
+      var r = {}, keep = { kind: 'ex' }, e = exLinked(it), vi = e && E.videoInfo(e.video);
+      EX_FIELDS.forEach(function (f) { r[f] = clean1(it[f]); keep[f] = r[f]; });
+      keep.lib = it.lib || '';
+      if (e && e.cues.length) { r.cues = e.cues.slice(); keep.cues = e.cues.slice(); }
+      if (vi) { r.video = vi.link; keep.video = vi.link; }
       cur.rows.push(r);
+      items.push(keep);
     });
-    var m = x.meta, name = clean1(m.name);
+    var m = x.meta, name = clean1(m.name), title = clean1(x.title), instructions = String(x.instructions || '').trim();
     return {
       file: name ? name.replace(/[\\/:*?"<>|]+/g, '-').replace(/ /g, '_') + '_exercises.pdf' : 'exercises.pdf',
       rep: window.BHReport.exercises({
         meta: { name: name, date: E.displayIso(m.date), practitioner: clean1(m.practitioner) },
-        title: clean1(x.title), instructions: String(x.instructions || '').trim(),
+        title: title, instructions: instructions,
         groups: groups.filter(function (g) { return g.rows.length; })
-      })
+      }),
+      program: { title: title, instructions: instructions, items: items }
     };
   }
 
@@ -2896,9 +3063,13 @@
     if (ai.exercise_scan && typeof ai.exercise_scan === 'object') Object.keys(ai.exercise_scan).forEach(function (k) { cfg[k] = ai.exercise_scan[k]; });
     return cfg;
   }
+  // v15: with exercises in the library, a last paragraph lists their names (at most 300; names only, nothing about the
+  // patient) so a clearly matching exercise comes back under the clinic's own name
   function exScanRequest(n) {
+    var names = libList().slice(0, 300).map(function (e) { return e.name; });
     return 'Turn the handwritten exercise program in ' + (n > 1 ? 'these ' + n + ' photos (pages in order)' : 'this photo') +
-      ' into the table format: the title and general instructions if written, then each section in the order written, with its exercises. Use an empty string for anything that isn’t written.';
+      ' into the table format: the title and general instructions if written, then each section in the order written, with its exercises. Use an empty string for anything that isn’t written.' +
+      (names.length ? '\n\nExercises in the clinic’s library (when a written exercise is clearly one of these, use this name exactly; keep any variation that is written, such as equipment, side or a hold time, in the name or notes): ' + names.join('; ') : '');
   }
   function exScanSchema() {
     var str = { type: 'string' }, ex = { type: 'object', properties: {}, required: EX_FIELDS.slice(), additionalProperties: false };
@@ -2943,14 +3114,31 @@
     });
     var unclear = (out && Array.isArray(out.unclear) ? out.unclear : []).map(function (u) { return clean1(u); }).filter(Boolean).slice(0, 12);
     if (!n) { scanInfo = { tool: 'ex', kind: 'empty', n: 0, photos: photos, unclear: unclear, undo: null }; return; }
-    var before = { title: x.title, instructions: x.instructions, items: JSON.parse(JSON.stringify(x.items)), scanned: Object.assign({}, x.scanned), seq: x.seq };
-    var marks = {};
-    x.items = found.map(function (f) { var it = f.heading ? newExSection(f.heading) : newExRow(f.row); marks[it.id] = true; return it; });
+    var before = exSnap();
+    var marks = {}, lib = libList(), matched = 0;
+    x.items = found.map(function (f) {
+      var it = f.heading ? newExSection(f.heading) : newExRow(f.row);
+      if (!f.heading) { var e = E.libMatch(it.name, lib); if (e) { it.lib = e.id; matched++; } }   // v15: linked; the values stay as read
+      marks[it.id] = true;
+      return it;
+    });
     var title = exTidy(out.title, 'title'), notes = exTidy(out.notes, 'instructions');
     if (title) { x.title = title; marks.title = true; } else if (x.scanned.title) marks.title = true;
     if (notes) { x.instructions = notes; marks.instructions = true; } else if (x.scanned.instructions) marks.instructions = true;
     x.scanned = marks;
-    scanInfo = { tool: 'ex', kind: 'done', n: n, photos: photos, unclear: unclear, undo: before };
+    scanInfo = { tool: 'ex', kind: 'done', n: n, photos: photos, unclear: unclear, undo: before, matched: matched };
+  }
+  // the program as it is now (for an Undo), and putting it back unless Clear all replaced the program since
+  function exSnap() {
+    var x = state.ex;
+    return { title: x.title, instructions: x.instructions, items: JSON.parse(JSON.stringify(x.items)), scanned: Object.assign({}, x.scanned), seq: x.seq };
+  }
+  function exRestore(u, prog) {
+    if (state.ex !== prog) return false;
+    prog.title = u.title; prog.instructions = u.instructions; prog.items = u.items; prog.scanned = u.scanned;
+    prog.seq = Math.max(prog.seq, u.seq);              // ids are never reused
+    if (state.tool === 'ex' && state.exPage === 'builder') render(); else saveDraft();
+    return true;
   }
   function showExScan() {                              // redraw the program without touching the patient card (its keyboard stays put)
     var x = state.ex, ti = $('ex-title'), tx = $('ex-instructions');
@@ -2966,6 +3154,786 @@
     scanInfo = null;
     render();
     toast('Scan undone');
+  }
+
+  // ------------------------------------------------------------------ exercise library (v15)
+  // The clinic's exercises: a default dose, up to three short cues printed under the exercise on the handout, and a video
+  // link (printed as a QR code). The starter set comes with the app (exercise_library.json: drafts for a clinician to
+  // check); what the clinic adds or changes is stored on top of it: on this device in local mode
+  // (bh-athlete-report-library-v1), in the clinic store in cloud mode (Firestore `library`, cached by cloud.js). A stored
+  // entry replaces the starter entry with its id, a tombstone { id, deleted: true } hides it, and new ids are added.
+  // Program templates are kept the same way (bh-athlete-report-templates-v1 / `templates`).
+  var LIB_STORE = 'bh-athlete-report-library-v1', TPL_STORE = 'bh-athlete-report-templates-v1';
+  var LIB_AREAS = ['Hip & groin', 'Knee', 'Hamstring', 'Calf & Achilles', 'Ankle & foot', 'Trunk', 'Shoulder & arm', 'Whole body'];
+  var LIB_TYPES = ['Strength', 'Isometric', 'Plyometric', 'Mobility', 'Balance & control', 'Running drill', 'Conditioning'];
+  var LIB_ID = /^[sc]-[a-z0-9-]{1,80}$/, TPL_ID = /^t-[a-z0-9]{1,40}$/;
+  var DOSE = ['sets', 'reps', 'load', 'rest', 'tempo', 'side'];
+  var PLAY = '<svg class="play" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" focusable="false" fill="currentColor"><path d="M8 5.6v12.8a.6.6 0 0 0 .92.5l10.1-6.4a.6.6 0 0 0 0-1L8.92 5.1A.6.6 0 0 0 8 5.6z"/></svg>';
+  var SEARCH_ICON = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="10.5" cy="10.5" r="6"/><path d="M15 15l5 5"/></svg>';
+  var starterLib = [], localLib = { v: 1, items: {} }, localTpl = { v: 1, items: {} }, NONE = {};
+  var libVer = 0, libMemo = null, tplMemo = null;      // the merged lists, rebuilt when libVer moves on or the store's cache object changes
+
+  // ---- where entries are kept: the clinic store when cloud.js has the library calls, else this device
+  function storeOn() { return !!(CLOUD && typeof CLOUD.putDoc === 'function' && typeof CLOUD.deleteDoc === 'function'); }
+  function loadItems(key) {
+    try { var o = JSON.parse(localStorage.getItem(key)); if (o && o.v === 1 && o.items && typeof o.items === 'object' && !Array.isArray(o.items)) return o; } catch (e) { /* none saved */ }
+    return { v: 1, items: {} };
+  }
+  function storedItems(coll) {                         // { id: entry | { id, deleted: true } }
+    if (storeOn()) { var c = CLOUD.cache, m = c && c[coll]; return m && typeof m === 'object' && !Array.isArray(m) ? m : NONE; }
+    return (coll === 'library' ? localLib : localTpl).items;
+  }
+  // a full write of one entry or template, or (obj null) its tombstone; false when this device couldn't store it
+  function writeItem(coll, id, obj) {
+    var ok = true;
+    if (storeOn()) {
+      if (obj) CLOUD.putDoc(coll, id, obj); else CLOUD.deleteDoc(coll, id);
+      CLOUD.sync();
+    } else {
+      var box = coll === 'library' ? localLib : localTpl;
+      box.items[id] = obj || { id: id, deleted: true };
+      try { localStorage.setItem(coll === 'library' ? LIB_STORE : TPL_STORE, JSON.stringify(box)); } catch (e) { ok = false; }
+    }
+    libVer++;
+    return ok;
+  }
+  function newId(prefix) {                             // 'c-' or 't-' + base-36 time + 4 random base-36 characters
+    var r = '';
+    try { var a = new Uint32Array(1); crypto.getRandomValues(a); r = a[0].toString(36); } catch (e) { r = Math.random().toString(36).slice(2); }
+    return prefix + Date.now().toString(36) + (r + '0000').slice(0, 4);
+  }
+  function cap(v, n) { var s = clean1(exStr(v)); return s.length > n ? s.slice(0, n).trim() : s; }
+  function nameOrder(a, b) { return String(a.name).localeCompare(String(b.name), undefined, { sensitivity: 'base' }); }
+  // an entry as stored or shipped, tidied (lengths, the known areas and types, up to 3 cues, a video only if it reads as
+  // one); fromFile: a starter entry, which is an unchecked draft without a video
+  function tidyEntry(o, fromFile) {
+    if (!o || typeof o !== 'object' || Array.isArray(o) || typeof o.id !== 'string' || !LIB_ID.test(o.id)) return null;
+    var name = cap(o.name, 120);
+    if (!name) return null;
+    var d = o.dose && typeof o.dose === 'object' ? o.dose : {}, dose = {}, aliases = [], seen = {};
+    DOSE.forEach(function (f) { dose[f] = cap(d[f], 60); });
+    (Array.isArray(o.aliases) ? o.aliases : []).forEach(function (a) {
+      a = cap(a, 60);
+      if (a && !seen[a.toLowerCase()] && aliases.length < 12) { seen[a.toLowerCase()] = 1; aliases.push(a); }
+    });
+    var video = String(exStr(o.video)).trim().slice(0, 500);
+    return {
+      id: o.id, name: name, aliases: aliases,         // the body areas in the entry's own order ('Knee · Hip & groin')
+      areas: (Array.isArray(o.areas) ? o.areas : []).filter(function (a, i, all) { return LIB_AREAS.indexOf(a) >= 0 && all.indexOf(a) === i; }),
+      type: LIB_TYPES.indexOf(o.type) >= 0 ? o.type : '', equipment: cap(o.equipment, 80), dose: dose,
+      cues: (Array.isArray(o.cues) ? o.cues : []).map(function (c) { return cap(c, 90); }).filter(Boolean).slice(0, 3),
+      instructions: exTidy(exStr(o.instructions), 'instructions'),
+      video: !fromFile && E.videoInfo(video) ? video : '', checked: !fromFile && o.checked === true,
+      updatedBy: fromFile ? '' : cap(o.updatedBy, 120), updatedAt: !fromFile && typeof o.updatedAt === 'string' ? o.updatedAt.slice(0, 40) : ''
+    };
+  }
+  // the starter file (exercise_library.json): its lists of areas and types when it has them, and its entries
+  function setStarter(file) {
+    var f = file && typeof file === 'object' ? file : {};
+    function strs(a) { return Array.isArray(a) ? a.filter(function (x) { return typeof x === 'string' && x.trim(); }).map(function (x) { return x.trim(); }) : []; }
+    if (strs(f.areas).length) LIB_AREAS = strs(f.areas);
+    if (strs(f.types).length) LIB_TYPES = strs(f.types);
+    var seen = {};
+    starterLib = (Array.isArray(f.exercises) ? f.exercises : []).map(function (o) { return tidyEntry(o, true); }).filter(function (e) {
+      if (!e || e.id.charAt(0) !== 's' || seen[e.id]) return false;
+      seen[e.id] = 1;
+      return true;
+    });
+    libVer++;
+  }
+  // the library every screen shows: the starter entries overlaid by the stored ones, sorted by name
+  function libAll() {
+    var src = storedItems('library');
+    if (libMemo && libMemo.ver === libVer && libMemo.src === src) return libMemo;
+    var byId = {};
+    starterLib.forEach(function (e) { byId[e.id] = e; });
+    Object.keys(src).forEach(function (id) {
+      var o = src[id];
+      if (!LIB_ID.test(id) || !o || typeof o !== 'object') return;
+      if (o.deleted === true) { delete byId[id]; return; }
+      var e = tidyEntry(o, false);
+      if (e && e.id === id) byId[id] = e;
+    });
+    libMemo = { ver: libVer, src: src, byId: byId, list: Object.keys(byId).map(function (k) { return byId[k]; }).sort(nameOrder) };
+    return libMemo;
+  }
+  function libList() { return libAll().list; }
+  function libGet(id) { return id && LIB_ID.test(id) ? libAll().byId[id] || null : null; }
+  function hasVideo(e) { return !!(e && e.video && E.videoInfo(e.video)); }
+  function doseLine(d) {                               // '3 × 8–12 · Each side · 90 s rest' (only the parts set)
+    d = d || {};
+    var sets = clean1(d.sets), reps = clean1(d.reps);
+    var sr = sets && reps ? sets + ' × ' + reps : sets ? sets + (/^\d+$/.test(sets) ? (sets === '1' ? ' set' : ' sets') : '') : reps;
+    return [sr, clean1(d.load), clean1(d.side), blank(d.rest) ? '' : clean1(d.rest) + ' rest', blank(d.tempo) ? '' : 'tempo ' + clean1(d.tempo)].filter(Boolean).join(' · ');
+  }
+  function libCounts(list) {
+    var c = { n: list.length, video: 0, drafts: 0 };
+    list.forEach(function (e) { if (hasVideo(e)) c.video++; if (!e.checked) c.drafts++; });
+    return c;
+  }
+  // search (name and other names, by key: 2 characters or more), one body area, Has video, Drafts to check
+  function libFiltered(v) { return clean1(v.q).length >= 2 || !!v.area || !!v.video || !!v.drafts; }
+  function libFilter(list, v) {
+    var out = list;
+    if (clean1(v.q).length >= 2) {
+      var hit = {};
+      E.libSuggest(v.q, list, list.length).forEach(function (e) { hit[e.id] = 1; });
+      out = out.filter(function (e) { return hit[e.id]; });
+    }
+    if (v.area) out = out.filter(function (e) { return e.areas.indexOf(v.area) >= 0; });
+    if (v.video) out = out.filter(hasVideo);
+    if (v.drafts) out = out.filter(function (e) { return !e.checked; });
+    return out;
+  }
+  function searchHtml(id, value, label) {
+    return '<label class="client-search lib-search" for="' + id + '">' + SEARCH_ICON + '<span class="vh">' + esc(label) + '</span>' +
+      '<input id="' + id + '" type="search" placeholder="' + esc(label) + '" value="' + esc(value) + '" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" enterkeyhint="search"></label>';
+  }
+  function areaChipsHtml(cur, attr) {                  // All + the body areas, one at a time
+    return [''].concat(LIB_AREAS).map(function (a) {
+      return '<button type="button" class="chip-btn" ' + attr + '="' + esc(a) + '" aria-pressed="' + (cur === a) + '">' + esc(a || 'All') + '</button>';
+    }).join('');
+  }
+
+  // ---- the library page (Exercises › Exercise library)
+  var libView = { q: '', area: '', video: false, drafts: false };
+  function libIntro(all) {
+    var n = all.filter(function (e) { return e.id.charAt(0) === 's' && !e.checked; }).length;
+    return (CLOUD ? 'Shared by every signed-in device.' : 'Saved on this device.') + ' Tap an exercise to edit it.' +
+      (n ? ' ' + n + (n === 1 ? ' starter exercise is a draft' : ' starter exercises are drafts') + ' for a clinician to check.' : '');
+  }
+  function renderLibrary() {
+    els.entry.innerHTML = '<div class="pagehead">' + pickHtml('ex') + '<p id="libIntro"></p></div>' +
+      '<section class="card lib-tools" aria-label="Find exercises"><div class="lib-top">' + searchHtml('libSearch', libView.q, 'Search exercises') +
+      '<button type="button" class="primary lib-new" data-action="lib-new" aria-haspopup="dialog">+ New exercise</button></div>' +
+      '<div class="lib-chips" role="group" aria-label="Filter the exercises">' + areaChipsHtml(libView.area, 'data-lib-area') +
+      '<span class="chip-sep" aria-hidden="true"></span>' +
+      '<button type="button" class="chip-btn" data-lib-flag="video" aria-pressed="' + libView.video + '">' + PLAY + 'Has video</button>' +
+      '<button type="button" class="chip-btn" data-lib-flag="drafts" aria-pressed="' + libView.drafts + '">Drafts to check <span class="chip-n" id="libDraftN"></span></button></div></section>' +
+      '<p class="lib-count" id="libCount" role="status" aria-live="polite"></p><div class="lib-list" id="libList"></div>';
+    document.documentElement.classList.remove('has-strip');
+    renderLibList();
+  }
+  function libChipsSync() {
+    els.entry.querySelectorAll('[data-lib-area]').forEach(function (c) { c.setAttribute('aria-pressed', String(c.dataset.libArea === libView.area)); });
+    els.entry.querySelectorAll('[data-lib-flag]').forEach(function (c) { c.setAttribute('aria-pressed', String(!!libView[c.dataset.libFlag])); });
+  }
+  function renderLibList() {
+    var box = $('libList');
+    if (!box) return;
+    var all = libList(), c = libCounts(all), shown = libFilter(all, libView), q = clean1(libView.q);
+    $('libIntro').textContent = libIntro(all);
+    $('libDraftN').textContent = c.drafts;
+    $('libCount').textContent = libFiltered(libView) ? 'Showing ' + shown.length + ' of ' + c.n
+      : c.n + (c.n === 1 ? ' exercise' : ' exercises') + (c.video ? ' · ' + c.video + ' with video' : '') + (c.drafts ? ' · ' + c.drafts + (c.drafts === 1 ? ' draft' : ' drafts') + ' to check' : '');
+    if (!all.length) box.innerHTML = '<div class="lib-empty"><p>The library is empty. Add your first exercise.</p></div>';
+    else if (!shown.length) {
+      box.innerHTML = '<div class="lib-empty"><p>' + (q.length >= 2 ? 'No exercises match “' + esc(q) + '”.' : 'No exercises match these filters.') + '</p>' +
+        '<button type="button" class="ghost" data-action="lib-clear">Clear filters</button></div>';
+    } else box.innerHTML = shown.map(libRowHtml).join('');
+    renderLibSummary(c);
+  }
+  function libRowHtml(e) {
+    var meta = e.areas.concat(e.type ? [e.type] : []).join(' · '), dose = doseLine(e.dose);
+    return '<button type="button" class="lib-row" data-action="lib-open" data-lib="' + esc(e.id) + '" aria-haspopup="dialog"><span class="lr-main"><b class="lr-name">' + esc(e.name) + '</b>' +
+      (meta ? '<span class="lr-meta">' + esc(meta) + '</span>' : '') + (dose ? '<span class="lr-dose">' + esc(dose) + '</span>' : '') + '</span>' +
+      '<span class="lr-badges">' + (hasVideo(e) ? '<span class="badge vid">' + PLAY + 'Video</span>' : '') + (e.checked ? '' : '<span class="badge draft">Draft</span>') + '</span></button>';
+  }
+  function renderLibSummary(c) {
+    if (state.tool !== 'ex' || state.exPage !== 'library') return;
+    c = c || libCounts(libList());
+    els.summary.innerHTML = '<div class="sum lib-sum"><div class="sum-scroll"><h2>Exercise library</h2>' +
+      '<div class="tally ex-tally lib-tally"><div><b>' + c.n + '</b><span>' + (c.n === 1 ? 'Exercise' : 'Exercises') + '</span></div>' +
+      '<div><b>' + c.video + '</b><span>With video</span></div><div><b>' + c.drafts + '</b><span>Drafts to check</span></div></div>' +
+      '<p class="fine lib-how">Exercises you add here can be added to any program with + From library. Cues print under the exercise on the handout; a video link prints as a QR code.</p>' +
+      '</div><div class="sum-foot"><button type="button" class="ghost make" data-action="lib-new" aria-haspopup="dialog">+ New exercise</button></div></div>';
+    els.dock.innerHTML = '<div class="dt"><span class="ex-dock"><b>' + c.n + '</b> ' + (c.n === 1 ? 'exercise' : 'exercises') + '</span></div>' +
+      '<button type="button" class="primary" data-action="lib-new" aria-haspopup="dialog">+ New exercise</button>';
+    els.dock.classList.remove('has-check');
+  }
+
+  // ---- the editor (#libDialog): New exercise / Edit exercise
+  var libEdit = null, libReturn = null, libReturnRow = '', libDelTimer = null;
+  function libErr(msg) { var p = $('libNameErr'); p.textContent = msg || ''; p.hidden = !msg; }
+  function fillLibForm(e) {
+    $('libName').value = e.name || '';
+    $('libAliases').value = (e.aliases || []).join(', ');
+    $('libAreas').innerHTML = LIB_AREAS.map(function (a) {
+      return '<button type="button" class="chip-btn" data-area="' + esc(a) + '" aria-pressed="' + ((e.areas || []).indexOf(a) >= 0) + '">' + esc(a) + '</button>';
+    }).join('');
+    $('libAreas')._was = (e.areas || []).slice();      // the entry's order is kept; areas ticked now go after it
+    $('libType').innerHTML = '<option value="">—</option>' + LIB_TYPES.map(function (t) { return '<option value="' + esc(t) + '"' + (t === e.type ? ' selected' : '') + '>' + esc(t) + '</option>'; }).join('');
+    $('libEquip').value = e.equipment || '';
+    DOSE.forEach(function (f) { $('libDose-' + f).value = (e.dose || {})[f] || ''; });
+    [0, 1, 2].forEach(function (i) { $('libCue' + i).value = (e.cues || [])[i] || ''; });
+    $('libInstr').value = e.instructions || '';
+    $('libVideo').value = e.video || '';
+    $('libChecked').checked = e.checked !== false;
+    libErr('');
+    libVideoState();
+  }
+  function readLibForm() {
+    var dose = {}, aliases = [], seen = {}, areas = [];
+    DOSE.forEach(function (f) { dose[f] = cap($('libDose-' + f).value, 60); });
+    $('libAliases').value.split(/[,;\n]/).forEach(function (a) {
+      a = cap(a, 60);
+      if (a && !seen[a.toLowerCase()] && aliases.length < 12) { seen[a.toLowerCase()] = 1; aliases.push(a); }
+    });
+    els.libDialog.querySelectorAll('#libAreas [data-area][aria-pressed="true"]').forEach(function (b) { areas.push(b.dataset.area); });
+    var was = $('libAreas')._was || [];
+    areas = was.filter(function (a) { return areas.indexOf(a) >= 0; }).concat(areas.filter(function (a) { return was.indexOf(a) < 0; }));
+    return {
+      name: cap($('libName').value, 120), aliases: aliases, areas: areas, type: LIB_TYPES.indexOf($('libType').value) >= 0 ? $('libType').value : '',
+      equipment: cap($('libEquip').value, 80), dose: dose,
+      cues: [0, 1, 2].map(function (i) { return cap($('libCue' + i).value, 90); }).filter(Boolean),
+      instructions: exTidy($('libInstr').value, 'instructions'), video: String($('libVideo').value || '').trim().slice(0, 500), checked: $('libChecked').checked
+    };
+  }
+  // under the video box: what the link is (with Preview), or why it can't be used (which blocks Save)
+  function libVideoState() {
+    var box = $('libVideoState'), inp = $('libVideo'), v = String(inp.value || '').trim(), info = E.videoInfo(v);
+    if (!v) { box.hidden = true; box.innerHTML = ''; inp.removeAttribute('aria-invalid'); return true; }
+    box.hidden = false;
+    if (!info) {
+      box.className = 'lib-vstate bad';
+      box.innerHTML = '<span>Use a full link starting with https://</span>';
+      inp.setAttribute('aria-invalid', 'true');
+      return false;
+    }
+    inp.removeAttribute('aria-invalid');
+    box.className = 'lib-vstate';
+    box.innerHTML = '<span>' + esc(info.kind === 'youtube' ? 'YouTube video' : info.kind === 'vimeo' ? 'Vimeo video' : 'Link to ' + info.label) + '</span>' +
+      '<button type="button" class="quiet" id="libPreview">' + PLAY + 'Preview</button>';
+    return true;
+  }
+  // opts (Save to library from a builder row): { name, dose, row }; the new exercise starts ticked as checked
+  function openLibEditor(entry, opts) {
+    opts = opts || {};
+    libEdit = { id: entry ? entry.id : '', row: opts.row || '', armed: false, dirty: false };
+    libReturn = document.activeElement;
+    var r = libReturn && libReturn.closest ? libReturn.closest('.ex-row') : null;
+    libReturnRow = r ? r.dataset.id : '';
+    fillLibForm(entry || { name: opts.name || '', dose: opts.dose || {}, checked: true });
+    $('libTitle').textContent = entry ? 'Edit exercise' : 'New exercise';
+    $('libMore').hidden = !entry;
+    $('libDraftNote').hidden = !(entry && entry.id.charAt(0) === 's' && !entry.checked);
+    libDisarm();
+    openModal(els.libDialog, entry ? $('libTitle') : $('libName'), libAfter);
+  }
+  // after the editor closes: back to what opened it (or, when that was redrawn, its replacement), never a box
+  function libAfter(restore) {
+    if (!restore) return false;
+    var el = libReturn;
+    if (!el || !document.body.contains(el)) {
+      el = libReturn && libReturn.dataset && libReturn.dataset.lib ? els.entry.querySelector('.lib-row[data-lib="' + libReturn.dataset.lib + '"]') : null;
+      if (!el && libReturnRow) { var act = $('ex-' + libReturnRow + '-libact'); el = act && act.querySelector('button'); }
+      if (!el) el = els.entry.querySelector('#libList .lib-row');
+    }
+    if (el) focusQuiet(el);
+    return true;
+  }
+  function libSave() {
+    if (!libEdit) return;
+    var v = readLibForm();
+    if (!v.name) { libErr('Add a name.'); $('libName').focus(); return; }
+    var k = E.libKey(v.name), id = libEdit.id;
+    if (libList().some(function (e) { return e.id !== id && E.libKey(e.name) === k; })) { libErr('Another exercise is already called that.'); $('libName').focus(); return; }
+    if (!libVideoState()) { $('libVideo').focus(); return; }
+    var entry = tidyEntry({ id: id || newId('c-'), name: v.name, aliases: v.aliases, areas: v.areas, type: v.type, equipment: v.equipment, dose: v.dose, cues: v.cues,
+      instructions: v.instructions, video: v.video, checked: v.checked, updatedBy: CLOUD ? userName() : '', updatedAt: new Date().toISOString() }, false);
+    if (!entry) return;
+    var ok = writeItem('library', entry.id, entry), row = libEdit.row ? exItem(libEdit.row) : null;
+    if (row) { row.lib = entry.id; saveDraft(); }      // Save to library: that row is linked to the new exercise
+    libEdit = null;
+    afterLibChange();
+    closeModal();
+    toast(ok ? 'Saved ' + entry.name : 'Saved ' + entry.name + ' for now, but this device wouldn’t store it (storage is full or blocked).');
+  }
+  function libDisarm() {
+    var b = $('libDelete');
+    clearTimeout(libDelTimer);
+    b.classList.remove('armed');
+    b.textContent = 'Delete';
+    if (libEdit) libEdit.armed = false;
+  }
+  function libDeleteTap() {                            // two taps, as for a client; Undo in the message writes it back
+    if (!libEdit || !libEdit.id) return;
+    var b = $('libDelete');
+    if (!libEdit.armed) {
+      libEdit.armed = true;
+      b.classList.add('armed');
+      b.textContent = 'Tap again to delete';
+      clearTimeout(libDelTimer);
+      libDelTimer = setTimeout(libDisarm, 4000);
+      return;
+    }
+    clearTimeout(libDelTimer);
+    var e = libGet(libEdit.id);
+    libEdit = null;
+    if (!e) { closeModal(); return; }
+    writeItem('library', e.id, null);
+    afterLibChange();
+    closeModal();
+    toast('Deleted ' + e.name, { label: 'Undo', run: function () { writeItem('library', e.id, e); afterLibChange(); } });
+  }
+  function libDuplicate() {                            // "<name> (copy)", as a new exercise not saved yet
+    if (!libEdit || !libEdit.id) return;
+    var v = readLibForm();
+    v.name = cap((v.name || 'Exercise') + ' (copy)', 120);
+    libEdit = { id: '', row: '', armed: false, dirty: true };
+    fillLibForm(v);
+    $('libTitle').textContent = 'New exercise';
+    $('libMore').hidden = true;
+    $('libDraftNote').hidden = true;
+    focusQuiet($('libTitle'));
+    toast('A copy: change it, then Save');
+  }
+  // Preview: the video dialog over the editor; closing it brings the editor back as it was
+  function libPreview() {
+    var url = String($('libVideo').value || '').trim();
+    if (!E.videoInfo(url)) return;
+    openVideo(cap($('libName').value, 120) || 'Exercise', url, function () {
+      openModal(els.libDialog, $('libPreview') || $('libVideo'), libAfter);
+      return true;
+    });
+  }
+  // the pages and dialogs showing library entries, after an entry changed here or on another device
+  function afterLibChange() {
+    if (state.tool === 'ex' && state.exPage === 'library') renderLibList();
+    else if (state.tool === 'ex' && state.exPage === 'builder') refreshExLinks();
+    if (openModalEl === els.libPickDialog) renderLibPickList();
+  }
+  // the builder's rows follow their library exercise (strip and link actions updated in place, so no box loses focus)
+  function refreshExLinks() {
+    els.entry.querySelectorAll('#exTable .ex-row[data-id]').forEach(function (row) {
+      var it = exItem(row.dataset.id);
+      if (!it || it.kind !== 'ex') return;
+      var s = $('ex-' + it.id + '-lib'), a = $('ex-' + it.id + '-libact'), sh = exLibStripHtml(it), ah = exLibActHtml(it);
+      if (s && s._h !== sh) { s.innerHTML = sh; s._h = sh; s.hidden = !sh; }
+      if (a && a._h !== ah) { a.innerHTML = ah; a._h = ah; }
+    });
+    refreshEx();
+  }
+
+  // ---- + From library (#libPickDialog): tick exercises, Add N exercises (to the end, or into the section it was opened from)
+  var pickView = { q: '', area: '' }, pickOrder = [], pickAfter = '', pickFrom = null;
+  function openLibPick(from, after) {
+    pickView = { q: '', area: '' };
+    pickOrder = [];
+    pickAfter = after || '';
+    pickFrom = from || null;
+    $('libPickSearch').value = '';
+    $('libPickChips').innerHTML = areaChipsHtml('', 'data-pick-area');
+    renderLibPickList();
+    openModal(els.libPickDialog, els.libPickDialog.querySelector('#libPickList input') || $('libPickCancel'), function (restore) {
+      if (restore && pickFrom && document.body.contains(pickFrom)) focusQuiet(pickFrom);
+      return true;
+    });
+  }
+  function renderLibPickList() {
+    var box = $('libPickList'), all = libList(), shown = libFilter(all, { q: pickView.q, area: pickView.area }), q = clean1(pickView.q);
+    els.libPickDialog.querySelectorAll('[data-pick-area]').forEach(function (c) { c.setAttribute('aria-pressed', String(c.dataset.pickArea === pickView.area)); });
+    if (!all.length) box.innerHTML = '<p class="client-none">The library is empty. Add exercises on the Exercise library page.</p>';
+    else if (!shown.length) box.innerHTML = '<p class="client-none" role="status">' + (q.length >= 2 ? 'No exercises match “' + esc(q) + '”.' : 'No exercises match this area.') + '</p>';
+    else {
+      box.innerHTML = '<ul class="lp-list">' + shown.map(function (e) {
+        var d = doseLine(e.dose);
+        return '<li><label class="lp-row"><input type="checkbox" data-lib="' + esc(e.id) + '"' + (pickOrder.indexOf(e.id) >= 0 ? ' checked' : '') + '>' +
+          '<span class="lp-main"><b>' + esc(e.name) + '</b>' + (d ? '<span>' + esc(d) + '</span>' : '') + '</span>' +
+          (hasVideo(e) ? '<span class="lp-vid">' + PLAY + '<span class="vh">Has a video</span></span>' : '') + '</label></li>';
+      }).join('') + '</ul>';
+    }
+    libPickCount();
+  }
+  function libPickCount() {
+    var n = pickOrder.length, b = $('libPickAdd');
+    b.textContent = 'Add ' + n + (n === 1 ? ' exercise' : ' exercises');
+    b.disabled = !n;
+  }
+  function libPickAdd() {
+    var x = state.ex, ids = pickOrder.filter(function (id) { return libGet(id); });
+    if (!ids.length) return;
+    var rows = ids.map(function (id) {                 // in the order ticked: the name, the default dose and the link; no notes
+      var e = libGet(id), o = { name: e.name, lib: e.id };
+      DOSE.forEach(function (f) { o[f] = e.dose[f] || ''; });
+      return newExRow(o);
+    });
+    var at = pickAfter ? exIndex(pickAfter) : -1;
+    if (at >= 0) Array.prototype.splice.apply(x.items, [at + 1, 0].concat(rows));
+    else rows.forEach(function (r) { x.items.push(r); });
+    closeModal();
+    renderExTable();
+    foldNow('ex', false);
+    var first = $('ex-' + rows[0].id + '-name');       // scrolled into view, not focused (no keyboard)
+    if (first) first.scrollIntoView({ block: 'center', behavior: reducedMotion() ? 'auto' : 'smooth' });
+    toast('Added ' + rows.length + (rows.length === 1 ? ' exercise' : ' exercises'));
+  }
+
+  // ---- the video dialog (#videoDialog): the player for YouTube and Vimeo (youtube-nocookie / do-not-track), else or
+  // offline a message and the link. The player (iframe #videoFrame) is made when the dialog opens with the video's
+  // address, and swapped for a blank one (about:blank) when it closes, which stops playback without leaving the old
+  // address in the browser's history.
+  function freshFrame(src, title) {
+    var box = $('videoBox'), old = $('videoFrame'), fr = document.createElement('iframe');
+    fr.id = 'videoFrame';
+    fr.title = title || 'Exercise video';
+    fr.setAttribute('allow', 'autoplay; encrypted-media; picture-in-picture; fullscreen');
+    fr.setAttribute('allowfullscreen', '');
+    fr.setAttribute('referrerpolicy', 'strict-origin-when-cross-origin');
+    fr.setAttribute('loading', 'lazy');
+    fr.src = src || 'about:blank';
+    if (old) old.parentNode.replaceChild(fr, old); else box.appendChild(fr);
+    return fr;
+  }
+  function openVideo(name, url, after) {
+    var info = E.videoInfo(url);
+    if (!info) return;
+    var off = navigator.onLine === false, embed = off ? '' : info.embed, msg = $('videoMsg'), open = $('videoOpen');
+    $('videoTitle').textContent = name;
+    $('videoBox').hidden = !embed;
+    msg.hidden = !!embed;
+    msg.textContent = off ? 'Videos need an internet connection.' : 'This video opens in the browser.';
+    open.href = info.link;
+    open.textContent = info.kind === 'youtube' ? 'Open in YouTube' : info.kind === 'vimeo' ? 'Open in Vimeo' : 'Open link';
+    openModal(els.videoDialog, $('videoClose'), function (restore) {
+      if ($('videoFrame')) freshFrame('about:blank');
+      return after ? after(restore) : false;
+    });
+    if (embed) freshFrame(embed, name + ' video');
+  }
+
+  // ------------------------------------------------------------------ program templates (v15)
+  // A template is a program to start from: { id: 't-…', title, instructions, items, updatedBy, updatedAt } where items are
+  // the sections (with a heading) and the exercises with something written (the eight boxes and the library link).
+  function progItems(list) {
+    var out = [];
+    (Array.isArray(list) ? list : []).forEach(function (it) {
+      if (!it || typeof it !== 'object' || out.length >= 400) return;
+      if (it.kind === 'section') { var h = cap(it.heading, EX_LEN.heading); if (h) out.push({ kind: 'section', heading: h }); return; }
+      if (it.kind !== 'ex') return;
+      var o = { kind: 'ex' }, any = false;
+      EX_FIELDS.forEach(function (f) { o[f] = cap(it[f], EX_LEN[f] || 60); if (o[f]) any = true; });
+      if (!any) return;
+      o.lib = typeof it.lib === 'string' && LIB_ID.test(it.lib) ? it.lib : '';
+      out.push(o);
+    });
+    return out;
+  }
+  function tidyTpl(o) {
+    if (!o || typeof o !== 'object' || Array.isArray(o) || typeof o.id !== 'string' || !TPL_ID.test(o.id)) return null;
+    var title = cap(o.title, 120);
+    if (!title) return null;
+    return { id: o.id, title: title, instructions: exTidy(exStr(o.instructions), 'instructions'), items: progItems(o.items),
+      updatedBy: cap(o.updatedBy, 120), updatedAt: typeof o.updatedAt === 'string' ? o.updatedAt.slice(0, 40) : '' };
+  }
+  function tplAll() {
+    var src = storedItems('templates');
+    if (tplMemo && tplMemo.ver === libVer && tplMemo.src === src) return tplMemo;
+    var byId = {};
+    Object.keys(src).forEach(function (id) {
+      var o = src[id];
+      if (!TPL_ID.test(id) || !o || typeof o !== 'object' || o.deleted === true) return;
+      var t = tidyTpl(o);
+      if (t && t.id === id) byId[id] = t;
+    });
+    tplMemo = { ver: libVer, src: src, byId: byId, list: Object.keys(byId).map(function (k) { return byId[k]; }).sort(function (a, b) {
+      return a.title.localeCompare(b.title, undefined, { sensitivity: 'base' });
+    }) };
+    return tplMemo;
+  }
+  function tplList() { return tplAll().list; }
+  function tplGet(id) { return id && TPL_ID.test(id) ? tplAll().byId[id] || null : null; }
+  function tplCountLine(t) {                           // '6 exercises · 2 sections'
+    var n = 0, s = 0;
+    t.items.forEach(function (it) { if (it.kind === 'ex') n++; else s++; });
+    return n + (n === 1 ? ' exercise' : ' exercises') + (s ? ' · ' + s + (s === 1 ? ' section' : ' sections') : '');
+  }
+  function localDay(iso) {
+    var d = new Date(iso);
+    return isNaN(d.getTime()) ? '' : d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
+  }
+  function tplUpdLine(t) {                             // 'Updated 01 Oct 2026 · Matthew' (what is known)
+    var day = t.updatedAt ? localDay(t.updatedAt) : '', by = clean1(t.updatedBy);
+    return day ? 'Updated ' + E.displayIso(day) + (by ? ' · ' + by : '') : (by ? 'Updated by ' + by : '');
+  }
+  function tplMatches(list, q) {                       // the search box (more than 8 templates): words starting the title's words
+    q = clean1(q);
+    if (list.length <= 8 || q.length < 2) return list;
+    var hit = {};
+    E.libSuggest(q, list.map(function (t) { return { id: t.id, name: t.title }; }), list.length).forEach(function (x) { hit[x.id] = 1; });
+    return list.filter(function (t) { return hit[t.id]; });
+  }
+
+  // ---- the templates page (Exercises › Program templates)
+  var tplView = { q: '' }, tplDelTimer = null;
+  function renderTemplates() {
+    els.entry.innerHTML = '<div class="pagehead">' + pickHtml('ex') + '<p>Start a patient’s program from a template in the builder (Start from template).</p></div>' +
+      '<div class="tpl-searchbar" id="tplSearchBar" hidden>' + searchHtml('tplSearch', tplView.q, 'Search templates') + '</div>' +
+      '<div class="tpl-list" id="tplList"></div>';
+    document.documentElement.classList.remove('has-strip');
+    renderTplList();
+  }
+  function renderTplList() {
+    var box = $('tplList');
+    if (!box) return;
+    var all = tplList(), shown = tplMatches(all, tplView.q);
+    $('tplSearchBar').hidden = all.length <= 8;
+    if (!all.length) {
+      box.innerHTML = '<div class="lib-empty"><p>No templates yet. Build a program, then tap Save as template.</p><button type="button" class="ghost" data-action="tpl-builder">Open the builder</button></div>';
+    } else if (!shown.length) box.innerHTML = '<div class="lib-empty"><p>No templates match “' + esc(clean1(tplView.q)) + '”.</p></div>';
+    else {
+      box.innerHTML = shown.map(function (t) {
+        var upd = tplUpdLine(t), nm = esc(t.title);
+        return '<div class="tpl-row" data-tpl="' + esc(t.id) + '"><div class="tpl-main"><b>' + nm + '</b><span>' + esc(tplCountLine(t)) + '</span>' +
+          (upd ? '<span class="tpl-upd">' + esc(upd) + '</span>' : '') + '</div><div class="tpl-acts">' +
+          '<button type="button" class="ghost" data-action="tpl-use">Use<span class="vh"> ' + nm + '</span></button>' +
+          '<button type="button" class="quiet" data-action="tpl-rename" aria-haspopup="dialog">Rename<span class="vh"> ' + nm + '</span></button>' +
+          '<button type="button" class="quiet tpl-del" data-action="tpl-del">Delete<span class="vh"> ' + nm + '</span></button></div></div>';
+      }).join('');
+    }
+    renderTplSummary();
+  }
+  function renderTplSummary() {
+    if (state.tool !== 'ex' || state.exPage !== 'templates') return;
+    var n = tplList().length;
+    els.summary.innerHTML = '<div class="sum tpl-sum"><div class="sum-scroll"><h2>Program templates</h2>' +
+      '<div class="tally ex-tally tpl-tally"><div><b>' + n + '</b><span>' + (n === 1 ? 'Template' : 'Templates') + '</span></div></div>' +
+      '<p class="fine">' + (CLOUD ? 'Shared by every signed-in device.' : 'Saved on this device.') + '</p></div>' +
+      '<div class="sum-foot"><button type="button" class="ghost make" data-action="tpl-builder">Open the builder</button></div></div>';
+    els.dock.innerHTML = '<div class="dt"><span class="ex-dock"><b>' + n + '</b> ' + (n === 1 ? 'template' : 'templates') + '</span></div>' +
+      '<button type="button" class="ghost" data-action="tpl-builder">Open the builder</button>';
+    els.dock.classList.remove('has-check');
+  }
+  function afterTplChange() {
+    if (state.tool === 'ex' && state.exPage === 'templates') renderTplList();
+    if (openModalEl === els.tplPickDialog) renderTplPickList();
+  }
+  function tplDeleteTap(b, id) {                       // two taps; Undo in the message writes it back
+    var t = tplGet(id);
+    if (!t) return;
+    if (!b.classList.contains('armed')) {
+      els.entry.querySelectorAll('.tpl-del.armed').forEach(function (x) { x.classList.remove('armed'); if (x._html) x.innerHTML = x._html; });
+      b._html = b.innerHTML;
+      b.classList.add('armed');
+      b.textContent = 'Tap again to delete';
+      clearTimeout(tplDelTimer);
+      tplDelTimer = setTimeout(function () { if (b.classList.contains('armed')) { b.classList.remove('armed'); b.innerHTML = b._html; } }, 4000);
+      return;
+    }
+    clearTimeout(tplDelTimer);
+    writeItem('templates', id, null);
+    afterTplChange();
+    toast('Deleted ' + t.title, { label: 'Undo', run: function () { writeItem('templates', id, t); afterTplChange(); } });
+  }
+  // Use (templates page): to the builder, then the template in (asking Replace / Add when the program has exercises)
+  function tplUse(id) {
+    var t = tplGet(id);
+    if (!t) return;
+    if (exCounts().exercises) { setExPage('builder'); openTplPick(id); return; }
+    applyTemplate(t, 'replace');
+  }
+  // replace: title and instructions from the template, its rows in place of the program's; add: its rows at the end.
+  // Rows get fresh ids and keep their library link. Undo puts back exactly what was there.
+  function applyTemplate(t, mode) {
+    var x = state.ex, before = exSnap();
+    var rows = t.items.map(function (it) { return it.kind === 'section' ? newExSection(it.heading) : newExRow(it); });
+    if (mode === 'add') rows.forEach(function (r) { x.items.push(r); });
+    else {
+      if (t.title) x.title = t.title;
+      x.instructions = t.instructions || '';
+      x.items = rows;
+      x.scanned = {};
+      if (scanInfo && scanInfo.tool === 'ex') scanInfo = null;   // a scan's Undo no longer applies
+    }
+    foldBeforeRender('ex');
+    if (state.exPage !== 'builder') { state.exPage = 'builder'; window.scrollTo(0, 0); }
+    render();
+    focusQuiet($('tplStart'));
+    toast((mode === 'add' ? 'Added ' : 'Started from ') + t.title, { label: 'Undo', run: function () { exRestore(before, x); } });
+  }
+
+  // ---- Save as template (#tplSaveDialog)
+  var tplArmed = '';
+  function tplSaveErr(msg) { var p = $('tplSaveErr'); p.textContent = msg || ''; p.hidden = !msg; }
+  function openTplSave() {
+    if (!exCounts().exercises) { toast('Add at least one exercise to save a template'); return; }
+    tplArmed = '';
+    $('tplName').value = clean1(state.ex.title);
+    $('tplSaveHint').textContent = (CLOUD ? 'Shared with the whole clinic.' : 'Saved on this device.') + ' The patient’s name and the date aren’t saved.';
+    $('tplSaveGo').textContent = 'Save';
+    tplSaveErr('');
+    openModal(els.tplSaveDialog, $('tplName'));
+  }
+  function tplSaveGo() {
+    var x = state.ex, name = cap($('tplName').value, 120);
+    if (!name) { tplSaveErr('Add a name.'); $('tplName').focus(); return; }
+    if (!exCounts().exercises) { tplSaveErr('Add at least one exercise first.'); return; }
+    var k = E.libKey(name), dup = tplList().filter(function (t) { return E.libKey(t.title) === k; })[0];
+    if (dup && tplArmed !== dup.id) {                  // the same name: a second tap replaces that template (keeping its id)
+      tplArmed = dup.id;
+      $('tplSaveGo').textContent = 'Replace ' + dup.title;
+      tplSaveErr('A template is already called that. Tap Replace to save over it.');
+      return;
+    }
+    var tpl = { id: dup ? dup.id : newId('t-'), title: name, instructions: exTidy(x.instructions, 'instructions'), items: progItems(x.items),
+      updatedBy: CLOUD ? userName() : '', updatedAt: new Date().toISOString() };
+    var ok = writeItem('templates', tpl.id, tpl);
+    afterTplChange();
+    closeModal();
+    toast(ok ? 'Saved template ' + name : 'This device wouldn’t save the template (storage is full or blocked).');
+  }
+
+  // ---- Start from template (#tplPickDialog); with useId (Use on the templates page) only the Replace / Add choice
+  var tplPickUse = '';
+  function openTplPick(useId) {
+    var t = useId ? tplGet(useId) : null, filled = exCounts().exercises > 0;
+    tplPickUse = t ? t.id : '';
+    $('tplPickTitle').textContent = t ? 'Use ' + t.title : 'Start from template';
+    $('tplModeWrap').hidden = !filled;
+    els.tplPickDialog.querySelector('input[name="tplMode"][value="replace"]').checked = true;
+    $('tplPickSearch').value = '';
+    $('tplPickSearchWrap').hidden = !!t || tplList().length <= 8;
+    $('tplPickList').hidden = !!t;
+    $('tplPickUse').hidden = !t;
+    renderTplPickList();
+    openModal(els.tplPickDialog, t ? $('tplPickUse') : (els.tplPickDialog.querySelector('#tplPickList .cl-pick') || $('tplPickCancel')));
+  }
+  function renderTplPickList() {
+    var box = $('tplPickList'), all = tplList(), shown = tplMatches(all, $('tplPickSearch').value);
+    $('tplPickSearchWrap').hidden = !!tplPickUse || all.length <= 8;
+    if (!all.length) { box.innerHTML = '<p class="client-none">No templates yet. Build a program, then tap Save as template.</p>'; return; }
+    if (!shown.length) { box.innerHTML = '<p class="client-none" role="status">No templates match “' + esc(clean1($('tplPickSearch').value)) + '”.</p>'; return; }
+    box.innerHTML = '<ul class="client-list pick tpl-pick">' + shown.map(function (t) {
+      return '<li><button type="button" class="cl-pick" data-tpl="' + esc(t.id) + '"><b>' + esc(t.title) + '</b><span>' + esc(tplCountLine(t)) + '</span></button></li>';
+    }).join('') + '</ul>';
+  }
+  function tplPicked(id) {
+    var t = tplGet(id), r = els.tplPickDialog.querySelector('input[name="tplMode"]:checked');
+    if (!t) return;
+    var mode = !$('tplModeWrap').hidden && r && r.value === 'add' ? 'add' : 'replace';
+    closeModal(false);
+    applyTemplate(t, mode);
+  }
+
+  // ---- Rename (#tplRenameDialog): another template may not have the same name
+  var tplRenaming = '';
+  function tplRenameErr(msg) { var p = $('tplRenameErr'); p.textContent = msg || ''; p.hidden = !msg; }
+  function openTplRename(id) {
+    var t = tplGet(id);
+    if (!t) return;
+    tplRenaming = id;
+    $('tplRenameBox').value = t.title;
+    tplRenameErr('');
+    openModal(els.tplRenameDialog, $('tplRenameBox'), function (restore) {
+      var b = els.entry.querySelector('.tpl-row[data-tpl="' + id + '"] [data-action="tpl-rename"]');
+      if (restore && b) focusQuiet(b);
+      return true;
+    });
+    try { $('tplRenameBox').select(); } catch (e) { /* not selectable */ }
+  }
+  function tplRenameGo() {
+    var t = tplGet(tplRenaming), name = cap($('tplRenameBox').value, 120);
+    if (!t) { closeModal(); return; }
+    if (!name) { tplRenameErr('Add a name.'); $('tplRenameBox').focus(); return; }
+    var k = E.libKey(name);
+    if (tplList().some(function (o) { return o.id !== t.id && E.libKey(o.title) === k; })) { tplRenameErr('Another template is already called that.'); $('tplRenameBox').focus(); return; }
+    if (name !== t.title) {
+      writeItem('templates', t.id, { id: t.id, title: name, instructions: t.instructions, items: t.items, updatedBy: CLOUD ? userName() : '', updatedAt: new Date().toISOString() });
+      afterTplChange();
+      toast('Renamed to ' + name);
+    }
+    closeModal();
+  }
+
+  // ---- the Exercises pages' own buttons (library, templates, library links and the client bar in the builder)
+  function exPageButton(b) {
+    var a = b.dataset.action;
+    if (b.dataset.libSugg) { exTakeSuggestion(b); return true; }
+    if (a === 'ex-loadprog') { loadProgramFor(b.dataset.client, false); return true; }
+    if (a === 'tpl-start') { openTplPick(''); return true; }
+    if (a === 'tpl-save') { openTplSave(); return true; }
+    if (a === 'tpl-builder') { setExPage('builder'); focusQuiet(pickBtn()); return true; }
+    if (a === 'lib-new') { openLibEditor(null); return true; }
+    if (a === 'lib-open') { var e = libGet(b.dataset.lib); if (e) openLibEditor(e); return true; }
+    if (a === 'lib-clear') { libView = { q: '', area: '', video: false, drafts: false }; renderLibrary(); return true; }
+    if (b.dataset.libArea !== undefined) { libView.area = libView.area === b.dataset.libArea ? '' : b.dataset.libArea; libChipsSync(); renderLibList(); return true; }
+    if (b.dataset.libFlag) { libView[b.dataset.libFlag] = !libView[b.dataset.libFlag]; libChipsSync(); renderLibList(); return true; }
+    var row = b.closest('.tpl-row'), id = row && row.dataset.tpl;
+    if (id && a === 'tpl-use') { tplUse(id); return true; }
+    if (id && a === 'tpl-rename') { openTplRename(id); return true; }
+    if (id && a === 'tpl-del') { tplDeleteTap(b, id); return true; }
+    return false;
+  }
+  // the dialogs of the library and the templates (their markup is in index.html)
+  function wireExDialogs() {
+    var d = els.libDialog;
+    d.addEventListener('click', function (e) {
+      if (e.target === d) { if (!(libEdit && libEdit.dirty)) closeModal(); return; }   // a tap outside closes it unless something was changed
+      var b = e.target.closest('button');
+      if (!b) return;
+      if (b.dataset.area) { b.setAttribute('aria-pressed', String(b.getAttribute('aria-pressed') !== 'true')); if (libEdit) libEdit.dirty = true; return; }
+      if (b.id === 'libPreview') libPreview();
+      else if (b.id === 'libSave') libSave();
+      else if (b.id === 'libCancel') closeModal();
+      else if (b.id === 'libDuplicate') libDuplicate();
+      else if (b.id === 'libDelete') libDeleteTap();
+    });
+    d.addEventListener('input', function (e) {
+      if (libEdit) libEdit.dirty = true;
+      if (e.target.id === 'libVideo') libVideoState();
+      if (e.target.id === 'libName') libErr('');
+    });
+    d.addEventListener('change', function () { if (libEdit) libEdit.dirty = true; });
+    d.addEventListener('keydown', function (e) {       // Return in a one-line box moves to the next box
+      if (e.key !== 'Enter' || !e.target.matches('input:not([type=checkbox])')) return;
+      e.preventDefault();
+      var f = modalFocusables(d).filter(function (x) { return x.matches('input:not([type=checkbox]), select, textarea'); }), i = f.indexOf(e.target);
+      if (i >= 0 && i < f.length - 1) f[i + 1].focus(); else e.target.blur();
+    });
+    var p = els.libPickDialog;
+    p.addEventListener('click', function (e) {
+      if (e.target === p) { closeModal(); return; }
+      var b = e.target.closest('button');
+      if (!b) return;
+      if (b.dataset.pickArea !== undefined) { pickView.area = pickView.area === b.dataset.pickArea ? '' : b.dataset.pickArea; renderLibPickList(); }
+      else if (b.id === 'libPickAdd') libPickAdd();
+      else if (b.id === 'libPickCancel') closeModal();
+    });
+    p.addEventListener('change', function (e) {
+      var cb = e.target;
+      if (!cb.matches('input[type=checkbox][data-lib]')) return;
+      var i = pickOrder.indexOf(cb.dataset.lib);
+      if (cb.checked && i < 0) pickOrder.push(cb.dataset.lib);
+      else if (!cb.checked && i >= 0) pickOrder.splice(i, 1);
+      libPickCount();
+    });
+    $('libPickSearch').addEventListener('input', function () { pickView.q = $('libPickSearch').value; renderLibPickList(); });
+    var v = els.videoDialog;
+    v.addEventListener('click', function (e) { if (e.target === v || e.target.closest('#videoClose')) closeModal(); });
+    var s = els.tplSaveDialog;
+    s.addEventListener('click', function (e) {
+      if (e.target === s || e.target.closest('#tplSaveCancel')) closeModal();
+      else if (e.target.closest('#tplSaveGo')) tplSaveGo();
+    });
+    $('tplName').addEventListener('input', function () { if (tplArmed) { tplArmed = ''; $('tplSaveGo').textContent = 'Save'; } tplSaveErr(''); });
+    $('tplName').addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); tplSaveGo(); } });
+    var tp = els.tplPickDialog;
+    tp.addEventListener('click', function (e) {
+      if (e.target === tp) { closeModal(); return; }
+      var b = e.target.closest('button');
+      if (!b) return;
+      if (b.dataset.tpl) tplPicked(b.dataset.tpl);
+      else if (b.id === 'tplPickUse') tplPicked(tplPickUse);
+      else if (b.id === 'tplPickCancel') closeModal();
+    });
+    $('tplPickSearch').addEventListener('input', renderTplPickList);
+    var r = els.tplRenameDialog;
+    r.addEventListener('click', function (e) {
+      if (e.target === r || e.target.closest('#tplRenameCancel')) closeModal();
+      else if (e.target.closest('#tplRenameGo')) tplRenameGo();
+    });
+    $('tplRenameBox').addEventListener('input', function () { tplRenameErr(''); });
+    $('tplRenameBox').addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); tplRenameGo(); } });
   }
 
   // ------------------------------------------------------------------ client records
@@ -3028,19 +3996,94 @@
     var sess = { tool: t, date: date, savedAt: new Date().toISOString(), meta: meta, values: compactValues(t), results: currentResults(t, c),
       mass: E.parseInput(m.mass), interp: blank(state[t].interp.text) ? '' : String(state[t].interp.text).trim() };
     if (userName()) sess.savedBy = userName();         // v13: who saved it (the practitioner's name on this device)
+    return storeSession(key, name, sess);
+  }
+  // a session into the client's record: the same tool and date replaces the earlier save (in the clinic store the
+  // version being replaced goes to history first)
+  function storeSession(key, name, sess) {
     var cl = clients.clients[key] || (clients.clients[key] = { name: name, sessions: [] });
     cl.name = name;
     var replaced = false, old = null;
-    cl.sessions = cl.sessions.filter(function (x) { if (x.tool === t && x.date === date) { replaced = true; old = x; return false; } return true; });
+    cl.sessions = cl.sessions.filter(function (x) { if (x.tool === sess.tool && x.date === sess.date) { replaced = true; old = x; return false; } return true; });
     cl.sessions.push(sess);
     cl.sessions = E.sortSessions(cl.sessions);
     var ok = saveClients();
-    if (CLOUD) {                                       // to the clinic store: the version being replaced goes to history first
+    if (CLOUD) {
       if (old) CLOUD.historyCopy(key, name, old);
       CLOUD.putSession(key, name, sess);
       CLOUD.sync();
     }
     return { ok: ok, name: name, replaced: replaced, count: cl.sessions.length };
+  }
+  // v15: Create handout with a patient name saves the program as printed (the cues and video links of linked rows
+  // included) as an Exercises session: no results, so nothing that reads results or previous values ever uses it
+  function saveProgram(program) {
+    var m = state.ex.meta, name = String(m.name || '').trim(), key = E.nameKey(name);
+    if (!key || !program) return null;
+    var sess = { tool: 'ex', date: m.date || todayIso(), savedAt: new Date().toISOString(), meta: {}, values: {}, results: {}, mass: null, interp: '', program: program };
+    if (!blank(m.practitioner)) sess.meta.practitioner = clean1(m.practitioner);
+    if (userName()) sess.savedBy = userName();
+    return storeSession(key, name, sess);
+  }
+  // v15: a client's saved programs, oldest first (by date, then when saved)
+  function exPrograms(cl) {
+    return cl ? E.sortSessions(cl.sessions.filter(function (x) { return x && x.tool === 'ex' && x.program && typeof x.program === 'object'; })) : [];
+  }
+  function exHasContent() {
+    var x = state.ex, c = exCounts();
+    return c.exercises > 0 || c.sections > 0 || !blank(x.title) || !blank(x.instructions);
+  }
+  // v15: a client chosen on the Exercises tab: the name, and their last saved program in place of the one on screen
+  // (title, instructions and rows with fresh ids; each row keeps its library link, dose and notes; the cues and video
+  // come from the library). The date stays (a new visit). Undo puts back what was replaced.
+  var exLoaded = null;                                 // { key, date }: the program loaded last (the client bar says so)
+  function loadProgramFor(key, picked) {
+    var cl = clients.clients[key];
+    if (!cl) return;
+    var x = state.ex, last = exPrograms(cl).slice(-1)[0];
+    x.meta.name = cl.name;
+    hideSuggest();
+    if (!last) {
+      exLoaded = null;
+      if (picked) foldBeforeRender('ex');
+      render();
+      toast(cl.name + ' has no saved programs yet');
+      return;
+    }
+    var had = exHasContent(), before = exSnap(), p = last.program;
+    x.title = exTidy(exStr(p.title), 'title');
+    x.instructions = exTidy(exStr(p.instructions), 'instructions');
+    x.items = progItems(p.items).map(function (it) { return it.kind === 'section' ? newExSection(it.heading) : newExRow(it); });
+    x.scanned = {};
+    if (scanInfo && scanInfo.tool === 'ex') scanInfo = null;   // a scan's Undo no longer applies to this program
+    exLoaded = { key: key, date: last.date };
+    foldBeforeRender('ex');
+    render();
+    toast('Loaded ' + cl.name + '’s program from ' + E.displayIso(last.date), had ? { label: 'Undo', run: function () {
+      if (state.ex !== x) return;
+      exLoaded = null;
+      exRestore(before, x);
+    } } : null);
+  }
+  // the client bar on the Exercises tab: the record's programs, or that there are none yet
+  function refreshExClientBar() {
+    var bar = $('clientBar');
+    if (!bar) return;
+    var key = E.nameKey(state.ex.meta.name), cl = key ? clients.clients[key] : null;
+    if (!cl) { bar.hidden = true; bar.innerHTML = ''; bar.className = 'client-bar'; return; }
+    var progs = exPrograms(cl), n = progs.length, last = n ? progs[n - 1].date : '';
+    bar.hidden = false;
+    if (exLoaded && exLoaded.key === key) {
+      bar.className = 'client-bar loaded';
+      bar.innerHTML = '<b>' + esc(cl.name) + '</b> — program from ' + esc(E.displayIso(exLoaded.date)) + ' loaded.';
+    } else if (n) {
+      bar.className = 'client-bar';
+      bar.innerHTML = '<b>' + esc(cl.name) + '</b> — ' + (n === 1 ? '1 saved program, from ' : n + ' saved programs, the last on ') + esc(E.displayIso(last)) + '. ' +
+        '<button type="button" class="quiet" data-action="ex-loadprog" data-client="' + esc(key) + '">Load last program</button>';
+    } else {
+      bar.className = 'client-bar';
+      bar.innerHTML = '<b>' + esc(cl.name) + '</b> has a ' + recordWord() + '; no programs yet.';
+    }
   }
   function earlierCount(cl, t, date) {
     return cl ? cl.sessions.filter(function (x) { return x.tool === t && x.date < date; }).length : 0;
@@ -3066,6 +4109,7 @@
       for (var i = all.length - 1; i >= 0; i--) {
         // injury details belong to that injury: an ACL test never takes the injured side from a hamstring record
         if (SAME_TOOL_ONLY[f] && all[i].tool !== t) continue;
+        if (all[i].tool === 'ex') continue;            // v15: a saved exercise program holds no test details
         var v = all[i].meta && all[i].meta[f];
         if (!blank(v)) { m[f] = v; break; }
       }
@@ -3108,7 +4152,7 @@
     render();
     toast(n ? 'Loaded ' + cl.name + ': previous results for ' + n + (n === 1 ? ' test' : ' tests') : cl.name + ': no earlier ' + TOOL_NAMES[t] + ' results; details filled in');
   }
-  function pickClient(key) { loadHistory(state.tool, key); }
+  function pickClient(key) { if (state.tool === 'ex') loadProgramFor(key, false); else loadHistory(state.tool, key); }
   function suggestClients(t, typed) {
     var box = $(t + '-name-sugg');
     if (!box) return;
@@ -3126,6 +4170,15 @@
   }
   function hideSuggest() {
     els.entry.querySelectorAll('.suggest').forEach(function (b) { b.hidden = true; b.innerHTML = ''; });
+  }
+  // v15: suggestion lists close when their box loses focus (the one whose box has it again stays: a client name and an
+  // exercise name can each have a list)
+  function hideSuggestExcept(a) {
+    els.entry.querySelectorAll('.suggest').forEach(function (b) {
+      var owner = b.parentNode && b.parentNode.querySelector('input, textarea');
+      if (a && owner === a) return;
+      b.hidden = true; b.innerHTML = '';
+    });
   }
   function refreshClientBar(c) {
     var t = state.tool, s = state[t], bar = $('clientBar');
@@ -3151,7 +4204,7 @@
   }
   function clientLine(t) {
     var name = String(state[t].meta.name || '').trim(), cl = clientFor(name);
-    if (!name) return 'Add a name to save this session to a ' + recordWord() + '.';
+    if (!name) return t === 'ex' ? 'Add a patient name to save this program to a ' + recordWord() + '.' : 'Add a name to save this session to a ' + recordWord() + '.';
     var date = state[t].meta.date || todayIso();
     // one line each (v11); the client bar in the details card says how many sessions there are
     var where = CLOUD ? '’s clinic record.' : '’s client record on this device.';
@@ -3182,7 +4235,7 @@
   // Back up and Restore are in the ⋯ menu.
   var clientsMode = 'manage';
   function openClientsDialog(mode) {
-    var pick = mode === 'pick' && TOOLS.indexOf(state.tool) >= 0;
+    var pick = mode === 'pick' && (TOOLS.indexOf(state.tool) >= 0 || state.tool === 'ex');   // v15: Exercises picks a client too
     clientsMode = pick ? 'pick' : 'manage';
     if (CLOUD) CLOUD.sync({ throttle: true });         // v13: another device may have saved something (the list redraws when it lands)
     els.clientsSearch.value = '';
@@ -3198,17 +4251,22 @@
   function clientKeys() {
     return Object.keys(clients.clients).sort(function (a, b) { return clients.clients[a].name.localeCompare(clients.clients[b].name); });
   }
-  function clientDetail(cl) {                          // 'Last test 29 Sep 2026 · Screening, LL Strength'
-    var last = '', used = {};
-    cl.sessions.forEach(function (x) { if (x.date > last) last = x.date; used[x.tool] = 1; });
+  // 'Last test 29 Sep 2026 · Performance screen, LL Strength · Program 01 Oct 2026' (v15: the last saved program, if any)
+  function clientDetail(cl) {
+    var last = '', used = {}, prog = '';
+    cl.sessions.forEach(function (x) {
+      if (x.tool === 'ex') { if (x.date > prog) prog = x.date; return; }
+      if (x.date > last) last = x.date;
+      used[x.tool] = 1;
+    });
     var tools = TOOLS.filter(function (t) { return used[t]; }).map(function (t) { return TOOL_NAMES[t]; }).join(', ');
-    return [last ? 'Last test ' + E.displayIso(last) : '', tools].filter(Boolean).join(' · ') || 'No sessions';
+    return [last ? 'Last test ' + E.displayIso(last) : '', tools, prog ? 'Program ' + E.displayIso(prog) : ''].filter(Boolean).join(' · ') || 'No sessions';
   }
   function renderClientsList() {
     var keys = clientKeys(), total = 0, pick = clientsMode === 'pick', typed = els.clientsSearch.value.trim(), q = E.nameKey(typed);
     keys.forEach(function (k) { total += clients.clients[k].sessions.length; });
     els.clientsSummary.textContent = !keys.length ? 'No saved clients yet. A record starts when you create a report with a name filled in.'
-      : pick ? 'Loading a client fills in their details and their results from last time.'
+      : pick ? (state.tool === 'ex' ? 'Loading a client fills in their name and their last saved program.' : 'Loading a client fills in their details and their results from last time.')
         : keys.length + (keys.length === 1 ? ' client, ' : ' clients, ') + total + (total === 1 ? ' session' : ' sessions') + (CLOUD ? ', in the clinic store.' : ', saved on this device.');
     els.clientsSearchWrap.hidden = !keys.length;
     var shown = q ? keys.filter(function (k) { return k.indexOf(q) >= 0; }) : keys;
@@ -3224,14 +4282,16 @@
   function pickFromDialog(key) {
     var t = state.tool;
     closeModal(false);
-    if (TOOLS.indexOf(t) < 0 || !clients.clients[key]) return;
-    loadHistory(t, key, true);
+    if ((TOOLS.indexOf(t) < 0 && t !== 'ex') || !clients.clients[key]) return;
+    if (t === 'ex') loadProgramFor(key, true);         // v15: their last saved program
+    else loadHistory(t, key, true);
     focusQuiet(state[t].cardOpen === false ? document.querySelector('#athleteStrip [data-action="edit-athlete"]') : document.querySelector('#athleteCard [data-action="choose-client"]'));
   }
   function newClient() {                               // New client: the name box emptied and ready to type in
     var t = state.tool;
     closeModal(false);
-    if (TOOLS.indexOf(t) < 0) return;
+    if (TOOLS.indexOf(t) < 0 && t !== 'ex') return;
+    if (t === 'ex') exLoaded = null;
     state[t].meta.name = '';
     if (state[t].cardOpen === false) setCardOpen(t, true);
     var box = $(t + '-name');
@@ -3373,6 +4433,7 @@
       CLOUD.setUserName(name);
       els.signinPassword.value = '';
       clients = CLOUD.cache;
+      libVer++;                                        // v15: the store's library and templates come with the new cache
       legacyAsked = false;
       fillPractitioner(was);
       showApp();
@@ -3415,10 +4476,16 @@
     toast(nm === was ? 'Name unchanged' : 'Your name is now ' + nm);
   }
   function askSignOut() {
-    var n = CLOUD.pendingCount();
-    if (!n) { signOutNow(); return; }
-    els.signOutText.textContent = n + (n === 1 ? ' result is' : ' results are') + ' still waiting to upload — sign out anyway?';
+    var n = CLOUD.pendingCount(), ch = +(CLOUD.status().changes || 0);   // v15: library and template changes wait too
+    if (!n && !ch) { signOutNow(); return; }
+    els.signOutText.textContent = (n && ch ? waitingWords(n, ch) + ' are' : n ? n + (n === 1 ? ' result is' : ' results are') : ch + (ch === 1 ? ' library change is' : ' library changes are')) +
+      ' still waiting to upload — sign out anyway?';
     openModal(els.signOutDialog, els.signOutCancel);
+  }
+  // '2 results', '1 library change', '2 results and 1 library change' (library and template writes are "library changes")
+  function waitingWords(n, ch) {
+    var a = n + (n === 1 ? ' result' : ' results'), b = ch + (ch === 1 ? ' library change' : ' library changes');
+    return n && ch ? a + ' and ' + b : (n ? a : b);
   }
   function signOutNow() {
     closeModal(false);
@@ -3428,12 +4495,15 @@
   function renderCloudBar() {
     var bar = els.cloudBar;
     if (!bar) return;
-    var s = CLOUD.status(), text = '', cls = 'cloud-bar';
-    var n = s.pending + (s.pending === 1 ? ' result' : ' results');
+    var s = CLOUD.status(), text = '', cls = 'cloud-bar', ch = +(s.changes || 0), any = s.pending || ch;
+    var n = waitingWords(s.pending, ch);               // v15: queued library and template changes are counted too
     if (!CLOUD.signedIn()) text = '';
-    else if (s.denied) { text = 'The clinic store refused this device (permission). Results are kept on this device until it is fixed.'; cls += ' denied'; }
-    else if (s.pending && s.offline) text = 'Offline — ' + n + ' will upload when you’re back online.';
-    else if (s.pending && s.failed) text = n + ' waiting to upload — the clinic store didn’t answer. The app will try again shortly.';
+    else if (s.denied) {
+      text = 'The clinic store refused this device (permission). ' + (s.pending && ch ? 'Results and library changes are' : ch && !s.pending ? (ch === 1 ? 'The library change is' : 'Library changes are') : 'Results are') +
+        ' kept on this device until it is fixed.';
+      cls += ' denied';
+    } else if (any && s.offline) text = 'Offline — ' + n + ' will upload when you’re back online.';
+    else if (any && s.failed) text = n + ' waiting to upload — the clinic store didn’t answer. The app will try again shortly.';
     var was = bar.hidden;
     bar.textContent = text;
     bar.className = cls;
@@ -3485,10 +4555,18 @@
       toast('Uploaded ' + evt.n + (evt.n === 1 ? ' waiting result' : ' waiting results'));
     } else if (evt.kind === 'settings') {
       applyCloudKey(evt.key);
+    } else if (evt.kind === 'library' || evt.kind === 'templates') {   // v15: another device changed the library or a template
+      libVer++;
+      if (!state) return;
+      if (evt.kind === 'library') afterLibChange(); else afterTplChange();
     } else if (evt.kind === 'synced') {
+      libVer++;                                        // (the merged library is rebuilt from the cache on next use)
       if (state) maybeLegacyPrompt();
     } else if (evt.kind === 'signout') {
+      libVer++;                                        // the store's library and templates went with the cache
       showSignIn(evt.message || '');
+    } else if (evt.kind === 'auth') {
+      libVer++;
     }
   }
   function initCloud() {
@@ -3525,9 +4603,14 @@
     var ai = fetchJson('interpretation.json').catch(function () { return null; });
     // so are the metric explainers: without them the names are plain text and the PDF has no explainer lines
     var explain = fetchJson('explainers.json').catch(function () { return null; });
-    Promise.all([fetchJson('norms.json'), fetchJson('hamstring_norms.json'), fetchJson('acl_norms.json'), fetchJson('strength_norms.json'), ai, explain]).then(function (r) {
+    // v15: and the starter exercise library (without it the library holds only the clinic's own exercises)
+    var starter = fetchJson('exercise_library.json').catch(function () { return null; });
+    Promise.all([fetchJson('norms.json'), fetchJson('hamstring_norms.json'), fetchJson('acl_norms.json'), fetchJson('strength_norms.json'), ai, explain, starter]).then(function (r) {
       DATA.screen = r[0]; DATA.ham = r[1]; DATA.acl = r[2]; DATA.str = r[3]; DATA.ai = r[4];
       DATA.explain = r[5] && r[5].metrics && typeof r[5].metrics === 'object' ? r[5] : { metrics: {} };
+      localLib = loadItems(LIB_STORE);                 // v15: local mode's library and templates (cloud mode reads the store's cache)
+      localTpl = loadItems(TPL_STORE);
+      setStarter(r[6]);
       clients = loadClients();
       testsPref = loadTestsPref();
       state = loadDraft() || { v: 1, tool: 'screen', screen: freshTool('screen'), str: freshTool('str'), ham: freshTool('ham'), acl: freshTool('acl'), ex: freshEx() };
@@ -3593,11 +4676,17 @@
       // tapping a suggested client must not blur the name box before the tap lands
       els.entry.addEventListener('pointerdown', function (e) { if (e.target.closest('.suggest')) e.preventDefault(); });
       els.entry.addEventListener('focusout', function (e) {
-        if (e.target.dataset && e.target.dataset.meta === 'name') setTimeout(function () {
-          var a = document.activeElement;                 // back in the name box by now: keep its fresh suggestions
-          if (!(a && a.dataset && a.dataset.meta === 'name')) hideSuggest();
-        }, 200);
+        var t = e.target, ds = t.dataset || {};
+        // a client name box, or (v15) an exercise name box with the library's suggestions: its list closes with it
+        if (ds.meta === 'name' || (ds.f === 'name' && t.closest('.ex-row'))) setTimeout(function () { hideSuggestExcept(document.activeElement); }, 200);
       });
+      els.entry.addEventListener('keydown', function (e) {   // v15: Escape closes a suggestion list (Return still moves on)
+        if (e.key !== 'Escape' || !e.target.matches('input, textarea')) return;
+        var box = e.target.parentNode && e.target.parentNode.querySelector('.suggest:not([hidden])');
+        if (!box && e.target.dataset.meta === 'name') box = $(state.tool + '-name-sugg');
+        if (box && !box.hidden) { e.preventDefault(); e.stopPropagation(); box.hidden = true; box.innerHTML = ''; }
+      });
+      wireExDialogs();                                 // v15: the library editor, + From library, the video player, templates
       els.back.addEventListener('click', closeReport);
       els.save.addEventListener('click', savePdf);
       els.share.addEventListener('click', sharePdf);

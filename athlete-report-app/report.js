@@ -2,13 +2,15 @@
    Recreates the WeasyPrint designs from report_pdf.py (screening, hamstring, ACL), plus the strength
    battery, the optional interpretation box and (v10) the exercise program handout, as a list of
    vector drawing commands, which are then written two ways from the same layout:
-     toPdf()  -> a real PDF file (jsPDF, embedded fonts, selectable text)
+     toPdf()  -> a real PDF file (jsPDF, embedded fonts, selectable text, link annotations)
      toSvg()  -> SVG pages for the on-screen preview
-   Browser: window.BHReport   Node (tests): require('./report.js')(engine, fonts, jsPDF) */
+   v15: the handout prints library cues and a QR code per video link; the QR encoder (qrcode.js, qrcode-generator) is
+   the fourth argument and optional (without it a video prints as a "Video link" text link).
+   Browser: window.BHReport   Node (tests): require('./report.js')(engine, fonts, jsPDF, qrcode) */
 (function (root, factory) {
   if (typeof module === 'object' && module.exports) module.exports = factory;
-  else root.BHReport = factory(root.BHEngine, root.BH_REPORT_FONTS, root.jspdf && root.jspdf.jsPDF);
-})(typeof self !== 'undefined' ? self : this, function (E, FONTS, JsPDF) {
+  else root.BHReport = factory(root.BHEngine, root.BH_REPORT_FONTS, root.jspdf && root.jspdf.jsPDF, root.qrcode);
+})(typeof self !== 'undefined' ? self : this, function (E, FONTS, JsPDF, QR) {
   'use strict';
 
   // ------------------------------------------------------------------ units & page
@@ -132,6 +134,10 @@
   // a filled shape from SVG path data (M, m, l, c, z), placed with its own origin and scale (v12: the logo)
   Doc.prototype.path = function (d, x, y, k, o) {
     return this.add({ t: 'path', segs: svgSegs(d, x, y, k), fill: o.fill || null });
+  };
+  // a tappable area that opens a web address (v15: the handout's video links); nothing is drawn for it
+  Doc.prototype.link = function (x, y, w, h, url) {
+    return this.add({ t: 'link', x: x, y: y, w: w, h: h, url: url });
   };
   // SVG path data -> absolute segments [['M',x,y], ['L',x,y], ['C',x1,y1,x2,y2,x,y], ['Z']] scaled by k and moved to (x, y).
   // Enough of the SVG grammar for the logo: absolute M, relative m/l/c (with implicit repeats) and z.
@@ -1185,6 +1191,86 @@
     }
     return out;
   }
+
+  // v15: the clinic's exercise library adds two things to a row. Cues (up to three short lines for the patient) print
+  // under the exercise name, small and muted, two lines each at most. A video link adds a last VIDEO column to the table
+  // with a QR code of the link in that row (and a link annotation over it, so the code can also be tapped in the PDF),
+  // plus one line above the first band saying how to use the codes. Rows without cues or a video lay out exactly as in
+  // v14, and a handout with neither is the v14 handout to the byte.
+  var EX_CUE_SZ = EX_SZ * 0.85, EX_CUE_MAX = 3, EX_CUE_MAXLINES = 2, EX_CUE_DASH = '– ';   // ~8.5 pt cues
+  var EX_VIDEO_COL = ['video', 'VIDEO'], EX_VIDEO_W = 17;                                   // the VIDEO column (mm)
+  var EX_QR_MM = 14, EX_QR_QUIET = 2, EX_QR_MAXV = 10;          // code size (mm), white margin (modules), largest version
+  var EX_NOTE_SZ = 12, EX_NOTE = 'Scan a code with your phone camera to watch the exercise.', EX_LINK_TEXT = 'Video link';
+  function exCues(list) {                            // tidy text lines, none empty, at most three
+    var out = [];
+    (Array.isArray(list) ? list : []).forEach(function (c) {
+      if (typeof c !== 'string' || out.length >= EX_CUE_MAX) return;
+      var s = clean(exText(c)).trim().replace(/^[-–—•·*]+\s*/, '');   // the handout adds its own dash
+      if (s) out.push(s);
+    });
+    return out;
+  }
+  // a link the handout can print: http(s) only (never javascript: and the like); spaces and characters outside ASCII
+  // are percent-encoded so the QR code, the PDF link and the preview all carry the same plain address
+  function exVideo(v) {
+    if (typeof v !== 'string') return '';
+    var s = v.trim();
+    if (!/^https?:\/\/[^\s\/?#]/i.test(s)) return '';
+    s = s.replace(/[\uD800-\uDBFF][\uDC00-\uDFFF]|[^\x21-\x7E]/g, function (ch) {
+      try { return encodeURIComponent(ch); } catch (e) { return ''; }    // a lone surrogate is dropped
+    });
+    return s.length <= 2000 ? s : '';
+  }
+  // The QR code of a link as rows of booleans (true = dark): qrcode-generator, error correction M, the smallest version
+  // that holds the link's UTF-8 bytes. null when the encoder is missing, when the link would need more than version 10
+  // (57 modules: anything denser is hard to scan at 14 mm) or when anything goes wrong; the row then prints "Video link".
+  function qrMatrix(url) {
+    if (typeof QR !== 'function') return null;
+    try {
+      if (QR.stringToBytesFuncs && QR.stringToBytesFuncs['UTF-8']) QR.stringToBytes = QR.stringToBytesFuncs['UTF-8'];
+      var q = QR(0, 'M');
+      q.addData(url, 'Byte');
+      q.make();
+      var n = q.getModuleCount();
+      if (!(n >= 21 && n <= 17 + 4 * EX_QR_MAXV)) return null;
+      var m = [];
+      for (var r = 0; r < n; r++) {
+        var row = [];
+        for (var c = 0; c < n; c++) row.push(!!q.isDark(r, c));
+        m.push(row);
+      }
+      return m;
+    } catch (e) {
+      return null;
+    }
+  }
+  // the dark modules as one filled path, a rectangle per horizontal run (absolute M/L/Z), k = module size (mm)
+  function qrSegs(m, x0, y0, k) {
+    var segs = [];
+    m.forEach(function (row, r) {
+      var c = 0;
+      while (c < row.length) {
+        if (!row[c]) { c++; continue; }
+        var s = c;
+        while (c < row.length && row[c]) c++;
+        var xa = x0 + s * k, xb = x0 + c * k, ya = y0 + r * k, yb = y0 + (r + 1) * k;
+        segs.push(['M', xa, ya], ['L', xb, ya], ['L', xb, yb], ['L', xa, yb], ['Z']);
+      }
+    });
+    return segs;
+  }
+  // one cue's lines: "– " and the cue wrapped under itself (a hanging indent), two lines at most (the second ends in "…")
+  function exCueLines(cue, maxW) {
+    var size = fs(EX_CUE_SZ), dw = width(EX_CUE_DASH, 'regular', size), w = Math.max(maxW - dw, px(20));
+    var lines = wrap(cue, 'regular', size, w);
+    if (lines.length > EX_CUE_MAXLINES) {
+      lines = lines.slice(0, EX_CUE_MAXLINES);
+      var l = lines[EX_CUE_MAXLINES - 1];
+      while (l.length > 1 && width(l + '…', 'regular', size) > w) l = l.slice(0, -1);
+      lines[EX_CUE_MAXLINES - 1] = l.replace(/\s+$/, '') + '…';
+    }
+    return lines.map(function (l, i) { return { s: i ? l : EX_CUE_DASH + l, dx: i ? dw : 0 }; });
+  }
   // Column widths (mm). A short column gets what its longest value (or label) needs, within its limits, and never less
   // than its longest word (so "AMRAP" never breaks); when space is short they squeeze towards that. Exercise and Notes
   // share the rest (the one needing less keeps just what it needs); with no Notes, Exercise takes it all, and spare room
@@ -1250,9 +1336,16 @@
     var used = {};
     groups.forEach(function (g) { g.rows.forEach(function (r) { EX_COLS.forEach(function (c) { if (r[c[0]]) used[c[0]] = true; }); }); });
     var cols = EX_COLS.filter(function (c) { return EX_CORE[c[0]] || used[c[0]]; });
-    var pad = px(8), gap = px(10), lh = lineH(EX_SZ), padY = px(6);
-    var W = exWidths(cols, groups, CW - 2 * pad - gap * (cols.length - 1)), xs = [], x = ML + pad;
+    // v15: a VIDEO column (fixed width, last) when any row has a video; the text columns share what is left as before
+    var video = groups.some(function (g) { return g.rows.some(function (r) { return !!r.video; }); }), tcols = cols;
+    if (video) cols = cols.concat([EX_VIDEO_COL]);
+    var pad = px(8), gap = px(10), lh = lineH(EX_SZ), padY = px(6), clh = lineH(EX_CUE_SZ);
+    var avail = CW - 2 * pad - gap * (cols.length - 1);
+    var W = exWidths(tcols, groups, video ? avail - EX_VIDEO_W : avail), xs = [], x = ML + pad;
+    if (video) W.video = EX_VIDEO_W;
     cols.forEach(function (c) { xs.push(x); x += W[c[0]] + gap; });
+    var qrs = {};                                    // one code per distinct link
+    function qrFor(url) { if (!Object.prototype.hasOwnProperty.call(qrs, url)) qrs[url] = qrMatrix(url); return qrs[url]; }
     var headH = px(6) + lineH(EX_HEAD) + px(5);
     function bandLines(title, cont) { return wrap(title.toUpperCase() + (cont ? ' (CONTINUED)' : ''), 'bold', fs(EX_BAND), CW - px(8 + 7.5 + 7 + 10), px(0.4)); }
     function bandH(title, cont) { return title ? bandLines(title, cont).length * lineH(EX_BAND) + px(8) : 0; }
@@ -1274,18 +1367,52 @@
       doc.y = top + headH;
     }
     function layout(r) {
-      var cells = cols.map(function (c, i) { return exCellLines(r[c[0]], c[0] === 'name' ? 'bold' : 'regular', W[c[0]]); });
+      var cells = cols.map(function (c, i) { return c[0] === 'video' ? [] : exCellLines(r[c[0]], c[0] === 'name' ? 'bold' : 'regular', W[c[0]]); });
       var n = Math.max.apply(null, [1].concat(cells.map(function (l) { return l.length; })));
-      return { cells: cells, h: n * lh + 2 * padY };
+      var L = { cells: cells, h: n * lh + 2 * padY };
+      if (r.cues && r.cues.length) {                 // v15: the cues under the name; the row grows to fit them
+        L.cues = [];
+        r.cues.forEach(function (c) { L.cues = L.cues.concat(exCueLines(c, W.name)); });
+        L.cueTop = cells[0].length ? cells[0].length * lh + px(1) : 0;
+        L.h = Math.max(L.h, L.cueTop + L.cues.length * clh + 2 * padY);
+      }
+      if (video && r.video) {                        // v15: the code (or "Video link" when there can't be one)
+        L.video = { url: r.video, m: qrFor(r.video) };
+        L.h = Math.max(L.h, (L.video.m ? EX_QR_MM : lh) + 2 * padY);
+      }
+      return L;
     }
+    // the code, top-aligned with the row's text, on a white square two modules wider all round (so a tinted row never
+    // touches it), the dark modules as one path and a link over the square; without a code, "Video link" as a text link
+    function videoCell(v, x, y) {
+      if (v.m) {
+        var k = EX_QR_MM / v.m.length, q = EX_QR_QUIET * k, s = EX_QR_MM + 2 * q;
+        doc.rect(x - q, y - q, s, s, { fill: C.WHITE });
+        doc.add({ t: 'path', segs: qrSegs(v.m, x, y, k), fill: C.BLACK });
+        doc.link(x - q, y - q, s, s, v.url);
+      } else {
+        var w = doc.text(EX_LINK_TEXT, x, baseline(y, EX_SZ), { style: 'regular', size: fs(EX_SZ), color: C.BLUEINK });
+        doc.link(x, y, w, lh, v.url);
+      }
+    }
+    // "Scan a code…" above the first band (kept with it), when at least one code is printed: a handout whose links all
+    // print as "Video link" (no encoder, or every link too long for a code) has nothing to scan
+    var codes = video && groups.some(function (g) { return g.rows.some(function (r) { return r.video && qrFor(r.video); }); });
+    var noteH = codes ? lineH(EX_NOTE_SZ) + px(4) : 0;
     var lastG = groups.length - 1;
     groups.forEach(function (g, gi) {
       var rows = g.rows.map(layout), title = g.heading;
       var lead = doc.y > MT + 0.5 ? px(gi ? 16 : 8) : 0;
       // the band and the column labels only start where the first row (and, for a one-row end, the footer) fits too
       var first = rows[0].h + (gi === lastG && rows.length === 1 ? tailH : 0);
-      if (!doc.fits(lead + bandH(title, false) + headH + first) && doc.y > MT + 0.5) { doc.newPage(); lead = 0; }
+      var start = lead + bandH(title, false) + headH + first;
+      if (gi === 0 && noteH) start += noteH;
+      if (!doc.fits(start) && doc.y > MT + 0.5) { doc.newPage(); lead = 0; }
       doc.y += lead;
+      if (gi === 0 && noteH) {
+        doc.text(EX_NOTE, ML + px(2), baseline(doc.y, EX_NOTE_SZ), { style: 'regular', size: fs(EX_NOTE_SZ), color: C.MUTE });
+        doc.y += noteH;
+      }
       band(title, false);
       colHead();
       rows.forEach(function (L, ri) {
@@ -1299,6 +1426,12 @@
             doc.text(l, xs[ci], baseline(top + padY + li * lh, EX_SZ), { style: bold ? 'bold' : 'regular', size: fs(EX_SZ), color: bold ? C.BLACK : C.INK });
           });
         });
+        if (L.cues) {
+          L.cues.forEach(function (cl, i) {
+            doc.text(cl.s, xs[0] + cl.dx, baseline(top + padY + L.cueTop + i * clh, EX_CUE_SZ), { style: 'regular', size: fs(EX_CUE_SZ), color: C.MUTE });
+          });
+        }
+        if (L.video) videoCell(L.video, xs[cols.length - 1], top + padY);
         doc.y = top + L.h;
       });
       doc.line(ML, doc.y, ML + CW, doc.y, { stroke: '#D5DBE0', lw: px(1) });
@@ -1362,6 +1495,9 @@
         rows: (g.rows || []).map(function (r) {
           var o = {};
           EX_COLS.forEach(function (c) { o[c[0]] = clean(exText(r[c[0]])).trim(); });
+          var cues = exCues(r.cues), video = exVideo(r.video);         // v15: from the clinic's exercise library
+          if (cues.length) o.cues = cues;
+          if (video) o.video = video;
           return o;
         }).filter(function (o) { return EX_COLS.some(function (c) { return o[c[0]]; }); })
       };
@@ -1449,6 +1585,8 @@
               for (var ch2 of r.text) x += charW(r.face, ch2, it.size);
             }
           });
+        } else if (it.t === 'link') {                  // v15: a link annotation (the video links on the handout)
+          pdf.link(it.x, it.y, it.w, it.h, { url: it.url });
         }
       });
     });
@@ -1502,6 +1640,8 @@
             for (var ch of r.text) { xs.push(n2(x)); s += ch; x += charW(r.face, ch, it.size) + it.cs; }
             out.push('<text x="' + xs.join(' ') + '" y="' + n2(it.y) + '" font-family="' + FAMILY[r.face] + '" font-size="' + size + '" fill="' + it.color + '" xml:space="preserve">' + escXml(s) + '</text>');
           });
+        } else if (it.t === 'link') {                  // v15: a transparent tap target that opens the link
+          out.push('<a href="' + escXml(it.url) + '" target="_blank" rel="noopener"><rect x="' + n2(it.x) + '" y="' + n2(it.y) + '" width="' + n2(it.w) + '" height="' + n2(it.h) + '" fill="transparent"/></a>');
         }
       });
       out.push('</svg>');

@@ -7,7 +7,12 @@
    The device keeps a full cache of the records (bh-athlete-report-cloud-v1) so the app works on poor Wi-Fi, and a
    queue of writes that have not reached Firestore yet (bh-athlete-report-pending-v1): a sync pushes the queue, then
    pulls what changed since the last pull. Local mode (no projectId in cloud-config.js) means none of this runs and the
-   records stay in bh-athlete-report-clients-v1 as before. Nothing here logs tokens or the password. */
+   records stay in bh-athlete-report-clients-v1 as before. Nothing here logs tokens or the password.
+   v15: two more collections shared by the clinic, `library` (the exercise library: the clinic's own exercises, edited
+   starter entries and tombstones that hide deleted ones) and `templates` (program templates), one document per id.
+   putDoc / deleteDoc queue a full write or a tombstone and update the cache at once; a pull brings sessions, then the
+   library, then the templates, each with its own cursor; a push commits the results (and their history copies) first,
+   then the library, then the templates, in separate commits, so a refusal on one collection never holds back another. */
 (function () {
   'use strict';
   var cfg = window.BH_CLOUD || {};
@@ -22,6 +27,11 @@
   var REFRESH_AHEAD_MS = 5 * 60 * 1000;                // refresh the id token when it has less than this left
   var REQUEST_TIMEOUT_MS = 25000;
   var MAX_WRITES = 400;                                // writes per commit (Firestore's limit is 500)
+  // v15: the clinic's shared documents (cache[coll] = { <id>: entry | { id, deleted: true } }) and the push order: each
+  // group goes in commits of its own, the results first
+  var DOC_COLLS = ['library', 'templates'];
+  var PUSH_ORDER = [['sessions', 'history'], ['library'], ['templates']];
+  var DOC_ID = /^[A-Za-z0-9][A-Za-z0-9_-]{0,149}$/;    // safe as a Firestore document id (no '/', never '__x__')
 
   // ------------------------------------------------------------------ storage helpers
   function getJson(k) { try { return JSON.parse(localStorage.getItem(k)); } catch (e) { return null; } }
@@ -62,22 +72,43 @@
 
   // ------------------------------------------------------------------ state
   var auth = null;                                     // { idToken, refreshToken, exp, email, uid }
-  var cache = null;                                    // { v: 1, email, syncedAt, cursorName, clients, legacy }
+  // { v: 1, email, syncedAt, cursorName, clients, legacy, library, templates, cursors: { library: { at, name }, templates } }
+  // (syncedAt / cursorName stay the sessions' cursor, as in v13)
+  var cache = null;
   var pending = [];                                    // [ { sid, kind, coll, doc, at } ] in order
   var listeners = [];
   var syncing = null, again = false, lastSyncAt = 0, retryTimer = null, backoffMs = 0;
-  var status = { offline: false, failed: false, denied: false, waited: false, error: '' };
+  // waited: results (sessions) could not be sent at some point, so their upload gets a toast; deniedColls: the
+  // collections the store refused in the last sync (denied = any)
+  var status = { offline: false, failed: false, denied: false, deniedColls: [], waited: false, error: '' };
   var refreshing = null;
 
   function emit(evt) {
     listeners.forEach(function (fn) { try { fn(evt); } catch (e) { /* one listener failing must not stop the others */ } });
   }
-  function freshCache(email) { return { v: 1, email: email || '', syncedAt: '', cursorName: '', clients: {}, legacy: 'pending' }; }
+  function freshCursor() { return { at: '', name: '' }; }
+  function freshCache(email) {
+    return { v: 1, email: email || '', syncedAt: '', cursorName: '', clients: {}, legacy: 'pending',
+      library: {}, templates: {}, cursors: { library: freshCursor(), templates: freshCursor() } };
+  }
+  function isMap(m) { return !!m && typeof m === 'object' && !Array.isArray(m); }
   function loadCache() {
     var c = getJson(CACHE);
     if (c && c.v === 1 && c.clients && typeof c.clients === 'object' && !Array.isArray(c.clients)) {
       c.email = String(c.email || ''); c.syncedAt = String(c.syncedAt || ''); c.cursorName = String(c.cursorName || '');
       if (c.legacy !== 'uploaded' && c.legacy !== 'never') c.legacy = 'pending';
+      // v15: a cache from v14 or earlier has no library, templates or cursors: start them empty, so the first pull
+      // fetches every document of the two collections (a damaged map is rebuilt the same way)
+      var cur = isMap(c.cursors) ? c.cursors : {};
+      c.cursors = {};
+      DOC_COLLS.forEach(function (k) {
+        var ok = isMap(c[k]), m = {};
+        if (ok) Object.keys(c[k]).forEach(function (id) { if (isMap(c[k][id])) m[id] = c[k][id]; });
+        c[k] = m;
+        var cr = ok && isMap(cur[k]) ? cur[k] : {};
+        c.cursors[k] = { at: String(cr.at || ''), name: String(cr.name || '') };
+        if (!c.cursors[k].at) c.cursors[k].name = '';
+      });
       return c;
     }
     return freshCache(auth ? auth.email : '');
@@ -136,9 +167,9 @@
       }
       auth = { idToken: j.idToken, refreshToken: j.refreshToken, exp: Date.now() + (parseInt(j.expiresIn, 10) || 3600) * 1000, email: String(j.email || email).toLowerCase(), uid: String(j.localId || '') };
       saveAuth();
-      if (!cache || cache.email !== auth.email) { cache = freshCache(auth.email); saveCache(); }
+      if (!cache || cache.email !== auth.email) { cache = freshCache(auth.email); overlayPending(); saveCache(); }
       lastSyncAt = 0; backoffMs = 0;
-      status = { offline: false, failed: false, denied: false, waited: pending.length > 0, error: '' };
+      status = { offline: false, failed: false, denied: false, deniedColls: [], waited: resultsWaiting() > 0, error: '' };
       emit({ kind: 'auth', email: auth.email });
       return { email: auth.email, uid: auth.uid };
     });
@@ -178,12 +209,13 @@
     });
   }
   // signing out keeps the draft, the tests preference, the AI key cache, the practitioner name and the pending queue
+  // (v15: the library and templates go with the cache; the starter file still shows after the next sign-in)
   function signOut(message) {
     auth = null;
     drop(AUTH); drop(CACHE);
     cache = freshCache('');
     clearTimeout(retryTimer); retryTimer = null;
-    status = { offline: false, failed: false, denied: false, waited: pending.length > 0, error: '' };
+    status = { offline: false, failed: false, denied: false, deniedColls: [], waited: resultsWaiting() > 0, error: '' };
     emit({ kind: 'signout', message: message || '' });
   }
 
@@ -219,7 +251,7 @@
     });
     pending.push(item);
     savePending();
-    if (navigator.onLine === false) status.waited = true;
+    if (navigator.onLine === false && resultsWaiting()) status.waited = true;
     emit({ kind: 'status' });
   }
   function putSession(key, name, sess) { queueWrite({ sid: sid(key, sess.tool, sess.date), kind: 'put', coll: 'sessions', doc: docFields(key, name, sess, false) }); }
@@ -227,43 +259,126 @@
   // the version being replaced goes to history/<sid>_<savedAt>: a cheap safety net
   function historyCopy(key, name, sess) { queueWrite({ sid: sid(key, sess.tool, sess.date) + '_' + String(sess.savedAt || ''), kind: 'put', coll: 'history', doc: docFields(key, name, sess, false) }); }
   function setting(claudeKey) { queueWrite({ sid: 'settings', kind: 'setting', coll: 'meta', doc: { claudeKey: { stringValue: String(claudeKey || '') } } }); }
-  function isPending(sidValue) {
-    return pending.some(function (x) { return x.coll === 'sessions' && x.sid === sidValue; });
+  // a write for this collection + document id is still waiting (its own newer version must not be overwritten by a pull)
+  function isPending(coll, id) {
+    return pending.some(function (x) { return x.coll === coll && x.sid === id; });
   }
   function settingPending() { return pending.some(function (x) { return x.kind === 'setting'; }); }
   function resultsWaiting() { return pending.filter(function (x) { return x.coll === 'sessions'; }).length; }
+  function changesWaiting(coll) {                      // library / template writes in the queue (one collection or both)
+    return pending.filter(function (x) { return coll ? x.coll === coll : DOC_COLLS.indexOf(x.coll) >= 0; }).length;
+  }
   function dropPending(items) {
     pending = pending.filter(function (x) { return items.indexOf(x) < 0; });
     savePending();
   }
 
+  // v15: library entries and templates. A document per id: id, name (the entry's name or the template's title),
+  // deleted, data (the entry / template as JSON), updatedBy, device and updatedAt (server time). A save writes the whole
+  // object; a delete writes a tombstone (deleted true, data { id, deleted: true }), which also hides a starter exercise.
+  function docCollOk(coll) { return DOC_COLLS.indexOf(coll) >= 0; }
+  function docIdOk(id) { return typeof id === 'string' && DOC_ID.test(id); }
+  function docTitle(coll, obj) {
+    var v = obj ? (coll === 'templates' ? obj.title : obj.name) : '';
+    return typeof v === 'string' ? v : '';
+  }
+  function libFields(coll, id, obj, deleted, title) {
+    var by = !deleted && obj && typeof obj.updatedBy === 'string' && obj.updatedBy ? obj.updatedBy : getStr(USER);
+    return {
+      id: { stringValue: id }, name: { stringValue: String(title || '') }, deleted: { booleanValue: !!deleted },
+      data: { stringValue: JSON.stringify(obj) }, updatedBy: { stringValue: String(by || '') }, device: { stringValue: deviceId() }
+    };
+  }
+  function putDoc(coll, id, obj) {
+    if (!enabled || !docCollOk(coll) || !docIdOk(id) || !isMap(obj)) return false;
+    if (obj.deleted === true) return deleteDoc(coll, id);
+    var copy;
+    try { copy = JSON.parse(JSON.stringify(obj)); } catch (e) { return false; }
+    if (!isMap(copy)) return false;
+    copy.id = id;                                      // the document's id is the entry's id
+    cache[coll][id] = copy;
+    saveCache();
+    queueWrite({ sid: id, kind: 'put', coll: coll, doc: libFields(coll, id, copy, false, docTitle(coll, copy)) });
+    return true;
+  }
+  function deleteDoc(coll, id) {
+    if (!enabled || !docCollOk(coll) || !docIdOk(id)) return false;
+    var was = cache[coll][id], tomb = { id: id, deleted: true };
+    cache[coll][id] = tomb;
+    saveCache();
+    queueWrite({ sid: id, kind: 'tombstone', coll: coll, doc: libFields(coll, id, tomb, true, docTitle(coll, was)) });
+    return true;
+  }
+  // the queued library / template writes shown in a cache built afresh (after a sign-in): they are this device's newest
+  function overlayPending() {
+    pending.forEach(function (x) {
+      if (!docCollOk(x.coll) || !cache || !isMap(cache[x.coll])) return;
+      var obj = null;
+      try { obj = JSON.parse(str(x.doc && x.doc.data)); } catch (e) { obj = null; }
+      if (isMap(obj)) { obj.id = x.sid; cache[x.coll][x.sid] = obj.deleted === true ? { id: x.sid, deleted: true } : obj; }
+    });
+  }
+
   // ------------------------------------------------------------------ push: the queue to Firestore
-  function push() {
-    var items = pending.slice(), writes = [], settings = [];
-    items.forEach(function (it) { (it.kind === 'setting' ? settings : writes).push(it); });
+  // round = { denied: [collections the store refused this sync], message }: a 403 (the rules) is about one collection, so
+  // it is noted and the other collections carry on; any other failure (network, 5xx, 429) stops the sync as in v13
+  function refuse(round, colls, r) {
+    colls.forEach(function (c) { if (round.denied.indexOf(c) < 0) round.denied.push(c); });
+    round.message = googleMessage(r);
+  }
+  // the queue's writes in commits: results and their history copies first, then the library, then the templates, each
+  // group in commits of its own (anything from a collection this version doesn't know goes last); then the settings
+  function push(round) {
+    var items = pending.slice(), groups = [], settings = [], out = { all: items.length, sent: 0, results: 0 };
+    var known = [].concat.apply([], PUSH_ORDER), extra = [];
+    items.forEach(function (it) {
+      if (it.kind === 'setting') settings.push(it);
+      else if (known.indexOf(it.coll) < 0 && extra.indexOf(it.coll) < 0) extra.push(it.coll);
+    });
+    PUSH_ORDER.concat(extra.map(function (c) { return [c]; })).forEach(function (colls) {
+      var g = items.filter(function (it) { return it.kind !== 'setting' && colls.indexOf(it.coll) >= 0; });
+      if (g.length) groups.push({ colls: colls, items: g });
+    });
     var p = Promise.resolve();
-    for (var i = 0; i < writes.length; i += MAX_WRITES) {
-      (function (chunk) {
-        p = p.then(function () {
-          var body = { writes: chunk.map(function (it) {
-            return { update: { name: DOCS + '/' + it.coll + '/' + it.sid, fields: it.doc }, updateTransforms: [{ fieldPath: 'updatedAt', setToServerValue: 'REQUEST_TIME' }] };
-          }) };
-          return fs('POST', ':commit', body).then(function (r) {
-            if (r.status !== 200) throw httpError(r);
-            dropPending(chunk);
+    groups.forEach(function (g) {
+      var refused = false;
+      for (var i = 0; i < g.items.length; i += MAX_WRITES) {
+        (function (chunk) {
+          p = p.then(function () {
+            if (refused) return;
+            var body = { writes: chunk.map(function (it) {
+              return { update: { name: DOCS + '/' + it.coll + '/' + it.sid, fields: it.doc }, updateTransforms: [{ fieldPath: 'updatedAt', setToServerValue: 'REQUEST_TIME' }] };
+            }) };
+            return fs('POST', ':commit', body).then(function (r) {
+              if (r.status === 403) {
+                refused = true;
+                refuse(round, g.colls.filter(function (c) { return chunk.some(function (it) { return it.coll === c; }); }), r);
+                return;
+              }
+              if (r.status !== 200) throw httpError(r);
+              dropPending(chunk);
+              out.sent += chunk.length;
+              out.results += chunk.filter(function (it) { return it.coll === 'sessions'; }).length;
+            });
           });
-        });
-      })(writes.slice(i, i + MAX_WRITES));
-    }
+        })(g.items.slice(i, i + MAX_WRITES));
+      }
+    });
     settings.forEach(function (it) {
       p = p.then(function () {
         return fs('PATCH', '/meta/settings', { fields: it.doc }, 'updateMask.fieldPaths=claudeKey').then(function (r) {
+          if (r.status === 403) { refuse(round, ['meta'], r); return; }
           if (r.status !== 200) throw httpError(r);
           dropPending([it]);
+          out.sent += 1;
         });
       });
     });
-    return p.then(function () { return { all: items.length, results: items.filter(function (it) { return it.coll === 'sessions'; }).length }; });
+    // a failure after some commits went through still says what was sent (the results' toast depends on it)
+    return p.then(function () { return out; }, function (err) {
+      if (err && typeof err === 'object') err.sent = out;
+      throw err;
+    });
   }
 
   // ------------------------------------------------------------------ pull: what changed since the last pull
@@ -271,7 +386,7 @@
     var f = d.fields || {}, docSid = String(d.name || '').split('/').pop();
     var key = str(f.clientKey), tool = str(f.tool), date = str(f.date);
     if (!key || !tool || !date) return false;
-    if (isPending(docSid)) return false;               // this device's own newer version is still on its way
+    if (isPending('sessions', docSid)) return false;   // this device's own newer version is still on its way
     var cl = cache.clients[key];
     if (f.deleted && f.deleted.booleanValue === true) {
       if (!cl) return false;
@@ -295,41 +410,79 @@
     cl.sessions = sortSessions(cl.sessions);
     return changed;
   }
-  function pull() {
-    var changed = false, got = 0, limit = api.pageSize;
+  // v15: a library or template document into the cache: the object (its id from the document), or the tombstone
+  function applyEntry(coll, d) {
+    var f = d.fields || {}, id = String(d.name || '').split('/').pop(), next = null;
+    if (!id || isPending(coll, id)) return false;      // this device's own newer version is still on its way
+    if (f.deleted && f.deleted.booleanValue === true) next = { id: id, deleted: true };
+    else {
+      try { next = JSON.parse(str(f.data)); } catch (e) { next = null; }
+      if (!isMap(next)) return false;
+      next.id = id;                                    // the document's identity wins over its payload
+      if (next.deleted === true) next = { id: id, deleted: true };
+    }
+    var map = cache[coll];
+    if (map[id] && JSON.stringify(map[id]) === JSON.stringify(next)) return false;
+    map[id] = next;
+    return true;
+  }
+  // every document of one collection changed since its cursor ({ at, name }: the updatedAt and resource name of the
+  // last document seen), in pages ordered by (updatedAt, __name__); the cursor moves on as each page is applied.
+  // A 403 notes the collection as refused and leaves its cursor; other failures are thrown. changed[coll] = true as soon
+  // as a document changes the cache (so a later failure still announces what did arrive).
+  function pullColl(coll, cur, apply, round, changed) {
+    var limit = api.pageSize;
     function page(cursor) {
       var q = {
-        from: [{ collectionId: 'sessions' }],
+        from: [{ collectionId: coll }],
         orderBy: [{ field: { fieldPath: 'updatedAt' }, direction: 'ASCENDING' }, { field: { fieldPath: '__name__' }, direction: 'ASCENDING' }],
         limit: limit
       };
       if (cursor) q.startAt = { values: [{ timestampValue: cursor.at }, { referenceValue: cursor.name }], before: false };
-      else if (cache.syncedAt) q.where = { fieldFilter: { field: { fieldPath: 'updatedAt' }, op: 'GREATER_THAN', value: { timestampValue: cache.syncedAt } } };
+      else if (cur.at) q.where = { fieldFilter: { field: { fieldPath: 'updatedAt' }, op: 'GREATER_THAN', value: { timestampValue: cur.at } } };
       return fs('POST', ':runQuery', { structuredQuery: q }).then(function (r) {
+        if (r.status === 403) { refuse(round, [coll], r); return; }
         if (r.status !== 200) throw httpError(r);
         var docs = [];
         (Array.isArray(r.json) ? r.json : []).forEach(function (row) { if (row && row.document && row.document.name) docs.push(row.document); });
-        docs.forEach(function (d) { if (applyDoc(d)) changed = true; });
-        got += docs.length;
+        docs.forEach(function (d) { if (apply(d)) changed[coll] = true; });
         if (docs.length) {
           var last = docs[docs.length - 1], at = last.fields && last.fields.updatedAt && last.fields.updatedAt.timestampValue;
-          cache.syncedAt = String(at || last.updateTime || cache.syncedAt);
-          cache.cursorName = String(last.name);
+          cur.at = String(at || last.updateTime || cur.at);
+          cur.name = String(last.name);
         }
-        if (docs.length >= limit) return page({ at: cache.syncedAt, name: cache.cursorName });
+        if (docs.length >= limit) return page({ at: cur.at, name: cur.name });
       });
     }
-    return page(null).then(function () {
-      saveCache();
-      if (changed) emit({ kind: 'cache' });
-      return got;
+    return page(null);
+  }
+  // sessions (as in v13: syncedAt / cursorName), then the library, then the templates. Whatever arrived is saved even
+  // when a later request fails, and the app hears { kind: 'cache' } (sessions), 'library', 'templates', in that order.
+  function pull(round) {
+    var changed = {}, mine = cache;
+    var sc = { at: cache.syncedAt, name: cache.cursorName };   // moves on with each page applied
+    var p = pullColl('sessions', sc, applyDoc, round, changed);
+    DOC_COLLS.forEach(function (coll) {
+      p = p.then(function () {
+        if (cache !== mine) return;                    // signed out meanwhile: this cache is gone
+        return pullColl(coll, cache.cursors[coll], function (d) { return applyEntry(coll, d); }, round, changed);
+      });
     });
+    function done() {
+      if (cache !== mine) return;
+      cache.syncedAt = sc.at; cache.cursorName = sc.name;
+      saveCache();
+      if (changed.sessions) emit({ kind: 'cache' });
+      DOC_COLLS.forEach(function (coll) { if (changed[coll]) emit({ kind: coll }); });
+    }
+    return p.then(done, function (err) { done(); throw err; });
   }
   // the clinic's Claude key, read after each pull (never while this device's own change to it is still queued)
-  function pullSettings() {
+  function pullSettings(round) {
     if (settingPending()) return Promise.resolve();
     return fs('GET', '/meta/settings').then(function (r) {
       if (r.status === 404) { emit({ kind: 'settings', key: null }); return; }
+      if (r.status === 403) { refuse(round, ['meta'], r); return; }
       if (r.status !== 200) throw httpError(r);
       emit({ kind: 'settings', key: str((r.json && r.json.fields || {}).claudeKey) });
     });
@@ -343,11 +496,18 @@
   }
   function failed(err) {
     if (err && err.code === 'signed-out') return;
-    if (pending.length) status.waited = true;
+    if (resultsWaiting()) status.waited = true;
     if (err && err.code === 'http' && err.status === 403) { status.denied = true; status.failed = false; status.error = err.message; }
     else if (err && (err.code === 'http' || err.code === 'refresh')) { status.failed = true; status.error = err.message || ''; scheduleRetry(); }
     else { status.offline = true; status.error = ''; scheduleRetry(); }
     emit({ kind: 'status' });
+  }
+  // the collections refused in this sync (v13 showed any refusal as "denied"; deniedColls says which ones)
+  function setDenied(round) {
+    status.deniedColls = round.denied.slice();
+    status.denied = round.denied.length > 0;
+    status.error = status.denied ? String(round.message || '') : '';
+    if (status.denied && resultsWaiting()) status.waited = true;
   }
   function sync(opts) {
     opts = opts || {};
@@ -356,24 +516,32 @@
     if (syncing) { again = true; return syncing; }
     lastSyncAt = Date.now();
     clearTimeout(retryTimer); retryTimer = null;
-    var waited = status.waited;
-    syncing = push().then(function (sent) {
-      status.offline = false; status.failed = false; status.denied = false; status.error = '';
-      if (sent.all) {
-        status.waited = false;
+    var waited = status.waited, round = { denied: [], message: '' };
+    syncing = push(round).then(function (sent) {
+      status.offline = false; status.failed = false;
+      setDenied(round);
+      if (sent.sent) {
+        if (!resultsWaiting()) status.waited = false;
         emit({ kind: 'status' });
-        if (waited && sent.results) emit({ kind: 'uploaded', n: sent.results });
+        if (waited && sent.results) emit({ kind: 'uploaded', n: sent.results });   // the toast counts results only
       }
-      return pull();
+      return pull(round);
     }).then(function () {
-      return pullSettings();
+      return pullSettings(round);
     }).then(function () {
       backoffMs = 0;
-      status.offline = false; status.failed = false; status.denied = false; status.error = '';
+      status.offline = false; status.failed = false;
+      setDenied(round);
       emit({ kind: 'status' });
       emit({ kind: 'synced' });
       return true;
     }, function (err) {
+      var sent = err && err.sent;                      // the push stopped part-way (e.g. the library after the results)
+      if (sent && sent.sent) {
+        if (!resultsWaiting()) status.waited = false;
+        if (waited && sent.results) emit({ kind: 'uploaded', n: sent.results });
+      }
+      if (round.denied.length) setDenied(round);       // refusals learnt before the failure (else, as v13, left as they were)
       failed(err);
       return false;
     }).then(function (ok) {
@@ -403,10 +571,18 @@
     tombstone: tombstone,
     historyCopy: historyCopy,
     setting: setting,
+    // v15: putDoc('library' | 'templates', id, obj) queues a full write, deleteDoc(coll, id) a tombstone; both update
+    // cache[coll][id] at once and return true (false: local mode, another collection, an unusable id or object)
+    putDoc: putDoc,
+    deleteDoc: deleteDoc,
     // results waiting: the session documents in the queue (history copies and the settings write ride along uncounted)
     pendingCount: resultsWaiting,
+    // pending: results waiting; changes: library + template writes waiting (changesBy per collection); denied: the store
+    // refused something in the last sync, deniedColls: which collections ('sessions', 'history', 'library', 'templates', 'meta')
     status: function () {
-      return { pending: resultsWaiting(), queued: pending.length, offline: status.offline || navigator.onLine === false, failed: status.failed, denied: status.denied, error: status.error, syncing: !!syncing };
+      return { pending: resultsWaiting(), changes: changesWaiting(), changesBy: { library: changesWaiting('library'), templates: changesWaiting('templates') },
+        queued: pending.length, offline: status.offline || navigator.onLine === false, failed: status.failed, denied: status.denied,
+        deniedColls: status.deniedColls.slice(), error: status.error, syncing: !!syncing };
     },
     sync: sync,
     onChange: function (fn) { if (typeof fn === 'function') listeners.push(fn); }
@@ -415,9 +591,9 @@
     auth = loadAuth();
     cache = loadCache();
     pending = loadPending();
-    if (auth && cache.email && cache.email !== auth.email) { cache = freshCache(auth.email); saveCache(); }
+    if (auth && cache.email && cache.email !== auth.email) { cache = freshCache(auth.email); overlayPending(); saveCache(); }
     if (!auth) cache = freshCache('');                 // signed out: the cache is gone with the sign-out
-    status.waited = pending.length > 0;
+    status.waited = resultsWaiting() > 0;
     window.addEventListener('online', function () { status.offline = false; emit({ kind: 'status' }); sync(); });
     window.addEventListener('offline', function () { status.offline = true; emit({ kind: 'status' }); });
     document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible') sync({ throttle: true }); });

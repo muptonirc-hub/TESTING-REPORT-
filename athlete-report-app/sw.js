@@ -2,10 +2,11 @@
    Keeps a copy of the app on the device so it opens without a connection.
    Online it always asks the server first (so updated norms and app files show up straight away),
    falling back to the saved copy when offline or when the network takes longer than 4 seconds.
-   Google's endpoints (the clinic store, v13) are on other origins, so they are never cached or intercepted here. */
-var CACHE = 'bh-athlete-report-v14';
-var FILES = ['./', 'index.html', 'app.js?v=14', 'engine.js?v=14', 'report.js?v=14', 'report-fonts.js?v=14', 'jspdf.umd.min.js?v=14', 'cloud-config.js?v=14', 'cloud.js?v=14',
-  'norms.json', 'strength_norms.json', 'hamstring_norms.json', 'acl_norms.json', 'interpretation.json', 'explainers.json', 'manifest.webmanifest',
+   Google's endpoints (the clinic store, v13) and the exercise videos (YouTube, Vimeo, v15) are on other origins, so they are
+   never cached or intercepted here. */
+var CACHE = 'bh-athlete-report-v15';
+var FILES = ['./', 'index.html', 'app.js?v=15', 'engine.js?v=15', 'qrcode.js?v=15', 'report.js?v=15', 'report-fonts.js?v=15', 'jspdf.umd.min.js?v=15', 'cloud-config.js?v=15', 'cloud.js?v=15',
+  'norms.json', 'strength_norms.json', 'hamstring_norms.json', 'acl_norms.json', 'interpretation.json', 'explainers.json', 'exercise_library.json', 'manifest.webmanifest',
   'icon-192.png', 'icon-512.png', 'icon-maskable-512.png', 'apple-touch-icon.png', 'rajdhani-600.woff2', 'rajdhani-700.woff2'];
 
 self.addEventListener('install', function (event) {

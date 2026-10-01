@@ -749,7 +749,7 @@ html.signed-out .workspace, html.signed-out .dock, html.signed-out .tools, html.
 }
 .ex-row:has(> .ex-det[hidden]) { grid-template-areas: "num name name name" ". sets reps load" ". acts acts acts"; }   /* no empty details row */
 .ex-num { grid-area: num; text-align: center; line-height: 44px; font-size: 13px; font-weight: 700; color: var(--muted); font-variant-numeric: tabular-nums; }
-.ex-row > .ex-name { grid-area: name; }
+.ex-row > .ex-namecol { grid-area: name; }          /* v15: the name box, its library strip and link action */
 .ex-row > .c-sets { grid-area: sets; }
 .ex-row > .c-reps { grid-area: reps; }
 .ex-row > .c-load { grid-area: load; }
@@ -831,6 +831,130 @@ html.signed-out .workspace, html.signed-out .dock, html.signed-out .tools, html.
 .ex-colsline { margin: 0; font-size: 14px; font-weight: 650; }
 .dock .ex-dock { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14.5px; color: var(--fg); }
 .dock .ex-dock b { font-variant-numeric: tabular-nums; }
+
+/* ---------- v15: the Exercises tab's library and templates pages, and the builder's library links */
+/* chips: the library's filters (All + one body area, Has video, Drafts to check) and the editor's body areas */
+.lib-chips { display: flex; flex-wrap: wrap; gap: 6px; min-width: 0; }
+.chip-btn {
+  flex: none; display: inline-flex; align-items: center; gap: 6px; min-height: 36px; padding: 6px 12px;
+  border: 1px solid var(--line-strong); border-radius: 18px; background: var(--surface); color: var(--muted);
+  font-size: 13.5px; font-weight: 600; white-space: nowrap;
+}
+.chip-btn[aria-pressed="true"] { background: color-mix(in srgb, var(--teal) 16%, var(--surface)); border-color: var(--teal); color: var(--teal-ink); }
+.chip-btn .play { flex: none; }
+.chip-n { min-width: 20px; padding: 1px 6px; border-radius: 10px; background: var(--field); color: var(--fg); font-size: 12px; font-variant-numeric: tabular-nums; text-align: center; }
+.chip-btn[aria-pressed="true"] .chip-n { background: var(--surface); }
+.chip-sep { flex: none; width: 1px; align-self: stretch; margin: 4px 4px; background: var(--line); }
+/* the library page: the toolbar card, the count line, the list (each row one button) */
+.lib-tools { display: flex; flex-direction: column; gap: 12px; }
+.lib-top { display: flex; align-items: center; gap: 10px; }
+.lib-search { flex: 1; min-width: 0; margin: 0; }
+.lib-new { flex: none; }
+.lib-count { margin: -4px 2px; font-size: 13.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.lib-list, .tpl-list { display: flex; flex-direction: column; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; }
+.lib-row {
+  display: flex; align-items: center; gap: 12px; width: 100%; min-height: 56px; padding: 9px 16px;
+  border: 0; border-top: 1px solid var(--line); background: transparent; color: inherit; font: inherit; text-align: left;
+}
+.lib-row:first-child { border-top: 0; }
+.lib-row:active { background: var(--field); }
+@media (hover: hover) { .lib-row:hover { background: var(--field); } }
+.lib-row:focus-visible { outline-offset: -3px; }
+.lr-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.lr-name { font-weight: 650; font-size: 15.5px; line-height: 1.3; }
+.lr-meta { font-size: 12.5px; color: var(--muted); line-height: 1.35; }
+.lr-dose { font-size: 13px; color: var(--fg); opacity: .8; line-height: 1.35; font-variant-numeric: tabular-nums; }
+.lr-badges { flex: none; display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; max-width: 45%; }
+.badge { display: inline-flex; align-items: center; gap: 4px; height: 22px; padding: 0 8px; border-radius: 11px; font-size: 12px; font-weight: 700; white-space: nowrap; }
+.badge.vid { background: color-mix(in srgb, var(--brand) 14%, var(--surface)); color: var(--teal-ink); }
+.badge.draft { background: var(--amber-soft); color: var(--amber-ink); }
+.lib-empty { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 24px 16px; text-align: center; color: var(--muted); font-size: 14.5px; }
+.lib-empty p { margin: 0; }
+.lib-tally { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.lib-tally span, .tpl-tally span { line-height: 1.25; }
+.tpl-tally { grid-template-columns: minmax(0, 1fr); max-width: 140px; }
+.lib-how { margin-top: 12px; line-height: 1.45; }
+.sum .make.ghost { margin-top: 12px; min-height: 48px; }
+/* the templates page */
+.tpl-searchbar .lib-search { margin: 0; }
+.tpl-row { display: flex; align-items: center; gap: 12px; min-height: 64px; padding: 10px 12px 10px 16px; border-top: 1px solid var(--line); }
+.tpl-row:first-child { border-top: 0; }
+.tpl-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.tpl-main b { font-weight: 650; font-size: 15.5px; line-height: 1.3; overflow-wrap: anywhere; }
+.tpl-main span { font-size: 12.5px; color: var(--muted); }
+.tpl-acts { flex: none; display: flex; align-items: center; gap: 2px; }
+.tpl-acts .ghost { min-height: 40px; padding: 6px 18px; }
+.tpl-acts .quiet { min-height: 40px; padding-inline: 10px; font-size: 14.5px; }
+.tpl-acts .tpl-del { color: var(--red-ink); }
+.tpl-acts .tpl-del.armed { background: var(--red); color: #fff; border-radius: 9px; }
+/* the builder: the template buttons, the library strip under a linked exercise and its link action */
+.ex-tplbar { display: flex; flex-wrap: wrap; gap: 0 6px; margin: -6px 0 -4px -8px; }
+.ex-tplbar .quiet { min-height: 40px; font-size: 14.5px; }
+.ex-namecol { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.ex-nameb { position: relative; min-width: 0; }
+.ex-lib { display: flex; align-items: center; gap: 8px; min-width: 0; min-height: 26px; padding: 0 2px 0 11px; font-size: 12.5px; color: var(--muted); }
+.ex-lib .el-cues { flex: 0 1 auto; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.ex-lib .el-cues:empty { display: none; }
+.ex-lib .badge { height: 20px; font-size: 11.5px; }
+.el-play {
+  flex: none; display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 26px; padding: 0;
+  border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--teal-ink);
+}
+.el-play:active { background: var(--field); }
+.ex-libact { display: none; padding-left: 3px; }
+.ex-libact.on:not(:empty), .ex-table.editing .ex-libact:not(:empty) { display: flex; }
+.ex-libact .quiet { min-height: 34px; padding-inline: 8px; font-size: 14px; white-space: normal; text-align: left; }
+/* an exercise name's suggestions sit in the flow under its box (pushing the row down while open), so they never cover the
+   row's own boxes or the buttons below and a tap meant for those can't pick a suggestion */
+.suggest.ex-sugg { position: static; margin-top: 4px; box-shadow: none; }
+.ex-sugg span { white-space: normal; text-align: right; }
+.ex-add-in .quiet + .quiet { margin-left: 4px; }
+.ex-libline { color: var(--fg); }
+/* the editor */
+.lib-card { max-width: 640px; }
+.lib-card .lib-f, .lib-card .lib-two { margin-top: 14px; }
+.lib-draftnote { margin: 4px 0 2px !important; padding: 8px 11px; border-radius: 9px; background: var(--amber-soft); color: var(--amber-ink) !important; font-size: 13.5px !important; }
+.lib-hint { margin: 5px 2px 0 !important; font-size: 12.5px !important; line-height: 1.4; }
+.lib-hint-top { margin: -2px 2px 8px !important; }
+.lib-h { margin: 20px 0 8px; font-size: 12px; letter-spacing: .8px; text-transform: uppercase; color: var(--muted); font-weight: 700; }
+.lib-two { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr); gap: 12px; }
+.lib-dose { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px 10px; }
+.lib-cues { display: flex; flex-direction: column; gap: 8px; }
+.lib-card .f textarea { min-height: 88px; font-size: 16px; }
+.lib-card .lib-chips { margin-top: 2px; }
+.lib-vstate { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 10px; margin-top: 6px; font-size: 13.5px; color: var(--fg); font-weight: 600; }
+.lib-vstate .quiet { min-height: 36px; padding-inline: 8px; gap: 6px; }
+.lib-vstate.bad { color: var(--red-ink); }
+#libVideo[aria-invalid="true"] { border-color: var(--red); }
+.lib-check { display: flex; align-items: center; gap: 12px; min-height: 48px; margin-top: 16px; padding: 6px 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--field); font-weight: 600; cursor: pointer; }
+.lib-check input { flex: none; width: 22px; height: 22px; margin: 0; accent-color: var(--accent); }
+.lib-more { display: flex; gap: 10px; margin-top: 16px; }
+.lib-more button { flex: 1; }
+.lib-del { color: var(--red-ink); }
+.lib-del.armed { background: var(--red); color: #fff; }
+/* + From library */
+.libpick-card { max-width: 580px; }
+.libpick-card .lib-chips { margin-top: 10px; }
+.lp-list { list-style: none; margin: 10px 0 4px; padding: 0; border: 1px solid var(--line); border-radius: 12px; background: var(--field); max-height: 46vh; overflow-y: auto; }
+.lp-list li + li { border-top: 1px solid var(--line); }
+.lp-row { display: flex; align-items: center; gap: 12px; min-height: 52px; padding: 6px 14px; cursor: pointer; }
+.lp-row input { flex: none; width: 22px; height: 22px; margin: 0; accent-color: var(--accent); }
+.lp-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.lp-main b { font-weight: 650; font-size: 15px; line-height: 1.3; }
+.lp-main span { font-size: 12.5px; color: var(--muted); }
+.lp-vid { flex: none; display: inline-flex; color: var(--teal-ink); }
+/* the video */
+.video-card { max-width: 760px; }
+.video-box { position: relative; height: 0; padding-top: 56.25%; margin-top: 12px; border-radius: 12px; overflow: hidden; background: #000; }
+.video-box iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+.video-msg { margin-top: 12px !important; }
+.modal-actions a.ghost { flex: 1; text-decoration: none; text-align: center; }
+/* templates: Replace / Add, the list, the hint */
+.tpl-mode { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0 0; padding: 0; border: 0; }
+.tpl-opt { flex: 1 1 180px; display: flex; align-items: center; gap: 10px; min-height: 48px; padding: 6px 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--field); font-weight: 600; font-size: 14.5px; cursor: pointer; }
+.tpl-opt input { flex: none; width: 20px; height: 20px; margin: 0; accent-color: var(--accent); }
+.tpl-opt:has(input:checked) { border-color: var(--teal); background: color-mix(in srgb, var(--teal) 10%, var(--surface)); }
+.tpl-hint { margin-top: 8px !important; }
 
 @media (max-width: 999px) {
   .workspace { grid-template-columns: minmax(0, 1fr); padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px)); }
@@ -914,6 +1038,28 @@ html.signed-out .workspace, html.signed-out .dock, html.signed-out .tools, html.
   .signin-card { padding: 22px 18px 18px; }
   .signin-card h1 { font-size: 24px; }
   .menu-account { max-width: none; }
+  /* v15: the Exercises pages on a phone: + New exercise is in the dock, the chips scroll sideways, 44 px targets */
+  .lib-new { display: none; }
+  .lib-tools .lib-chips, .libpick-card .lib-chips { flex-wrap: nowrap; overflow-x: auto; margin-inline: -16px; padding: 0 16px 2px; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+  .libpick-card .lib-chips { margin-inline: -22px; padding-inline: 22px; }
+  .lib-tools .lib-chips::-webkit-scrollbar, .libpick-card .lib-chips::-webkit-scrollbar { display: none; }
+  .chip-btn { min-height: 44px; padding-inline: 14px; }
+  .lib-row { padding-inline: 14px; }
+  .lr-badges { flex-direction: column; align-items: flex-end; }
+  .tpl-row { flex-wrap: wrap; padding: 12px 12px 8px 14px; }
+  .tpl-acts { width: 100%; justify-content: flex-end; }
+  .tpl-acts .ghost, .tpl-acts .quiet { min-height: 44px; }
+  .ex-tplbar .quiet, .ex-libact .quiet, .lib-vstate .quiet { min-height: 44px; }
+  .ex-lib { min-height: 44px; }
+  .el-play { width: 44px; height: 44px; border-radius: 10px; }
+  .ex-add-in .quiet { min-height: 44px; }
+  /* the editor: a full-height sheet */
+  .lib-modal { padding: 0; }
+  .lib-modal .lib-card { max-width: none; height: 100%; max-height: none; border-width: 0; border-radius: 0;
+    padding: calc(env(safe-area-inset-top, 0px) + 18px) max(16px, env(safe-area-inset-right, 0px)) calc(env(safe-area-inset-bottom, 0px) + 18px) max(16px, env(safe-area-inset-left, 0px)); }
+  .lib-dose { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .lib-two { grid-template-columns: minmax(0, 1fr); }
+  .lp-row { min-height: 56px; }
 }
 @media (max-width: 380px) {
   .brand .logo { height: 24px; }                                   /* brand, Clients and ⋯ on one row (v11) */
@@ -1131,14 +1277,148 @@ html.signed-out .workspace, html.signed-out .dock, html.signed-out .tools, html.
   </div>
 </div>
 
+<!-- v15: the exercise library's editor (New exercise / Edit exercise); a full-height sheet on a phone -->
+<div class="modal lib-modal" id="libDialog" role="dialog" aria-modal="true" aria-labelledby="libTitle" hidden>
+  <div class="modal-card lib-card">
+    <h2 id="libTitle" tabindex="-1">New exercise</h2>
+    <p class="lib-draftnote" id="libDraftNote" hidden>A starter exercise drafted by Claude: check the dose and cues, then tick Checked by a clinician.</p>
+    <label class="f lib-f" for="libName"><span>Name</span>
+      <input id="libName" type="text" maxlength="120" autocapitalize="sentences" autocomplete="off" enterkeyhint="next" aria-describedby="libNameErr"></label>
+    <p class="ai-err" id="libNameErr" role="alert" hidden></p>
+    <label class="f lib-f" for="libAliases"><span>Also called</span>
+      <input id="libAliases" type="text" maxlength="800" autocapitalize="none" autocorrect="off" spellcheck="false" autocomplete="off" enterkeyhint="next" aria-describedby="libAliasesHint"></label>
+    <p class="lib-hint" id="libAliasesHint">Other names and shorthand, e.g. SL RDL — used to match scanned and typed names</p>
+    <div class="f lib-f"><span id="libAreasL">Body areas</span><div class="lib-chips wrap" id="libAreas" role="group" aria-labelledby="libAreasL"></div></div>
+    <div class="lib-two">
+      <label class="f" for="libType"><span>Type</span><select id="libType"></select></label>
+      <label class="f" for="libEquip"><span>Equipment</span>
+        <input id="libEquip" type="text" maxlength="80" autocapitalize="sentences" autocomplete="off" enterkeyhint="next"></label>
+    </div>
+    <h3 class="lib-h" id="libDoseH">Default dose</h3>
+    <div class="lib-dose" role="group" aria-labelledby="libDoseH">
+      <label class="ex-cell" for="libDose-sets"><span class="ex-cl">Sets</span><input class="ex-in" id="libDose-sets" type="text" maxlength="60" autocapitalize="none" autocorrect="off" spellcheck="false" autocomplete="off" enterkeyhint="next"></label>
+      <label class="ex-cell" for="libDose-reps"><span class="ex-cl">Reps</span><input class="ex-in" id="libDose-reps" type="text" maxlength="60" autocapitalize="none" autocorrect="off" spellcheck="false" autocomplete="off" enterkeyhint="next"></label>
+      <label class="ex-cell" for="libDose-load"><span class="ex-cl">Load</span><input class="ex-in" id="libDose-load" type="text" maxlength="60" autocapitalize="sentences" autocomplete="off" enterkeyhint="next"></label>
+      <label class="ex-cell" for="libDose-rest"><span class="ex-cl">Rest</span><input class="ex-in" id="libDose-rest" type="text" maxlength="60" autocapitalize="none" autocorrect="off" spellcheck="false" autocomplete="off" enterkeyhint="next"></label>
+      <label class="ex-cell" for="libDose-tempo"><span class="ex-cl">Tempo</span><input class="ex-in" id="libDose-tempo" type="text" maxlength="60" autocapitalize="none" autocorrect="off" spellcheck="false" autocomplete="off" enterkeyhint="next"></label>
+      <label class="ex-cell" for="libDose-side"><span class="ex-cl">Side</span><input class="ex-in" id="libDose-side" type="text" maxlength="60" autocapitalize="sentences" autocomplete="off" enterkeyhint="next"></label>
+    </div>
+    <h3 class="lib-h" id="libCuesH">Cues for the handout</h3>
+    <p class="lib-hint lib-hint-top">Short, for the patient: printed under the exercise</p>
+    <div class="lib-cues" role="group" aria-labelledby="libCuesH">
+      <input class="ex-in" id="libCue0" type="text" maxlength="90" autocapitalize="sentences" autocomplete="off" enterkeyhint="next" placeholder="Cue 1" aria-label="Cue 1">
+      <input class="ex-in" id="libCue1" type="text" maxlength="90" autocapitalize="sentences" autocomplete="off" enterkeyhint="next" placeholder="Cue 2" aria-label="Cue 2">
+      <input class="ex-in" id="libCue2" type="text" maxlength="90" autocapitalize="sentences" autocomplete="off" enterkeyhint="next" placeholder="Cue 3" aria-label="Cue 3">
+    </div>
+    <label class="f lib-f" for="libInstr"><span>Instructions</span><textarea id="libInstr" rows="3" maxlength="1000" autocapitalize="sentences" aria-describedby="libInstrHint"></textarea></label>
+    <p class="lib-hint" id="libInstrHint">For clinicians; not printed</p>
+    <label class="f lib-f" for="libVideo"><span>Video link</span>
+      <input id="libVideo" type="url" inputmode="url" maxlength="500" placeholder="https://youtu.be/…" autocapitalize="none" autocorrect="off" spellcheck="false" autocomplete="off" enterkeyhint="done" aria-describedby="libVideoHint libVideoState"></label>
+    <p class="lib-hint" id="libVideoHint">A YouTube (unlisted is fine), Vimeo or website link. It prints as a QR code.</p>
+    <div class="lib-vstate" id="libVideoState" aria-live="polite" hidden></div>
+    <label class="lib-check" for="libChecked"><input type="checkbox" id="libChecked"><span>Checked by a clinician</span></label>
+    <div class="lib-more" id="libMore" hidden>
+      <button class="ghost" id="libDuplicate" type="button">Duplicate</button>
+      <button class="quiet lib-del" id="libDelete" type="button">Delete</button>
+    </div>
+    <div class="modal-actions">
+      <button class="ghost" id="libCancel" type="button">Cancel</button>
+      <button class="primary" id="libSave" type="button">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- v15: + From library in the program builder: tick exercises, then Add -->
+<div class="modal" id="libPickDialog" role="dialog" aria-modal="true" aria-labelledby="libPickTitle" hidden>
+  <div class="modal-card libpick-card">
+    <h2 id="libPickTitle">Add from the library</h2>
+    <label class="client-search" for="libPickSearch">
+      <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="10.5" cy="10.5" r="6"/><path d="M15 15l5 5"/></svg>
+      <span class="vh">Search exercises</span>
+      <input id="libPickSearch" type="search" placeholder="Search exercises" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" enterkeyhint="search">
+    </label>
+    <div class="lib-chips" id="libPickChips" role="group" aria-label="Body area"></div>
+    <div id="libPickList"></div>
+    <div class="modal-actions">
+      <button class="ghost" id="libPickCancel" type="button">Cancel</button>
+      <button class="primary" id="libPickAdd" type="button" disabled>Add 0 exercises</button>
+    </div>
+  </div>
+</div>
+
+<!-- v15: an exercise's video (YouTube through youtube-nocookie, Vimeo with do-not-track; other links open in the browser) -->
+<div class="modal" id="videoDialog" role="dialog" aria-modal="true" aria-labelledby="videoTitle" hidden>
+  <div class="modal-card video-card">
+    <h2 id="videoTitle">Video</h2>
+    <div class="video-box" id="videoBox"></div>   <!-- the player (iframe #videoFrame) is made by app.js when a video opens -->
+    <p class="video-msg" id="videoMsg" hidden></p>
+    <div class="modal-actions">
+      <a class="ghost" id="videoOpen" href="about:blank" target="_blank" rel="noopener">Open link</a>
+      <button class="primary" id="videoClose" type="button">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- v15: Save as template (the program without the patient's name or the date) -->
+<div class="modal" id="tplSaveDialog" role="dialog" aria-modal="true" aria-labelledby="tplSaveTitle" aria-describedby="tplSaveHint" hidden>
+  <div class="modal-card">
+    <h2 id="tplSaveTitle">Save as template</h2>
+    <label class="f name-field" for="tplName"><span>Name</span>
+      <input id="tplName" type="text" maxlength="120" autocapitalize="sentences" autocomplete="off" enterkeyhint="done"></label>
+    <p class="modal-fine tpl-hint" id="tplSaveHint"></p>
+    <p class="ai-err" id="tplSaveErr" role="alert" hidden></p>
+    <div class="modal-actions">
+      <button class="ghost" id="tplSaveCancel" type="button">Cancel</button>
+      <button class="primary" id="tplSaveGo" type="button">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- v15: Start from template (and Use, from the templates page): replace the program or add to the end -->
+<div class="modal" id="tplPickDialog" role="dialog" aria-modal="true" aria-labelledby="tplPickTitle" hidden>
+  <div class="modal-card clients-card">
+    <h2 id="tplPickTitle">Start from template</h2>
+    <fieldset class="tpl-mode" id="tplModeWrap" hidden>
+      <legend class="vh">The program already has exercises</legend>
+      <label class="tpl-opt"><input type="radio" name="tplMode" value="replace" checked><span>Replace the program</span></label>
+      <label class="tpl-opt"><input type="radio" name="tplMode" value="add"><span>Add to the end</span></label>
+    </fieldset>
+    <label class="client-search" id="tplPickSearchWrap" for="tplPickSearch" hidden>
+      <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="10.5" cy="10.5" r="6"/><path d="M15 15l5 5"/></svg>
+      <span class="vh">Search templates</span>
+      <input id="tplPickSearch" type="search" placeholder="Search templates" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" enterkeyhint="search">
+    </label>
+    <div id="tplPickList"></div>
+    <div class="modal-actions">
+      <button class="ghost" id="tplPickCancel" type="button">Cancel</button>
+      <button class="primary" id="tplPickUse" type="button" hidden>Use template</button>
+    </div>
+  </div>
+</div>
+
+<!-- v15: Rename a template -->
+<div class="modal" id="tplRenameDialog" role="dialog" aria-modal="true" aria-labelledby="tplRenameTitle" hidden>
+  <div class="modal-card">
+    <h2 id="tplRenameTitle">Rename template</h2>
+    <label class="f name-field" for="tplRenameBox"><span>Name</span>
+      <input id="tplRenameBox" type="text" maxlength="120" autocapitalize="sentences" autocomplete="off" enterkeyhint="done"></label>
+    <p class="ai-err" id="tplRenameErr" role="alert" hidden></p>
+    <div class="modal-actions">
+      <button class="ghost" id="tplRenameCancel" type="button">Cancel</button>
+      <button class="primary" id="tplRenameGo" type="button">Save</button>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast" role="status" hidden></div>
 
-<script src="engine.js?v=14" defer></script>
-<script src="report-fonts.js?v=14" defer></script>
-<script src="jspdf.umd.min.js?v=14" defer></script>
-<script src="report.js?v=14" defer></script>
-<script src="cloud-config.js?v=14" defer></script>
-<script src="cloud.js?v=14" defer></script>
-<script src="app.js?v=14" defer></script>
+<script src="engine.js?v=15" defer></script>
+<script src="report-fonts.js?v=15" defer></script>
+<script src="jspdf.umd.min.js?v=15" defer></script>
+<script src="qrcode.js?v=15" defer></script>
+<script src="report.js?v=15" defer></script>
+<script src="cloud-config.js?v=15" defer></script>
+<script src="cloud.js?v=15" defer></script>
+<script src="app.js?v=15" defer></script>
 </body>
 </html>

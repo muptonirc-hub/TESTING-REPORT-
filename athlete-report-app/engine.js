@@ -832,6 +832,136 @@
     return { meta: meta, results: results, messages: messages };
   }
 
+  // ---------------------------------------------------------------- exercise library (v15)
+  // Exercise names are compared by a key: accents dropped, lower case, '&' as 'and', anything but a-z / 0-9 as one space,
+  // the clinic's shorthand written out (SL = single leg, DB = dumbbell, RDL = Romanian deadlift ...) and a plural s
+  // dropped, so "SL RDLs", "Single-leg RDL" and "single leg Romanian deadlift" all agree.
+  var LIB_SHORT = {
+    sl: 'single leg', dl: 'double leg', db: 'dumbbell', kb: 'kettlebell', bb: 'barbell', bw: 'body weight', tb: 'theraband',
+    iso: 'isometric', isom: 'isometric', ecc: 'eccentric', ext: 'extension', flex: 'flexion', abd: 'abduction', add: 'adduction',
+    rdl: 'romanian deadlift', rfess: 'rear foot elevated split squat'
+  };
+  function own(o, k) { return Object.prototype.hasOwnProperty.call(o, k); }
+  function libTokens(name, rewrite) {
+    var s = String(name == null ? '' : name);
+    if (s.normalize) s = s.normalize('NFKD');
+    s = s.replace(/[̀-ͯ]/g, '').toLowerCase().replace(/&/g, ' and ').replace(/[^a-z0-9]+/g, ' ');
+    var out = [];
+    s.split(' ').forEach(function (t) {
+      if (!t) return;
+      // a plural s comes off a word of 4+ letters (raises -> raise; press stays); a shorthand stays as it is (rfess)
+      if (!own(LIB_SHORT, t) && t.length > 3 && t.charAt(t.length - 1) === 's' && t.charAt(t.length - 2) !== 's') t = t.slice(0, -1);
+      out.push(rewrite && own(LIB_SHORT, t) ? LIB_SHORT[t] : t);
+    });
+    return out.join(' ');
+  }
+  var libKeyMemo = {}, libKeyCount = 0;               // the same names are keyed again and again (every row, every keystroke)
+  function libKeyed(name, rewrite) {
+    var s = String(name == null ? '' : name), m = (rewrite ? '#' : '~') + s, k = libKeyMemo[m];
+    if (k !== undefined) return k;
+    k = libTokens(s, rewrite);
+    if (++libKeyCount > 8000) { libKeyMemo = {}; libKeyCount = 1; }
+    libKeyMemo[m] = k;
+    return k;
+  }
+  function libKey(name) { return libKeyed(name, true); }
+  function libByName(a, b) { return String(a.name).localeCompare(String(b.name), undefined, { sensitivity: 'base' }); }
+  // the entry called exactly this (its name or one of its other names, by key); the first by name when several are
+  function libMatch(name, list) {
+    var k = libKey(name), best = null;
+    if (!k) return null;
+    (list || []).forEach(function (e) {
+      if (!e || !e.name) return;
+      var hit = libKey(e.name) === k || (Array.isArray(e.aliases) && e.aliases.some(function (a) { return libKey(a) === k; }));
+      if (hit && (!best || libByName(e, best) < 0)) best = e;
+    });
+    return best;
+  }
+  // up to n entries for an autocomplete: every typed word must start a word of the entry's name, or of one of its other
+  // names (by key). Words are also compared as written, without the shorthand written out, so a word still being typed
+  // works: "ext rot" finds External rotation and "add" Adductor squeeze (as shorthand they would be "extension" and
+  // "adduction"), and "SL RD" finds SL RDL. Ranked: names starting with what was typed, then names holding every word,
+  // then other names; ties by name. Under 2 characters typed: nothing.
+  function libSuggest(typed, list, n) {
+    n = n == null ? 5 : n;
+    var raw = String(typed == null ? '' : typed).replace(/\s+/g, ' ').trim();
+    var keys = [libKey(raw), libKeyed(raw, false)].filter(function (k, i, a) { return k && a.indexOf(k) === i; });
+    if (raw.length < 2 || !keys.length) return [];
+    function forms(name) { return [libKey(name), libKeyed(name, false)]; }
+    function covers(name) {
+      return forms(name).some(function (key) {
+        var toks = key.split(' ');
+        return keys.some(function (k) { return k.split(' ').every(function (w) { return toks.some(function (t) { return t.indexOf(w) === 0; }); }); });
+      });
+    }
+    function starts(name) { return forms(name).some(function (key) { return keys.some(function (k) { return key.indexOf(k) === 0; }); }); }
+    var hits = [];
+    (list || []).forEach(function (e) {
+      if (!e || !e.name) return;
+      var rank = -1;
+      if (starts(e.name)) rank = 0;
+      else if (covers(e.name)) rank = 1;
+      else if (Array.isArray(e.aliases) && e.aliases.some(covers)) rank = 2;
+      if (rank >= 0) hits.push({ e: e, r: rank });
+    });
+    hits.sort(function (a, b) { return a.r - b.r || libByName(a.e, b.e); });
+    return hits.slice(0, Math.max(0, n)).map(function (h) { return h.e; });
+  }
+  // a video link -> how to show and print it: YouTube and Vimeo get an embeddable player address (youtube-nocookie, Vimeo
+  // with do-not-track) and a short link; any other http(s) address is a plain link. null: blank, not http(s) or unreadable.
+  function ytSeconds(v) {                             // t= / start=: '90', '90s', '1m30s', '1h2m3s'
+    var m = /^(?:(\d+)h)?(?:(\d+)m)?(?:(\d+)s?)?$/i.exec(String(v == null ? '' : v).trim());
+    if (!m || !(m[1] || m[2] || m[3])) return 0;
+    return (+m[1] || 0) * 3600 + (+m[2] || 0) * 60 + (+m[3] || 0);
+  }
+  function urlParams(s) {
+    var out = {};
+    String(s || '').split('&').forEach(function (p) {
+      var i = p.indexOf('='), k = i < 0 ? p : p.slice(0, i), v = i < 0 ? '' : p.slice(i + 1);
+      try { k = decodeURIComponent(k.replace(/\+/g, ' ')); v = decodeURIComponent(v.replace(/\+/g, ' ')); } catch (e) { return; }
+      if (k && !own(out, k)) out[k] = v;
+    });
+    return out;
+  }
+  function videoInfo(url) {
+    var s = String(url == null ? '' : url).trim();
+    var m = /^(https?):\/\/([^\s\/?#]+)([^\s?#]*)(\?[^\s#]*)?(#\S*)?$/i.exec(s);
+    if (!m) return null;
+    var host = m[2].toLowerCase();
+    if (host.indexOf('@') >= 0) host = host.slice(host.lastIndexOf('@') + 1);
+    host = host.replace(/:\d*$/, '');
+    if (host !== 'localhost' && !/^[^.:]+(\.[^.:]+)+$/.test(host)) return null;
+    var h = host.replace(/^www\./, ''), segs = m[3].split('/').filter(Boolean);
+    var q = urlParams(m[4] ? m[4].slice(1) : ''), frag = urlParams(m[5] ? m[5].slice(1) : '');
+    var yt = '';
+    if (h === 'youtube.com' || h === 'm.youtube.com') yt = segs[0] === 'watch' ? q.v : (segs[0] === 'shorts' || segs[0] === 'embed' ? segs[1] : '');
+    else if (h === 'youtu.be') yt = segs[0];
+    else if (h === 'youtube-nocookie.com' && segs[0] === 'embed') yt = segs[1];
+    if (yt && /^[A-Za-z0-9_-]{11}$/.test(yt)) {
+      var start = ytSeconds(q.t || q.start || frag.t || frag.start);
+      return { kind: 'youtube', id: yt, start: start, label: 'YouTube',
+        embed: 'https://www.youtube-nocookie.com/embed/' + yt + '?rel=0&playsinline=1' + (start ? '&start=' + start : ''),
+        link: 'https://youtu.be/' + yt + (start ? '?t=' + start : '') };
+    }
+    if (h === 'vimeo.com' || h === 'player.vimeo.com') {
+      var id = '', hash = '';
+      if (h === 'player.vimeo.com') { if (segs[0] === 'video' && /^\d+$/.test(segs[1] || '')) id = segs[1]; }
+      else if (/^\d+$/.test(segs[0] || '')) {          // vimeo.com/123 or, unlisted, vimeo.com/123/abcdef0123
+        id = segs[0];
+        if (segs[1] && /^[0-9a-f]{6,}$/i.test(segs[1])) hash = segs[1];
+      } else {                                          // vimeo.com/channels/x/123, /groups/x/videos/123, /showcase/x/video/123
+        segs.forEach(function (sg, i) { if (i > 0 && /^\d+$/.test(sg)) id = sg; });
+      }
+      if (!hash && q.h && /^[0-9a-z]+$/i.test(q.h)) hash = q.h;
+      if (id) {
+        return { kind: 'vimeo', id: id, hash: hash, label: 'Vimeo',
+          embed: 'https://player.vimeo.com/video/' + id + '?dnt=1' + (hash ? '&h=' + hash : ''),
+          link: 'https://vimeo.com/' + id + (hash ? '/' + hash : '') };
+      }
+    }
+    return { kind: 'link', link: s, embed: '', label: h };
+  }
+
   return {
     num: num, parseInput: parseInput, pyFixed: pyFixed, pySigned: pySigned, pyRound: pyRound, fmt: fmt,
     status: status, targetStr: targetStr, change: change, changeLabel: changeLabel,
@@ -847,6 +977,7 @@
     strengthRawTarget: strengthRawTarget, formatScore: formatScore, diffText: diffText,
     displayIso: displayIso, parseDate: parseDate, isoOf: isoOf, displayDate: displayDate,
     nameKey: nameKey, sortSessions: sortSessions, previousFor: previousFor, progress: progress,
-    parseCsv: parseCsv, parseValdFiles: parseValdFiles, normCol: normCol
+    parseCsv: parseCsv, parseValdFiles: parseValdFiles, normCol: normCol,
+    libKey: libKey, libMatch: libMatch, libSuggest: libSuggest, videoInfo: videoInfo
   };
 });

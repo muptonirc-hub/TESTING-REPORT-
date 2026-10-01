@@ -1,0 +1,2221 @@
+{
+ "v": 1,
+ "note": "Starter exercises drafted by Claude for BASE Health Noosa, 1 Oct 2026. Every entry is a draft for a clinician to check: the cues print on patient handouts. Edit in the app (Exercises > Exercise library); edited copies are kept in the clinic store and win over this file.",
+ "areas": [
+  "Hip & groin",
+  "Knee",
+  "Hamstring",
+  "Calf & Achilles",
+  "Ankle & foot",
+  "Trunk",
+  "Shoulder & arm",
+  "Whole body"
+ ],
+ "types": [
+  "Strength",
+  "Isometric",
+  "Plyometric",
+  "Mobility",
+  "Balance & control",
+  "Running drill",
+  "Conditioning"
+ ],
+ "exercises": [
+  {
+   "id": "s-split-squat",
+   "name": "Split squat",
+   "aliases": [
+    "Static lunge"
+   ],
+   "areas": [
+    "Knee",
+    "Hip & groin"
+   ],
+   "type": "Strength",
+   "equipment": "Body weight or dumbbells",
+   "dose": {
+    "sets": "3",
+    "reps": "8–12",
+    "load": "",
+    "rest": "90 s",
+    "tempo": "",
+    "side": "Each side"
+   },
+   "cues": [
+    "Front shin stays close to upright",
+    "Lower the back knee straight down",
+    "Push up through the whole front foot"
+   ],
+   "instructions": ""
+  },
+  {
+   "id": "s-rear-foot-elevated-split-squat",
+   "name": "Rear-foot elevated split squat",
+   "aliases": [
+    "Bulgarian split squat",
+    "RFESS",
+    "BSS"
+   ],
+   "areas": [
+    "Knee",
+    "Hip & groin"
+   ],
+   "type": "Strength",
+   "equipment": "Bench and dumbbells",
+   "dose": {
+    "sets": "3",
+    "reps": "6–10",
+    "load": "",
+    "rest": "2 min",
+    "tempo": "",
+    "side": "Each side"
+   },
+   "cues": [
+    "Back foot on the bench, laces down",
+    "Keep most of your weight on the front leg",
+    "Lower under control, drive up through the front heel"
+   ],
+   "instructions": ""
+  },
+  {
+   "id": "s-goblet-squat",
+   "name": "Goblet squat",
+   "aliases": [
+    "KB goblet squat",
+    "DB goblet squat"
+   ],
+   "areas": [
+    "Knee",
+    "Hip & groin"
+   ],
+   "type": "Strength",
+   "equipment": "Kettlebell or dumbbell",
+   "dose": {
+    "sets": "3",
+    "reps": "8–12",
+    "load": "",
+    "rest": "90 s",
+    "tempo": "",
+    "side": ""
+   },
+   "cues": [
+    "Hold the weight close to your chest",
+    "Knees track over your toes",
+    "Keep your chest up as you sit down"
+   ],
+   "instructions": ""
+  },
+  {
+   "id": "s-back-squat",
+   "name": "Back squat",
+   "aliases": [
+    "Barbell back squat",
+    "BB squat"
+   ],
+   "areas": [
+    "Knee",
+    "Hip & groin",
+    "Whole body"
+   ],
+   "type": "Strength",
+   "equipment": "Barbell and rack",
+   "dose": {
+    "sets": "4",
+    "reps": "5–8",
+    "load": "",
+    "rest": "2–3 min",
+    "tempo": "",
+    "side": ""
+   },
+   "cues": [
+    "Brace your trunk before each rep",
+    "Knees follow your toes",
+    "Drive up through the whole foot"
+   ],
+   "instructions": ""
+  },
+  {
+   "id": "s-box-squat",
+   "name": "Box squat",
+   "aliases": [
+    "Squat to box",
+    "Sit to box"
+   ],
+   "areas": [
+    "Knee",
+    "Hip & groin"
+   ],
+   "type": "Strength",
+   "equipment": "Box or bench",
+   "dose": {
+    "sets": "3",
+    "reps": "10",
+    "load": "",
+    "rest": "60 s",
+    "tempo": "",
+    "side": ""
+   },
+   "cues": [
+    "Sit back until you lightly touch the box",
+    "Stand up without rocking forwards",
+    "Knees in line with your toes"
+   ],
+   "instructions": ""
+  },
+  {
+   "id": "s-sit-to-stand",
+   "name": "Sit to stand",
+   "aliases": [
+    "STS",
+    "Chair stand",
+    "Sit-to-stands"
+   ],
+   "areas": [
+    "Knee",
+    "Hip & groin"
+   ],
+   "type": "Strength",
+   "equipment": "Chair",
+   "dose": {
+    "sets": "3",
+    "reps": "10",
+    "load": "",
+    "rest": "60 s",
+    "tempo": "",
+    "side": ""
+   },
+   "cues": [
+    "Feet flat, slightly behind your knees",
+    "Lean forwards, then stand up tall",
+    "Lower back down slowly"
+   ],
+   "instructions": ""
+  },
+  {
+   "id": "s-spanish-squat",
+   "name": "Spanish squat",
+   "aliases": [
+    "Spanish squat isometric",
+    "Spanish squat hold"
+   ],
+   "areas": [
+    "Knee"
+   ],
+   "type": "Isometric",
+   "equipment": "Heavy band anchored behind the knees",
+   "dose": {
+    "sets": "5",
+    "reps": "45 s",
+    "load": "",
+    "rest": "60 s",
+    "tempo": "",
+    "side": ""
+   },
+   "cues": [
+    "Sit back into the band",
+    "Keep your shins upright",
+    "Stay at a depth you can hold comfortably"
+   ],
+   "instructions": ""
+  },
+  {
+   "id": "s-wall-sit",
+   "name": "Wall sit",
+   "aliases": [
+    "Wall squat",
+    "Wall squat hold"
+   ],
+   "areas": [
+    "Knee"
+   ],
+   "type": "Isometric",
+   "equipment": "Wall",
+   "dose": {
+    "sets": "3",
+    "reps": "30–45 s",
+    "load": "",
+    "rest": "60 s",
+    "tempo": "",
+    "side": ""
+   },
+   "cues": [
+    "Back flat against the wall",
+    "Knees over your ankles",
+    "Breathe steadily while you hold"
+   ],
+   "instructions": ""
+  },
+  {
+   "id": "s-leg-press",
+   "name": "Leg press",
+   "aliases": [
+    "Double-leg press"
+   ],
+   "areas": [
+    "Knee",
+    "Hip & groin"
+   ],
+   "type": "Strength",
+   "equipment": "Leg press machine",
+   "dose": {
+    "sets": "3",
+    "reps": "8–12",
+    "load": "",
+    "rest": "90 s",
+    "tempo": "",
+    "side": ""
+   },
+   "cues": [
+    "Feet hip-width apart on the platform",
+    "Lower until your knees are bent to about 90°",
+    "Don’t lock your knees at the top"
+   ],
+   "instructions": ""
+  },
+  {
+   "id": "s-single-leg-press",
+   "name": "Single-leg leg press",
+   "aliases": [
+    "SL leg press",
+    "Single-leg press"
+   ],
+   "areas": [
+    "Knee",
+    "Hip & groin"
+   ],
+   "type": "Strength",
+   "equipment": "Leg press machine",
+   "dose": {
+    "sets": "3",
+    "reps": "8–12",
+    "load": "",
+    "rest": "90 s",
+    "tempo": "",
+    "side": "Each side"
+   },
+   "cues": [
+    "Foot in the middle of the platform",
+    "Knee tracks over your toes",
+    "Control the lowering"
+   ],
+   "instructions": ""
+  },
+  {
+   "id": "s-knee-extension",
+   "name": "Knee extension machine",
+   "aliases": [
+    "Leg extension",
+    "Knee ext",
+    "Quad extension"
+   ],
+   "areas": [
+    "Knee"
+   ],
+   "type": "Strength",
+   "equipment": "Knee extension machine",
+   "dose": {
+    "sets": "3",
+    "reps": "10–12",
+    "load": "",
+    "rest": "90 s",
+    "tempo": "",
+    "side": ""
+   },
+   "cues": [
+    "Line your knee up with the machine’s pivot",
+    "Straighten fully and pause",
+    "Lower slowly"
+   ],
+   "instructions": ""
+  },
+  {
+   "id": "s-isometric-knee-extension",
+   "name": "Isometric knee extension",
+   "aliases": [
+    "Iso knee extension",
+    "Iso quads",
+    "Isometric quads"
+   ],
+   "areas": [
+    "Knee"
+   ],
+   "type": "Isometric",
+   "equipment": "Knee extension machine or band",
+   "dose": {
+    "sets": "5",
+    "reps": "45 s",
+    "load": "",
+    "rest": "60 s",
+    "tempo": "",
+    "side": "Each side"
+   },
+   "cues": [
+    "Push into the pad and hold still",
+    "Strong but comfortable effort",
+    "Keep breathing during the hold"
+   ],
+   "instructions": ""
+  },
+  {
+   "id": "s-step-up",
+   "name": "Step-up",
+   "aliases": [
+    "Box step-up",
+    "Step-ups"
+   ],
+   "areas": [
+    "Knee",
+    "Hip & groin"
+   ],
+   "type": "Strength",
+   "equipment": "Step or box",
+   "dose": {
+    "sets": "3",
+    "reps": "10",
+    "load": "",
+    "rest": "60 s",
+    "tempo": "",
+    "side": "Each side"
+   },
+   "cues": [
+    "Whole foot on the step",
+    "Push through the top leg, not the back foot",
+    "Knee stays in line with your toes"
+   ],
+   "instructions": ""
+  },
+  {
+   "id": "s-lateral-step-down",
+   "name": "Lateral step-down",
+   "aliases": [
+    "Side step-down",
+    "Step-down"
+   ],
+   "areas": [
+    "Knee"
+   ],
+   "type": "Balance & control",
+   "equipment": "Step",
+   "dose": {
+    "sets": "3",
+    "reps": "10",
+    "load": "",
+    "rest": "60 s",
+    "tempo": "",
+    "side": "Each side"
+   },
+   "cues": [
+    "Keep your hips level",
+    "Knee points over your second toe",
+    "Lightly tap the heel down, then stand back up"
+   ],
+   "instructions": ""
+  },
+  {
+   "id": "s-reverse-lunge",
+   "name": "Reverse lunge",
+   "aliases": [
+    "Back lunge",
+    "Backward lunge"
+   ],
+   "areas": [
+    "Knee",
+    "Hip & groin"
+   ],
+   "type": "Strength",
+   "equipment": "Body weight or dumbbells",
+   "dose": {
+    "sets": "3",
+    "reps": "8–10",
+    "load": "",
+    "rest": "90 s",
+    "tempo": "",
+    "side": "Each side"
+   },
+   "cues": [
+    "Step back far enough to drop straight down",
+    "Front knee over the middle of the foot",
+    "Push through the front heel to come back up"
+   ],
+   "instructions": ""
+  },
+  {
+   "id": "s-walking-lunge",
+   "name": "Walking lunge",
+   "aliases": [
+    "Lunge walk"
+   ],
+   "areas": [
+    "Knee",
+    "Hip & groin"
+   ],
+   "type": "Strength",
+   "equipment": "Body weight or dumbbells",
+   "dose": {
+    "sets": "3",
+    "reps": "10",
+    "load": "",
+    "rest": "90 s",
+    "tempo": "",
+    "side": "Each side"
+   },
+   "cues": [
+    "Long steps, trunk upright",
+    "Lower the back knee close to the floor",
+    "Keep each knee in line with its foot"
+   ],
+   "instructions": ""
+  },
+  {
+   "id": "s-lateral-lunge",
+   "name": "Lateral lunge",
+   "aliases": [
+    "Side lunge"
+   ],
+   "areas": [
+    "Hip & groin",
+    "Knee"
+   ],
+   "type": "Strength",
+   "equipment": "Body weight or dumbbell",
+   "dose": {
+    "sets": "3",
+    "reps": "8",
+    "load": "",
+    "rest": "60 s",
+    "tempo": "",
+    "side": "Each side"
+   },
+   "cues": [
+    "Step wide and sit back over one leg",
+    "Keep the other leg straight",
+    "Push back to the middle"
+   ],
+   "instructions": ""
+  },
+  {
+   "id": "s-terminal-knee-extension",
+   "name": "Terminal knee extension",
+   "aliases": [
+    "TKE",
+    "Banded TKE"
+   ],
+   "areas": [
+    "Knee"
+   ],
+   "type": "Strength",
+   "equipment": "Band",
+   "dose": {
+    "sets": "3",
+    "reps": "15",
+    "load": "",
+    "rest": "45 s",
+    "tempo": "",
+    "side": "Each side"
+   },
+   "cues": [
+    "Band behind your knee",
+    "Straighten fully and squeeze your thigh",
+    "Slowly let the knee bend"
+   ],
+   "instructions": ""
+  },
+  {
+   "id": "s-static-quads",
+   "name": "Static quads",
+   "aliases": [
+    "Quad set",
+    "Quads set",
+    "Static quadriceps"
+   ],
+   "areas": [
+    "Knee"
+   ],
+   "type": "Isometric",
+   "equipment": "Rolled towel",
+   "dose": {
+    "sets": "3",
+    "reps": "10 × 5 s",
+    "load": "",
+    "rest": "",
+    "tempo": "",
+    "side": ""
+   },
+   "cues": [
+    "Small rolled towel under your knee",
+    "Tighten your thigh to press the knee down",
+    "Hold, then relax fully"
+   ],
+   "instructions": ""
+  },
+  {
+   "id": "s-straight-leg-raise",
+   "name": "Straight leg raise",
+   "aliases": [
+    "SLR"
+   ],
+   "areas": [
+    "Knee",
+    "Hip & groin"
+   ],
+   "type": "Strength",
+   "equipment": "Body weight or ankle weight",
+   "dose": {
+    "sets": "3",
+    "reps": "10",
+    "load": "",
+    "rest": "45 s",
+    "tempo": "",
+    "side": "Each side"
+   },
+   "cues": [
+    "Tighten your thigh first",
+    "Lift the straight leg to the height of the other knee",
+    "Lower slowly"
+   ],
+   "instructions": ""
+  },
+  {
+   "id": "s-heel-slides",
+   "name": "Heel slides",
+   "aliases": [
+    "Heel slide",
+    "Knee bends"
+   ],
+   "areas": [
+    "Knee"
+   ],
+   "type": "Mobility",
+   "equipment": "Towel or slider",
+   "dose": {
+    "sets": "3",
+    "reps": "10–15",
+    "load": "",
+    "rest": "",
+    "tempo": "",
+    "side": ""
+   },
+   "cues": [
+    "Slide your heel towards your bottom",
+    "Go to a comfortable stretch",
+    "Slide back out slowly"
+   ],
+   "instructions": ""
+  },
+  {
+   "id": "s-single-leg-squat",
+   "name": "Single-leg squat",
+   "aliases": [
+    "SL squat",
+    "Single-leg squat to box",
+    "Pistol squat to box"
+   ],
+   "areas": [
+    "Knee",
+    "Hip & groin"
+   ],
+   "type": "Balance & control",
+   "equipment": "Box (optional)",
+   "dose": {
+    "sets": "3",
+    "reps": "6–8",
+    "load": "",
+    "rest": "90 s",
+    "tempo": "",
+    "side": "Each side"
+   },
+   "cues": [
+    "Sit back as if onto a chair",
+    "Knee tracks over your second toe",
+    "Keep your hips level"
+   ],
+   "instructions": ""
+  },
+  {
+   "id": "s-quad-stretch",
+   "name": "Standing quad stretch",
+   "aliases": [
+    "Quad stretch",
+    "Quadriceps stretch"
+   ],
+   "areas": [
+    "Knee"
+   ],
+   "type": "Mobility",
+   "equipment": "Wall for balance",
+   "dose": {
+    "sets": "3",
+    "reps": "30 s",
+    "load": "",
+    "rest": "",
+    "tempo": "",
+    "side": "Each side"
+   },
+   "cues": [
+    "Hold your ankle behind you",
+    "Knees together, hips pushed forwards",
+    "Stand tall"
+   ],
+   "instructions": ""
+  },
+  {
+   "id": "s-glute-bridge",
+   "name": "Glute bridge",
+   "aliases": [
+    "Hip bridge",
+    "Bridge"
+   ],
+   "areas": [
+    "Hip & groin"
+   ],
+   "type": "Strength",
+   "equipment": "Body weight",
+   "dose": {
+    "sets": "3",
+    "reps": "12–15",
+    "load": "",
+    "rest": "60 s",
+    "tempo": "",
+    "side": ""
+   },
+   "cues": [
+    "Push through your heels",
+    "Squeeze your glutes at the top",
+    "Lower slowly"
+   ],
+   "instructions": ""
+  },
+  {
+   "id": "s-single-leg-glute-bridge",
+   "name": "Single-leg glute bridge",
+   "aliases": [
+    "SL bridge",
+    "SL glute bridge",
+    "Single-leg bridge"
+   ],
+   "areas": [
+    "Hip & groin",
+    "Hamstring"
+   ],
+   "type": "Strength",
+   "equipment": "Body weight",
+   "dose": {
+    "sets": "3",
+    "reps": "10–12",
+    "load": "",
+    "rest": "60 s",
+    "tempo": "",
+    "side": "Each side"
+   },
+   "cues": [
+    "Keep your hips level",
+    "Drive through the heel of the working leg",
+    "Pause at the top"
+   ],
+   "instructions": ""
+  },
+  {
+   "id": "s-hip-thrust",
+   "name": "Hip thrust",
+   "aliases": [
+    "Barbell hip thrust",
+    "BB hip thrust"
+   ],
+   "areas": [
+    "Hip & groin"
+   ],
+   "type": "Strength",
+   "equipment": "Bench and barbell",
+   "dose": {
+    "sets": "3",
+    "reps": "8–12",
+    "load": "",
+    "rest": "90 s",
+    "tempo": "",
+    "side": ""
+   },
+   "cues": [
+    "Upper back on the bench, chin tucked",
+    "Drive your hips up until your body is flat",
+    "Squeeze your glutes at the top"
+   ],
+   "instructions": ""
+  },
+  {
+   "id": "s-side-plank",
+   "name": "Side plank",
+   "aliases": [
+    "Side bridge"
+   ],
+   "areas": [
+    "Trunk",
+    "Hip & groin"
+   ],
+   "type": "Isometric",
+   "equipment": "Mat",
+   "dose": {
+    "sets": "3",
+    "reps": "20–40 s",
+    "load": "",
+    "rest": "45 s",
+    "tempo": "",
+    "side": "Each side"
+   },
+   "cues": [
+    "Elbow under your shoulder",
+    "Body in one straight line",
+    "Lift your hips, don’t let them sag"
+   ],
+   "instructions": ""
+  },
+  {
+   "id": "s-copenhagen-plank",
+   "name": "Copenhagen plank",
+   "aliases": [
+    "Copenhagen adductor plank",
+    "Copenhagen adduction",
+    "Copenhagen"
+   ],
+   "areas": [
+    "Hip & groin",
+    "Trunk"
+   ],
+   "type": "Isometric",
+   "equipment": "Bench",
+   "dose": {
+    "sets": "3",
+    "reps": "15–30 s",
+    "load": "",
+    "rest": "60 s",
+    "tempo": "",
+    "side": "Each side"
+   },
+   "cues": [
+    "Top leg on the bench, body in a straight line",
+    "Squeeze the bench with your top leg",
+    "Start with your knee on the bench if needed"
+   ],
+   "instructions": ""
+  },
+  {
+   "id": "s-adductor-squeeze",
+   "name": "Adductor squeeze",
+   "aliases": [
+    "Add squeeze",
+    "Groin squeeze",
+    "Ball squeeze"
+   ],
+   "areas": [
+    "Hip & groin"
+   ],
+   "type": "Isometric",
+   "equipment": "Ball or folded pillow",
+   "dose": {
+    "sets": "5",
+    "reps": "10 s",
+    "load": "",
+    "rest": "20 s",
+    "tempo": "",
+    "side": ""
+   },
+   "cues": [
+    "Ball between your knees",
+    "Squeeze steadily and hold",
+    "Relax fully between holds"
+   ],
+   "instructions": ""
+  },
+  {
+   "id": "s-side-lying-hip-abduction",
+   "name": "Side-lying hip abduction",
+   "aliases": [
+    "Hip abduction",
+    "Side leg raise"
+   ],
+   "areas": [
+    "Hip & groin"
+   ],
+   "type": "Strength",
+   "equipment": "Body weight or ankle weight",
+   "dose": {
+    "sets": "3",
+    "reps": "12–15",
+    "load": "",
+    "rest": "45 s",
+    "tempo": "",
+    "side": "Each side"
+   },
+   "cues": [
+    "Lie on your side, bottom knee bent",
+    "Lift the top leg slightly behind you",
+    "Toes point forwards, not up"
+   ],
+   "instructions": ""
+  },
+  {
+   "id": "s-banded-lateral-walk",
+   "name": "Banded lateral walk",
+   "aliases": [
+    "Crab walk",
+    "Monster walk",
+    "Band walks",
+    "Lateral band walk"
+   ],
+   "areas": [
+    "Hip & groin"
+   ],
+   "type": "Strength",
+   "equipment": "Mini band",
+   "dose": {
+    "sets": "3",
+    "reps": "10 steps",
+    "load": "",
+    "rest": "45 s",
+    "tempo": "",
+    "side": "Each way"
+   },
+   "cues": [
+    "Band around your knees or ankles",
+    "Stay low with your feet apart",
+    "Small steps, keep tension on the band"
+   ],
+   "instructions": ""
+  },
+  {
+   "id": "s-clam",
+   "name": "Clam",
+   "aliases": [
+    "Clam shell"
+   ],
+   "areas": [
+    "Hip & groin"
+   ],
+   "type": "Strength",
+   "equipment": "Mini band (optional)",
+   "dose": {
+    "sets": "3",
+    "reps": "15",
+    "load": "",
+    "rest": "45 s",
+    "tempo": "",
+    "side": "Each side"
+   },
+   "cues": [
+    "Lie on your side, knees bent, heels together",
+    "Lift the top knee without rolling back",
+    "Lower slowly"
+   ],
+   "instructions": ""
+  },
+  {
+   "id": "s-standing-hip-adduction",
+   "name": "Standing hip adduction",
+   "aliases": [
+    "Cable adduction",
+    "Band adduction",
+    "Hip adduction"
+   ],
+   "areas": [
+    "Hip & groin"
+   ],
+   "type": "Strength",
+   "equipment": "Cable or band",
+   "dose": {
+    "sets": "3",
+    "reps": "12",
+    "load": "",
+    "rest": "45 s",
+    "tempo": "",
+    "side": "Each side"
+   },
+   "cues": [
+    "Stand tall and hold on for balance",
+    "Bring the leg across in front of you",
+    "Control the return"
+   ],
+   "instructions": ""
+  },
+  {
+   "id": "s-kneeling-hip-flexor-stretch",
+   "name": "Kneeling hip flexor stretch",
+   "aliases": [
+    "Hip flexor stretch",
+    "HF stretch"
+   ],
+   "areas": [
+    "Hip & groin"
+   ],
+   "type": "Mobility",
+   "equipment": "Mat",
+   "dose": {
+    "sets": "3",
+    "reps": "30 s",
+    "load": "",
+    "rest": "",
+    "tempo": "",
+    "side": "Each side"
+   },
+   "cues": [
+    "Tuck your tailbone under",
+    "Shift forwards until you feel the front of the hip",
+    "Keep your trunk upright"
+   ],
+   "instructions": ""
+  },
+  {
+   "id": "s-90-90-hip-switch",
+   "name": "90/90 hip switch",
+   "aliases": [
+    "90 90 hip mobility",
+    "Hip switches"
+   ],
+   "areas": [
+    "Hip & groin"
+   ],
+   "type": "Mobility",
+   "equipment": "Mat",
+   "dose": {
+    "sets": "2",
+    "reps": "10",
+    "load": "",
+    "rest": "",
+    "tempo": "",
+    "side": ""
+   },
+   "cues": [
+    "Sit with both knees bent to 90°",
+    "Rotate both knees to the other side",
+    "Keep your chest tall"
+   ],
+   "instructions": ""
+  },
+  {
+   "id": "s-nordic-hamstring-curl",
+   "name": "Nordic hamstring curl",
+   "aliases": [
+    "Nordics",
+    "Nordic curl",
+    "Nordic",
+    "NHC"
+   ],
+   "areas": [
+    "Hamstring"
+   ],
+   "type": "Strength",
+   "equipment": "Partner, anchored bar or NordBord",
+   "dose": {
+    "sets": "3",
+    "reps": "4–6",
+    "load": "",
+    "rest": "2 min",
+    "tempo": "",
+    "side": ""
+   },
+   "cues": [
+    "Keep a straight line from knees to shoulders",
+    "Lower as slowly as you can",
+    "Catch yourself with your hands, then push back up"
+   ],
+   "instructions": ""
+  },
+  {
+   "id": "s-romanian-deadlift",
+   "name": "Romanian deadlift",
+   "aliases": [
+    "RDL"
+   ],
+   "areas": [
+    "Hamstring",
+    "Hip & groin"
+   ],
+   "type": "Strength",
+   "equipment": "Barbell or dumbbells",
+   "dose": {
+    "sets": "3",
+    "reps": "8",
+    "load": "",
+    "rest": "2 min",
+    "tempo": "",
+    "side": ""
+   },
+   "cues": [
+    "Soft knees, push your hips back",
+    "Keep the weight close to your legs",
+    "Stop when you feel a strong hamstring stretch"
+   ],
+   "instructions": ""
+  },
+  {
+   "id": "s-single-leg-rdl",
+   "name": "Single-leg Romanian deadlift",
+   "aliases": [
+    "SL RDL",
+    "Single-leg RDL",
+    "Single-leg deadlift",
+    "SL DL"
+   ],
+   "areas": [
+    "Hamstring",
+    "Hip & groin"
+   ],
+   "type": "Strength",
+   "equipment": "Dumbbell or kettlebell",
+   "dose": {
+    "sets": "3",
+    "reps": "8",
+    "load": "",
+    "rest": "90 s",
+    "tempo": "",
+    "side": "Each side"
+   },
+   "cues": [
+    "Keep your hips level and square to the floor",
+    "Hinge from the hip with a soft knee",
+    "Reach the free leg straight back"
+   ],
+   "instructions": ""
+  },
+  {
+   "id": "s-isometric-hamstring-bridge",
+   "name": "Isometric hamstring bridge",
+   "aliases": [
+    "Hamstring bridge hold",
+    "Long-lever bridge hold",
+    "Iso hamstring bridge"
+   ],
+   "areas": [
+    "Hamstring"
+   ],
+   "type": "Isometric",
+   "equipment": "Box or bench",
+   "dose": {
+    "sets": "4",
+    "reps": "20–30 s",
+    "load": "",
+    "rest": "60 s",
+    "tempo": "",
+    "side": "Each side"
+   },
+   "cues": [
+    "Heel on the box, knee slightly bent",
+    "Lift your hips and hold still",
+    "Push down through your heel"
+   ],
+   "instructions": ""
+  },
+  {
+   "id": "s-single-leg-hamstring-bridge",
+   "name": "Single-leg hamstring bridge",
+   "aliases": [
+    "SL hamstring bridge",
+    "Single-leg bridge off box"
+   ],
+   "areas": [
+    "Hamstring"
+   ],
+   "type": "Strength",
+   "equipment": "Box or bench",
+   "dose": {
+    "sets": "3",
+    "reps": "8–10",
+    "load": "",
+    "rest": "90 s",
+    "tempo": "",
+    "side": "Each side"
+   },
+   "cues": [
+    "Heel on the box, other leg up",
+    "Drive your hips up through the heel",
+    "Lower slowly"
+   ],
+   "instructions": ""
+  },
+  {
+   "id": "s-prone-hamstring-curl",
+   "name": "Prone hamstring curl",
+   "aliases": [
+    "Lying leg curl",
+    "Hamstring curl machine",
+    "Prone leg curl"
+   ],
+   "areas": [
+    "Hamstring"
+   ],
+   "type": "Strength",
+   "equipment": "Leg curl machine",
+   "dose": {
+    "sets": "3",
+    "reps": "8–12",
+    "load": "",
+    "rest": "90 s",
+    "tempo": "",
+    "side": ""
+   },
+   "cues": [
+    "Keep your hips down on the bench",
+    "Curl your heels towards your bottom",
+    "Lower slowly"
+   ],
+   "instructions": ""
+  },
+  {
+   "id": "s-hamstring-slider-curl",
+   "name": "Hamstring slider curl",
+   "aliases": [
+    "Slider curl",
+    "Sliding leg curl"
+   ],
+   "areas": [
+    "Hamstring"
+   ],
+   "type": "Strength",
+   "equipment": "Sliders or towel",
+   "dose": {
+    "sets": "3",
+    "reps": "8–10",
+    "load": "",
+    "rest": "90 s",
+    "tempo": "",
+    "side": ""
+   },
+   "cues": [
+    "Lift your hips into a bridge first",
+    "Slide your heels out slowly",
+    "Keep your hips up as you pull back in"
+   ],
+   "instructions": ""
+  },
+  {
+   "id": "s-back-extension",
+   "name": "45° back extension",
+   "aliases": [
+    "Hip extension",
+    "45 degree hip extension",
+    "Back extension"
+   ],
+   "areas": [
+    "Hamstring",
+    "Trunk"
+   ],
+   "type": "Strength",
+   "equipment": "Back-extension bench",
+   "dose": {
+    "sets": "3",
+    "reps": "10–12",
+    "load": "",
+    "rest": "90 s",
+    "tempo": "",
+    "side": ""
+   },
+   "cues": [
+    "Hinge from your hips over the pad",
+    "Squeeze your glutes to come up",
+    "Stop when your body is straight"
+   ],
+   "instructions": ""
+  },
+  {
+   "id": "s-kettlebell-swing",
+   "name": "Kettlebell swing",
+   "aliases": [
+    "KB swing"
+   ],
+   "areas": [
+    "Hamstring",
+    "Hip & groin",
+    "Whole body"
+   ],
+   "type": "Strength",
+   "equipment": "Kettlebell",
+   "dose": {
+    "sets": "3",
+    "reps": "12–15",
+    "load": "",
+    "rest": "60 s",
+    "tempo": "",
+    "side": ""
+   },
+   "cues": [
+    "Hinge, don’t squat",
+    "Snap your hips forwards to swing the bell",
+    "Let the bell float to chest height"
+   ],
+   "instructions": ""
+  },
+  {
+   "id": "s-trap-bar-deadlift",
+   "name": "Trap-bar deadlift",
+   "aliases": [
+    "Hex bar deadlift",
+    "Trap bar DL"
+   ],
+   "areas": [
+    "Hamstring",
+    "Hip & groin",
+    "Whole body"
+   ],
+   "type": "Strength",
+   "equipment": "Trap bar",
+   "dose": {
+    "sets": "4",
+    "reps": "5–6",
+    "load": "",
+    "rest": "2–3 min",
+    "tempo": "",
+    "side": ""
+   },
+   "cues": [
+    "Stand in the middle of the bar, chest up",
+    "Push the floor away",
+    "Stand tall, then lower with control"
+   ],
+   "instructions": ""
+  },
+  {
+   "id": "s-hamstring-stretch",
+   "name": "Standing hamstring stretch",
+   "aliases": [
+    "Hamstring stretch",
+    "Ham stretch"
+   ],
+   "areas": [
+    "Hamstring"
+   ],
+   "type": "Mobility",
+   "equipment": "Low step or bench",
+   "dose": {
+    "sets": "3",
+    "reps": "30 s",
+    "load": "",
+    "rest": "",
+    "tempo": "",
+    "side": "Each side"
+   },
+   "cues": [
+    "Heel up on a low step, knee straight",
+    "Hinge forwards from your hips",
+    "Stop at a comfortable stretch"
+   ],
+   "instructions": ""
+  },
+  {
+   "id": "s-calf-raise",
+   "name": "Calf raise",
+   "aliases": [
+    "Double-leg calf raise",
+    "DL calf raise",
+    "Standing calf raise",
+    "Heel raise"
+   ],
+   "areas": [
+    "Calf & Achilles"
+   ],
+   "type": "Strength",
+   "equipment": "Step (optional)",
+   "dose": {
+    "sets": "3",
+    "reps": "15–20",
+    "load": "",
+    "rest": "60 s",
+    "tempo": "",
+    "side": ""
+   },
+   "cues": [
+    "Rise all the way up onto your toes",
+    "Pause at the top",
+    "Lower slowly"
+   ],
+   "instructions": ""
+  },
+  {
+   "id": "s-single-leg-calf-raise",
+   "name": "Single-leg calf raise",
+   "aliases": [
+    "SL calf raise",
+    "SL heel raise",
+    "Single-leg heel raise"
+   ],
+   "areas": [
+    "Calf & Achilles",
+    "Ankle & foot"
+   ],
+   "type": "Strength",
+   "equipment": "Step, wall for balance",
+   "dose": {
+    "sets": "3",
+    "reps": "15–25",
+    "load": "",
+    "rest": "60 s",
+    "tempo": "",
+    "side": "Each side"
+   },
+   "cues": [
+    "Fingertips on the wall for balance only",
+    "Rise as high as you can",
+    "Take 3 seconds to lower"
+   ],
+   "instructions": ""
+  },
+  {
+   "id": "s-seated-calf-raise",
+   "name": "Seated calf raise",
+   "aliases": [
+    "Soleus raise",
+    "Seated soleus raise"
+   ],
+   "areas": [
+    "Calf & Achilles"
+   ],
+   "type": "Strength",
+   "equipment": "Machine, or a dumbbell on the knee",
+   "dose": {
+    "sets": "3",
+    "reps": "12–15",
+    "load": "",
+    "rest": "60 s",
+    "tempo": "",
+    "side": ""
+   },
+   "cues": [
+    "Knees bent to 90°",
+    "Push up through the ball of the foot",
+    "Full range, pause at the top"
+   ],
+   "instructions": ""
+  },
+  {
+   "id": "s-bent-knee-calf-raise",
+   "name": "Bent-knee calf raise",
+   "aliases": [
+    "Standing soleus raise",
+    "Bent-knee heel raise"
+   ],
+   "areas": [
+    "Calf & Achilles"
+   ],
+   "type": "Strength",
+   "equipment": "Step or wall",
+   "dose": {
+    "sets": "3",
+    "reps": "15",
+    "load": "",
+    "rest": "60 s",
+    "tempo": "",
+    "side": "Each side"
+   },
+   "cues": [
+    "Keep your knee bent the whole time",
+    "Rise up through your big toe",
+    "Lower slowly"
+   ],
+   "instructions": ""
+  },
+  {
+   "id": "s-eccentric-heel-drop",
+   "name": "Eccentric heel drop",
+   "aliases": [
+    "Alfredson heel drop",
+    "Eccentric calf lowering",
+    "Heel drops"
+   ],
+   "areas": [
+    "Calf & Achilles"
+   ],
+   "type": "Strength",
+   "equipment": "Step",
+   "dose": {
+    "sets": "3",
+    "reps": "15",
+    "load": "",
+    "rest": "60 s",
+    "tempo": "",
+    "side": "Each side"
+   },
+   "cues": [
+    "Rise on both feet, then lower on one",
+    "Lower your heel slowly below the step",
+    "Use both feet to come back up"
+   ],
+   "instructions": ""
+  },
+  {
+   "id": "s-isometric-calf-raise",
+   "name": "Isometric calf raise hold",
+   "aliases": [
+    "Calf iso",
+    "Iso calf raise",
+    "Calf raise hold"
+   ],
+   "areas": [
+    "Calf & Achilles"
+   ],
+   "type": "Isometric",
+   "equipment": "Step or wall",
+   "dose": {
+    "sets": "5",
+    "reps": "30–45 s",
+    "load": "",
+    "rest": "60 s",
+    "tempo": "",
+    "side": "Each side"
+   },
+   "cues": [
+    "Rise to halfway and hold still",
+    "Strong but comfortable effort",
+    "Keep breathing"
+   ],
+   "instructions": ""
+  },
+  {
+   "id": "s-tibialis-raise",
+   "name": "Tibialis raise",
+   "aliases": [
+    "Tib raise",
+    "Toe raise"
+   ],
+   "areas": [
+    "Ankle & foot"
+   ],
+   "type": "Strength",
+   "equipment": "Wall",
+   "dose": {
+    "sets": "3",
+    "reps": "15–20",
+    "load": "",
+    "rest": "45 s",
+    "tempo": "",
+    "side": ""
+   },
+   "cues": [
+    "Lean your back against the wall",
+    "Lift your toes as high as you can",
+    "Lower slowly"
+   ],
+   "instructions": ""
+  },
+  {
+   "id": "s-knee-to-wall",
+   "name": "Knee-to-wall ankle mobility",
+   "aliases": [
+    "Knee to wall",
+    "Ankle dorsiflexion stretch"
+   ],
+   "areas": [
+    "Ankle & foot",
+    "Calf & Achilles"
+   ],
+   "type": "Mobility",
+   "equipment": "Wall",
+   "dose": {
+    "sets": "2",
+    "reps": "10",
+    "load": "",
+    "rest": "",
+    "tempo": "",
+    "side": "Each side"
+   },
+   "cues": [
+    "Keep your heel flat on the floor",
+    "Push your knee towards the wall",
+    "Knee goes over your second toe"
+   ],
+   "instructions": ""
+  },
+  {
+   "id": "s-calf-stretch",
+   "name": "Standing calf stretch",
+   "aliases": [
+    "Calf stretch",
+    "Gastroc stretch",
+    "Wall calf stretch"
+   ],
+   "areas": [
+    "Calf & Achilles"
+   ],
+   "type": "Mobility",
+   "equipment": "Wall",
+   "dose": {
+    "sets": "3",
+    "reps": "30 s",
+    "load": "",
+    "rest": "",
+    "tempo": "",
+    "side": "Each side"
+   },
+   "cues": [
+    "Back leg straight, heel down",
+    "Lean into the wall until you feel your calf",
+    "Hold without bouncing"
+   ],
+   "instructions": ""
+  },
+  {
+   "id": "s-single-leg-balance",
+   "name": "Single-leg balance",
+   "aliases": [
+    "SL balance",
+    "SL stance",
+    "Single-leg stance"
+   ],
+   "areas": [
+    "Ankle & foot",
+    "Knee"
+   ],
+   "type": "Balance & control",
+   "equipment": "Cushion (optional)",
+   "dose": {
+    "sets": "3",
+    "reps": "30 s",
+    "load": "",
+    "rest": "",
+    "tempo": "",
+    "side": "Each side"
+   },
+   "cues": [
+    "Stand tall on one leg",
+    "Soft knee, toes relaxed",
+    "Make it harder by closing your eyes or standing on a cushion"
+   ],
+   "instructions": ""
+  },
+  {
+   "id": "s-star-excursion",
+   "name": "Star excursion reach",
+   "aliases": [
+    "Y balance reach",
+    "Star excursion balance",
+    "SEBT"
+   ],
+   "areas": [
+    "Ankle & foot",
+    "Knee",
+    "Hip & groin"
+   ],
+   "type": "Balance & control",
+   "equipment": "Tape marks on the floor (optional)",
+   "dose": {
+    "sets": "3",
+    "reps": "5",
+    "load": "",
+    "rest": "45 s",
+    "tempo": "",
+    "side": "Each side"
+   },
+   "cues": [
+    "Balance on one leg with a slight knee bend",
+    "Reach forwards, sideways and back, 5 times each",
+    "Tap lightly and come back to the middle"
+   ],
+   "instructions": ""
+  },
+  {
+   "id": "s-short-foot",
+   "name": "Short foot",
+   "aliases": [
+    "Foot doming",
+    "Arch lift"
+   ],
+   "areas": [
+    "Ankle & foot"
+   ],
+   "type": "Strength",
+   "equipment": "",
+   "dose": {
+    "sets": "3",
+    "reps": "10 × 5 s",
+    "load": "",
+    "rest": "",
+    "tempo": "",
+    "side": ""
+   },
+   "cues": [
+    "Keep your toes long and relaxed",
+    "Draw the ball of your foot towards your heel",
+    "Hold the arch, then relax"
+   ],
+   "instructions": ""
+  },
+  {
+   "id": "s-resisted-ankle-eversion",
+   "name": "Resisted ankle eversion",
+   "aliases": [
+    "Band eversion",
+    "TB eversion",
+    "Ankle eversion with band"
+   ],
+   "areas": [
+    "Ankle & foot"
+   ],
+   "type": "Strength",
+   "equipment": "Band",
+   "dose": {
+    "sets": "3",
+    "reps": "15",
+    "load": "",
+    "rest": "45 s",
+    "tempo": "",
+    "side": "Each side"
+   },
+   "cues": [
+    "Band around the outside of your foot",
+    "Turn your foot out against the band",
+    "Keep your knee still"
+   ],
+   "instructions": ""
+  },
+  {
+   "id": "s-pogo-hops",
+   "name": "Pogo hops",
+   "aliases": [
+    "Pogos",
+    "Pogo",
+    "Ankle hops"
+   ],
+   "areas": [
+    "Calf & Achilles",
+    "Ankle & foot"
+   ],
+   "type": "Plyometric",
+   "equipment": "",
+   "dose": {
+    "sets": "3",
+    "reps": "20",
+    "load": "",
+    "rest": "60 s",
+    "tempo": "",
+    "side": ""
+   },
+   "cues": [
+    "Quick, springy ankles",
+    "Stay tall with almost straight knees",
+    "Land softly and bounce straight back up"
+   ],
+   "instructions": ""
+  },
+  {
+   "id": "s-squat-jump",
+   "name": "Squat jump",
+   "aliases": [
+    "Jump squat",
+    "Countermovement jump"
+   ],
+   "areas": [
+    "Knee",
+    "Hip & groin",
+    "Whole body"
+   ],
+   "type": "Plyometric",
+   "equipment": "",
+   "dose": {
+    "sets": "3",
+    "reps": "5–8",
+    "load": "",
+    "rest": "90 s",
+    "tempo": "",
+    "side": ""
+   },
+   "cues": [
+    "Dip quickly, then jump as high as you can",
+    "Land softly with knees over toes",
+    "Reset before the next jump"
+   ],
+   "instructions": ""
+  },
+  {
+   "id": "s-box-jump",
+   "name": "Box jump",
+   "aliases": [],
+   "areas": [
+    "Knee",
+    "Hip & groin",
+    "Whole body"
+   ],
+   "type": "Plyometric",
+   "equipment": "Box",
+   "dose": {
+    "sets": "3",
+    "reps": "5",
+    "load": "",
+    "rest": "90 s",
+    "tempo": "",
+    "side": ""
+   },
+   "cues": [
+    "Swing your arms and jump up onto the box",
+    "Land softly in a half squat",
+    "Step down, don’t jump down"
+   ],
+   "instructions": ""
+  },
+  {
+   "id": "s-drop-landing",
+   "name": "Drop landing",
+   "aliases": [
+    "Snap down",
+    "Drop and stick",
+    "Landing drill"
+   ],
+   "areas": [
+    "Knee",
+    "Ankle & foot"
+   ],
+   "type": "Plyometric",
+   "equipment": "Low box",
+   "dose": {
+    "sets": "3",
+    "reps": "5",
+    "load": "",
+    "rest": "60 s",
+    "tempo": "",
+    "side": ""
+   },
+   "cues": [
+    "Step off the box, don’t jump",
+    "Land on both feet and freeze",
+    "Knees over toes, hips back"
+   ],
+   "instructions": ""
+  },
+  {
+   "id": "s-single-leg-hop-and-stick",
+   "name": "Single-leg hop and stick",
+   "aliases": [
+    "SL hop and hold",
+    "Hop and stick",
+    "SL hop and stick"
+   ],
+   "areas": [
+    "Knee",
+    "Ankle & foot"
+   ],
+   "type": "Plyometric",
+   "equipment": "",
+   "dose": {
+    "sets": "3",
+    "reps": "5",
+    "load": "",
+    "rest": "60 s",
+    "tempo": "",
+    "side": "Each side"
+   },
+   "cues": [
+    "Hop forwards and land on the same leg",
+    "Hold the landing for 2 seconds",
+    "Knee lines up over your toes"
+   ],
+   "instructions": ""
+  },
+  {
+   "id": "s-lateral-bound",
+   "name": "Lateral bound",
+   "aliases": [
+    "Skater jump",
+    "Skaters",
+    "Lateral hop"
+   ],
+   "areas": [
+    "Hip & groin",
+    "Knee",
+    "Ankle & foot"
+   ],
+   "type": "Plyometric",
+   "equipment": "",
+   "dose": {
+    "sets": "3",
+    "reps": "6",
+    "load": "",
+    "rest": "60 s",
+    "tempo": "",
+    "side": "Each side"
+   },
+   "cues": [
+    "Push off sideways from one leg",
+    "Land softly on the other leg and hold",
+    "Keep your knee in line with your toes"
+   ],
+   "instructions": ""
+  },
+  {
+   "id": "s-a-skips",
+   "name": "A-skips",
+   "aliases": [
+    "A skip"
+   ],
+   "areas": [
+    "Whole body"
+   ],
+   "type": "Running drill",
+   "equipment": "",
+   "dose": {
+    "sets": "3",
+    "reps": "20 m",
+    "load": "",
+    "rest": "Walk back",
+    "tempo": "",
+    "side": ""
+   },
+   "cues": [
+    "Drive one knee up as the other foot pushes down",
+    "Stay tall on the balls of your feet",
+    "Opposite arm drives with the knee"
+   ],
+   "instructions": ""
+  },
+  {
+   "id": "s-wall-drill",
+   "name": "Wall drive drill",
+   "aliases": [
+    "Wall drill",
+    "Wall march",
+    "Acceleration wall drill"
+   ],
+   "areas": [
+    "Whole body"
+   ],
+   "type": "Running drill",
+   "equipment": "Wall",
+   "dose": {
+    "sets": "3",
+    "reps": "10",
+    "load": "",
+    "rest": "60 s",
+    "tempo": "",
+    "side": "Each side"
+   },
+   "cues": [
+    "Lean into the wall from your ankles",
+    "Drive one knee up, then switch quickly",
+    "Keep a straight line from head to heel"
+   ],
+   "instructions": ""
+  },
+  {
+   "id": "s-tempo-run",
+   "name": "Tempo runs",
+   "aliases": [
+    "Tempo run",
+    "Tempos"
+   ],
+   "areas": [
+    "Whole body"
+   ],
+   "type": "Conditioning",
+   "equipment": "Field or track",
+   "dose": {
+    "sets": "8",
+    "reps": "100 m",
+    "load": "About 70% effort",
+    "rest": "Walk back",
+    "tempo": "",
+    "side": ""
+   },
+   "cues": [
+    "Run at a smooth, comfortable pace",
+    "Relaxed shoulders and hands",
+    "Walk back between efforts"
+   ],
+   "instructions": ""
+  },
+  {
+   "id": "s-exercise-bike",
+   "name": "Exercise bike",
+   "aliases": [
+    "Bike",
+    "Stationary bike",
+    "Cycling"
+   ],
+   "areas": [
+    "Whole body",
+    "Knee"
+   ],
+   "type": "Conditioning",
+   "equipment": "Exercise bike",
+   "dose": {
+    "sets": "1",
+    "reps": "10–20 min",
+    "load": "Easy to moderate",
+    "rest": "",
+    "tempo": "",
+    "side": ""
+   },
+   "cues": [
+    "Seat high enough for a slight knee bend at the bottom",
+    "Steady, comfortable effort",
+    "Build up the time before the resistance"
+   ],
+   "instructions": ""
+  },
+  {
+   "id": "s-front-plank",
+   "name": "Front plank",
+   "aliases": [
+    "Plank",
+    "Prone plank",
+    "Prone bridge"
+   ],
+   "areas": [
+    "Trunk"
+   ],
+   "type": "Isometric",
+   "equipment": "Mat",
+   "dose": {
+    "sets": "3",
+    "reps": "30–45 s",
+    "load": "",
+    "rest": "45 s",
+    "tempo": "",
+    "side": ""
+   },
+   "cues": [
+    "Elbows under your shoulders",
+    "Straight line from head to heels",
+    "Breathe normally"
+   ],
+   "instructions": ""
+  },
+  {
+   "id": "s-dead-bug",
+   "name": "Dead bug",
+   "aliases": [],
+   "areas": [
+    "Trunk"
+   ],
+   "type": "Balance & control",
+   "equipment": "Mat",
+   "dose": {
+    "sets": "3",
+    "reps": "10",
+    "load": "",
+    "rest": "45 s",
+    "tempo": "",
+    "side": ""
+   },
+   "cues": [
+    "Press your lower back gently into the floor",
+    "Slowly reach the opposite arm and leg away",
+    "Breathe out as you reach"
+   ],
+   "instructions": ""
+  },
+  {
+   "id": "s-bird-dog",
+   "name": "Bird dog",
+   "aliases": [
+    "Quadruped arm and leg raise"
+   ],
+   "areas": [
+    "Trunk"
+   ],
+   "type": "Balance & control",
+   "equipment": "Mat",
+   "dose": {
+    "sets": "3",
+    "reps": "10",
+    "load": "",
+    "rest": "45 s",
+    "tempo": "",
+    "side": ""
+   },
+   "cues": [
+    "Hands under shoulders, knees under hips",
+    "Reach the opposite arm and leg out long",
+    "Keep your back still, like a table top"
+   ],
+   "instructions": ""
+  },
+  {
+   "id": "s-pallof-press",
+   "name": "Pallof press",
+   "aliases": [
+    "Anti-rotation press"
+   ],
+   "areas": [
+    "Trunk"
+   ],
+   "type": "Isometric",
+   "equipment": "Band or cable",
+   "dose": {
+    "sets": "3",
+    "reps": "10",
+    "load": "",
+    "rest": "45 s",
+    "tempo": "",
+    "side": "Each side"
+   },
+   "cues": [
+    "Stand side-on to the band’s anchor",
+    "Press the band straight out from your chest",
+    "Don’t let your body twist"
+   ],
+   "instructions": ""
+  },
+  {
+   "id": "s-suitcase-carry",
+   "name": "Suitcase carry",
+   "aliases": [
+    "Single-arm carry",
+    "One-arm farmer carry"
+   ],
+   "areas": [
+    "Trunk",
+    "Whole body"
+   ],
+   "type": "Strength",
+   "equipment": "Kettlebell or dumbbell",
+   "dose": {
+    "sets": "3",
+    "reps": "20–30 m",
+    "load": "",
+    "rest": "60 s",
+    "tempo": "",
+    "side": "Each side"
+   },
+   "cues": [
+    "Weight in one hand, stand tall",
+    "Don’t lean towards or away from the weight",
+    "Walk with steady, even steps"
+   ],
+   "instructions": ""
+  },
+  {
+   "id": "s-open-book",
+   "name": "Open book thoracic rotation",
+   "aliases": [
+    "Open book",
+    "Thoracic rotation",
+    "T-spine rotation"
+   ],
+   "areas": [
+    "Trunk"
+   ],
+   "type": "Mobility",
+   "equipment": "Mat",
+   "dose": {
+    "sets": "2",
+    "reps": "10",
+    "load": "",
+    "rest": "",
+    "tempo": "",
+    "side": "Each side"
+   },
+   "cues": [
+    "Lie on your side with your knees bent",
+    "Open your top arm across like a book",
+    "Follow your hand with your eyes"
+   ],
+   "instructions": ""
+  },
+  {
+   "id": "s-push-up",
+   "name": "Push-up",
+   "aliases": [
+    "Push-ups",
+    "Press-up",
+    "Press-ups"
+   ],
+   "areas": [
+    "Shoulder & arm",
+    "Trunk"
+   ],
+   "type": "Strength",
+   "equipment": "Body weight",
+   "dose": {
+    "sets": "3",
+    "reps": "8–15",
+    "load": "",
+    "rest": "60 s",
+    "tempo": "",
+    "side": ""
+   },
+   "cues": [
+    "Hands just wider than your shoulders",
+    "Body in one straight line",
+    "Lower your chest to just above the floor"
+   ],
+   "instructions": ""
+  },
+  {
+   "id": "s-single-arm-dumbbell-row",
+   "name": "Single-arm dumbbell row",
+   "aliases": [
+    "DB row",
+    "One-arm row",
+    "Bent-over row"
+   ],
+   "areas": [
+    "Shoulder & arm"
+   ],
+   "type": "Strength",
+   "equipment": "Dumbbell and bench",
+   "dose": {
+    "sets": "3",
+    "reps": "10",
+    "load": "",
+    "rest": "60 s",
+    "tempo": "",
+    "side": "Each side"
+   },
+   "cues": [
+    "Flat back, hand and knee on the bench",
+    "Pull the dumbbell towards your hip",
+    "Lower slowly"
+   ],
+   "instructions": ""
+  },
+  {
+   "id": "s-external-rotation",
+   "name": "Band external rotation",
+   "aliases": [
+    "Shoulder ER",
+    "ER with band",
+    "External rotation"
+   ],
+   "areas": [
+    "Shoulder & arm"
+   ],
+   "type": "Strength",
+   "equipment": "Band",
+   "dose": {
+    "sets": "3",
+    "reps": "12–15",
+    "load": "Light band",
+    "rest": "45 s",
+    "tempo": "",
+    "side": "Each side"
+   },
+   "cues": [
+    "Elbow tucked into your side",
+    "Rotate your hand outwards against the band",
+    "Slowly return"
+   ],
+   "instructions": ""
+  },
+  {
+   "id": "s-dumbbell-shoulder-press",
+   "name": "Dumbbell shoulder press",
+   "aliases": [
+    "DB shoulder press",
+    "Overhead press"
+   ],
+   "areas": [
+    "Shoulder & arm"
+   ],
+   "type": "Strength",
+   "equipment": "Dumbbells",
+   "dose": {
+    "sets": "3",
+    "reps": "8–10",
+    "load": "",
+    "rest": "90 s",
+    "tempo": "",
+    "side": ""
+   },
+   "cues": [
+    "Ribs down, trunk braced",
+    "Press straight up overhead",
+    "Lower to shoulder height under control"
+   ],
+   "instructions": ""
+  }
+ ]
+}
