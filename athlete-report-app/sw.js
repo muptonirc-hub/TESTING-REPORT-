@@ -4,8 +4,8 @@
    falling back to the saved copy when offline or when the network takes longer than 4 seconds.
    Google's endpoints (the clinic store, v13) and the exercise videos (YouTube, Vimeo, v15) are on other origins, so they are
    never cached or intercepted here. */
-var CACHE = 'bh-athlete-report-v19';
-var FILES = ['./', 'index.html', 'app.js?v=19', 'engine.js?v=19', 'qrcode.js?v=19', 'report.js?v=19', 'report-fonts.js?v=19', 'jspdf.umd.min.js?v=19', 'cloud-config.js?v=19', 'cloud.js?v=19',
+var CACHE = 'bh-athlete-report-v20';
+var FILES = ['./', 'index.html', 'app.js?v=20', 'engine.js?v=20', 'qrcode.js?v=20', 'report.js?v=20', 'report-fonts.js?v=20', 'jspdf.umd.min.js?v=20', 'cloud-config.js?v=20', 'cloud.js?v=20',
   'norms.json', 'strength_norms.json', 'hamstring_norms.json', 'acl_norms.json', 'interpretation.json', 'explainers.json', 'exercise_library.json', 'manifest.webmanifest',
   'icon-192.png', 'icon-512.png', 'icon-maskable-512.png', 'apple-touch-icon.png', 'rajdhani-600.woff2', 'rajdhani-700.woff2'];
 

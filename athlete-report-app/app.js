@@ -24,7 +24,7 @@
   var $ = function (id) { return document.getElementById(id); };
   var els = {
     entry: $('entry'), summary: $('summary'), dock: $('dock'), sheet: $('sheet'), pages: $('pages'),
-    sheetTitle: $('sheetTitle'), share: $('sharePdf'), save: $('savePdf'), back: $('sheetBack'),
+    sheetTitle: $('sheetTitle'), share: $('sharePdf'), save: $('savePdf'), back: $('sheetBack'), sheetEx: $('sheetEx'), sheetExBtn: $('sheetExBtn'),
     // v16: Return home in the report view, and the check it asks when some entries aren't in a client record
     home: $('homeBtn'), homeLabel: $('homeLabel'), homeDialog: $('homeDialog'), homeList: $('homeList'), homeKeep: $('homeKeep'), homeClear: $('homeClear'),
     toast: $('toast'), clearAll: $('clearAll'), clearDialog: $('clearDialog'), clearList: $('clearList'),
@@ -1453,7 +1453,9 @@
         : c.radarPicked.length <= 4 ? 'Bars on the report; pick 5 or 6 for a radar.' : 'A radar on the report; pick 3 or 4 for bars.') + '</p>';
     }
     var why = blocker(c);
-    html += '</div><div class="sum-foot">' + checkFlagHtml() + interpFlagHtml(t, c) + exLinkHtml(t) + '<button type="button" class="primary make" data-action="report"' + (why ? ' disabled' : '') + '>Create report</button>' +
+    // v20: with its program linked (and exercises in it) the button says the PDF holds both, in the dock too
+    var make = linkedTool() === t && exCounts().exercises > 0 ? 'Create report + exercises' : 'Create report';
+    html += '</div><div class="sum-foot">' + checkFlagHtml() + interpFlagHtml(t, c) + exLinkHtml(t) + '<button type="button" class="primary make" data-action="report"' + (why ? ' disabled' : '') + '>' + make + '</button>' +
       '<p class="fine">' + esc(why || 'Preview, then share or save.') + '</p>' +
       '<p class="fine client-line">' + esc(clientLine(t)) + '</p></div></div>';
     els.summary.innerHTML = html;
@@ -1464,8 +1466,9 @@
       return '<a href="#summary" class="' + x[0] + (n ? ' on' : '') + '" aria-label="' + esc(labels[x[2]] + ': ' + n) + '">' + statusIcon(x[1]) + n + '</a>';
     }).join('') + '</div>' +
       (nCheck ? '<button type="button" class="dock-check" data-action="goto-check">' + statusIcon('Amber') + nCheck + (nCheck === 1 ? ' value to check' : ' values to check') + '</button>' : '') +
-      '<button type="button" class="primary" data-action="report"' + (why ? ' disabled' : '') + '>Create report</button>';
+      '<button type="button" class="primary" data-action="report"' + (why ? ' disabled' : '') + '>' + dockMake(make) + '</button>';
     els.dock.classList.toggle('has-check', nCheck > 0);   // on a phone the check takes the tally's place (the tally stays in the summary)
+    els.dock.classList.toggle('has-both', make !== 'Create report');   // v20: on the narrowest phones the button takes the tally's place
   }
 
   // ------------------------------------------------------------------ input handling
@@ -1794,6 +1797,10 @@
       x.link = moved; followReport(); render(); saveDraft();
     } });
   }
+  // v20: the dock's 'Create report + exercises' is 'Report + exercises' on a narrow phone (the tally keeps its room)
+  function dockMake(label) {
+    return label === 'Create report + exercises' ? '<span class="mk-full">' + label + '</span><span class="mk-short">Report + exercises</span>' : label;
+  }
   function gotoProgram() {                             // ✓ Exercise program included: to the builder
     closePick(false);
     state.exPage = 'builder';
@@ -1875,6 +1882,12 @@
     }
     homeFrom = { tool: both || t, name: saved && saved.ok ? saved.name : '', saved: !!(saved && saved.ok) };
     els.back.textContent = '‹ ' + (ex ? 'Back to the program' : 'Back to results');
+    // v20: a Screening report made without a program: the report view offers one too (where Matthew looked for it once
+    // the report was made); the program then prints after this report, in the same PDF
+    var offer = !ex && !both ? t : '';
+    els.sheetEx.hidden = !offer;
+    els.sheetEx.dataset.tool = offer;
+    if (offer) $('sheetExQ').textContent = 'Exercises for this ' + person(offer) + '?';   // athlete on the Performance screen (v9 wording)
     current = { file: null, blob: null, title: built.rep.title };
     els.sheetTitle.innerHTML = esc(built.rep.title) + '<small>' + esc(built.file) + '</small>';
     els.pages.innerHTML = '<p class="sheet-msg">Building the report…</p>';
@@ -1908,6 +1921,13 @@
   function closeReport() {
     els.sheet.hidden = true;
     document.documentElement.style.overflow = '';
+  }
+  function addProgramFromReport() {                    // v20: the report view's Add exercise program
+    var t = els.sheetEx.dataset.tool;
+    if (TOOLS.indexOf(t) < 0 || els.sheet.hidden) return;
+    closeReport();
+    if (state.tool !== t) switchTool(t);
+    linkProgram(t);
   }
   function downloadBlob(blob, name) {
     var url = URL.createObjectURL(blob);
@@ -2499,15 +2519,16 @@
   }
   // the summary's interpretation line. v18: 'Add an AI interpretation' drafts straight away (until v17 it scrolled down to
   // a second button); it shows once there is something to interpret, and says when a draft is under way or didn't work
-  // v19: the exercise program on a report's summary: Add an exercise program (once the page has a name), or while
-  // linked, Exercise program included (a tap opens it in the builder)
+  // v19: the exercise program on a report's summary: Add an exercise program (once the page has a name, v20: or
+  // results), or while linked, Exercise program included (a tap opens it in the builder)
   function exLinkHtml(t) {
     if (linkedTool() === t) {
       var n = exCounts().exercises;
-      return n ? '<button type="button" class="quiet ex-flag ok" data-action="goto-program">✓ Exercise program included · ' + n + (n === 1 ? ' exercise' : ' exercises') + '</button>'
+      // v20: '· 4 exercises' kept together when the line wraps on a narrow phone
+      return n ? '<button type="button" class="quiet ex-flag ok" data-action="goto-program"><span>✓ Exercise program included <span class="nw">· ' + n + (n === 1 ? ' exercise' : ' exercises') + '</span></span></button>'
         : '<button type="button" class="quiet ex-flag stale" data-action="goto-program">' + EX_ICON + 'Exercise program: no exercises yet</button>';
     }
-    if (blank(state[t].meta.name)) return '';
+    if (blank(state[t].meta.name) && !hasResults(t)) return '';   // v20: results without a name yet count too
     return '<button type="button" class="quiet ex-flag" data-action="add-program">' + EX_ICON + 'Add an exercise program</button>';
   }
   function interpFlagHtml(t, c) {
@@ -3347,8 +3368,8 @@
       '<p class="fine client-line">' + esc(clientLine('ex')) + '</p></div></div>';
     els.dock.innerHTML = '<div class="dt"><span class="ex-dock"><b>' + c.exercises + '</b> ' + (c.exercises === 1 ? 'exercise' : 'exercises') +
       (c.sections ? ' · <b>' + c.sections + '</b> ' + (c.sections === 1 ? 'section' : 'sections') : '') + '</span></div>' +
-      '<button type="button" class="primary" data-action="report"' + (why ? ' disabled' : '') + '>' + make + '</button>';
-    els.dock.classList.remove('has-check');
+      '<button type="button" class="primary" data-action="report"' + (why ? ' disabled' : '') + '>' + dockMake(make) + '</button>';
+    els.dock.classList.remove('has-check', 'has-both');
   }
 
   // ---- editing
@@ -3991,7 +4012,7 @@
       '</div><div class="sum-foot"><button type="button" class="ghost make" data-action="lib-new" aria-haspopup="dialog">+ New exercise</button></div></div>';
     els.dock.innerHTML = '<div class="dt"><span class="ex-dock"><b>' + c.n + '</b> ' + (c.n === 1 ? 'exercise' : 'exercises') + '</span></div>' +
       '<button type="button" class="primary" data-action="lib-new" aria-haspopup="dialog">+ New exercise</button>';
-    els.dock.classList.remove('has-check');
+    els.dock.classList.remove('has-check', 'has-both');
   }
 
   // ---- the editor (#libDialog): New exercise / Edit exercise
@@ -4386,7 +4407,7 @@
       '<div class="sum-foot"><button type="button" class="ghost make" data-action="tpl-builder">Open the builder</button></div></div>';
     els.dock.innerHTML = '<div class="dt"><span class="ex-dock"><b>' + n + '</b> ' + (n === 1 ? 'template' : 'templates') + '</span></div>' +
       '<button type="button" class="ghost" data-action="tpl-builder">Open the builder</button>';
-    els.dock.classList.remove('has-check');
+    els.dock.classList.remove('has-check', 'has-both');
   }
   function afterTplChange() {
     if (state.tool === 'ex' && state.exPage === 'templates') renderTplList();
@@ -5430,6 +5451,10 @@
       });
       wireExDialogs();                                 // v15: the library editor, + From library, the video player, templates
       els.back.addEventListener('click', closeReport);
+      els.sheetExBtn.addEventListener('click', addProgramFromReport);   // v20
+      // v20: the version running, at the foot of the ⋯ menu (from app.js's own ?v= in index.html)
+      var appScript = document.querySelector('script[src*="app.js"]'), appV = appScript && /[?&]v=(\d+)/.exec(appScript.getAttribute('src') || '');
+      if ($('menuVer')) $('menuVer').textContent = 'BASE Health Report' + (appV ? ' · version ' + appV[1] : '');
       els.save.addEventListener('click', savePdf);
       els.share.addEventListener('click', sharePdf);
       els.home.addEventListener('click', onHome);      // v16: Return home, and its check when some entries aren't saved

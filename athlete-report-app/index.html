@@ -147,6 +147,7 @@ button { cursor: pointer; }
 .menu-item:focus-visible { outline-offset: -3px; }
 .menu-item.menu-danger, .menu-item.menu-danger svg { color: var(--red-ink); }
 .menu-sep { height: 1px; margin: 4px 8px; background: var(--line); }
+.menu-ver { padding: 6px 12px 4px; font-size: 12.5px; color: var(--muted); white-space: nowrap; }   /* v20 */
 /* v13: the account line at the top of the menu (cloud mode) */
 .menu-account { padding: 8px 12px 6px; font-size: 13px; line-height: 1.35; color: var(--muted); white-space: normal; overflow-wrap: anywhere; max-width: 320px; }
 .menu-account b { color: var(--fg); font-weight: 650; }
@@ -555,6 +556,13 @@ html.signed-out .workspace, html.signed-out .dock, html.signed-out .tools, html.
 .pages svg { width: 100%; max-width: 860px; height: auto; background: #fff; border-radius: 4px; box-shadow: 0 2px 10px rgba(0, 0, 0, .16); }
 .pages svg text { font-kerning: none; }
 .sheet-msg { max-width: 560px; margin: 40px auto; text-align: center; color: var(--muted); }
+/* v20: the report view's offer of an exercise program (a Screening report made without one) */
+.sheet-ex { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 16px; max-width: 860px; margin: 0 auto 18px; padding: 12px 12px 12px 16px;
+  border: 1px solid color-mix(in srgb, var(--teal) 30%, var(--line)); border-radius: 12px; background: color-mix(in srgb, var(--teal) 7%, var(--surface)); }
+.sheet-ex p { flex: 1 1 280px; display: flex; align-items: flex-start; gap: 10px; margin: 0; font-size: 15px; line-height: 1.4; color: var(--fg); }
+.sheet-ex p svg { flex: none; margin-top: 1px; color: var(--teal-ink); }
+.sheet-ex b { font-weight: 700; }
+.sheet-ex button { flex: none; min-height: 44px; background: var(--surface); }
 
 .toast {
   position: fixed; left: 50%; bottom: calc(24px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%);
@@ -684,6 +692,8 @@ p.interp-flag { display: flex; align-items: center; justify-content: center; col
 .interp-flag.stale, .ex-flag.stale { color: var(--amber-ink); }
 /* v19: the report and the exercise program together (a report's summary line; the builder's linked panel) */
 .ex-flag svg { flex: none; }
+.ex-flag { white-space: normal; text-align: center; line-height: 1.3; }   /* v20: a long line wraps on a narrow phone */
+.ex-flag .nw { white-space: nowrap; }
 .sum-foot .interp-flag + .ex-flag { margin-top: -6px; }   /* the AI line and the exercise line, one under the other */
 .ex-link { margin: 4px 0 10px; padding: 10px 12px 6px; border: 1px solid color-mix(in srgb, var(--teal) 30%, var(--line)); border-radius: 12px; background: color-mix(in srgb, var(--teal) 7%, var(--surface)); }
 .ex-linkline { display: flex; align-items: flex-start; gap: 8px; margin: 0; font-size: 14px; font-weight: 600; line-height: 1.35; color: var(--fg); }
@@ -896,6 +906,9 @@ html.row-dragging, html.row-dragging * { cursor: grabbing !important; user-selec
 .ex-colsline { margin: 0; font-size: 14px; font-weight: 650; }
 .dock .ex-dock { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14.5px; color: var(--fg); }
 .dock .ex-dock b { font-variant-numeric: tabular-nums; }
+.dock .mk-short { display: none; }                   /* v20: 'Report + exercises' on a narrow phone */
+@media (max-width: 440px) { .dock .mk-full { display: none; } .dock .mk-short { display: inline; } }
+@media (max-width: 359px) { .dock.has-both .dt { display: none; } .dock.has-both .primary { flex: 1; } }   /* the tally stays in the summary */
 
 /* ---------- v15: the Exercises tab's library and templates pages, and the builder's library links */
 /* chips: the library's filters (All + one body area, Has video, Drafts to check) and the editor's body areas */
@@ -1200,6 +1213,9 @@ html.row-dragging, html.row-dragging * { cursor: grabbing !important; user-selec
         <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19h16M7 16V10M12 16V6M17 16v-4"/></svg>
         <span>Show example results</span>
       </button>
+      <!-- v20: the version running (app.js fills it in from its own ?v=), so an update can be seen to have arrived -->
+      <div class="menu-sep" role="separator"></div>
+      <div class="menu-ver" id="menuVer" role="presentation"></div>
     </div>
   </div>
 </header>
@@ -1251,7 +1267,15 @@ html.row-dragging, html.row-dragging * { cursor: grabbing !important; user-selec
       </button>
     </div>
   </div>
-  <div class="sheet-body"><div class="pages" id="pages"></div></div>
+  <div class="sheet-body">
+    <!-- v20: a Screening report made without a program: add one here; it prints after the report, in the same PDF -->
+    <div class="sheet-ex" id="sheetEx" hidden>
+      <p><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="4.5" width="14" height="16.5" rx="2"/><path d="M9 3h6v3H9zM9 11h6M9 15h4"/></svg>
+        <span><b id="sheetExQ">Exercises for this patient?</b> Add a program and it prints after this report, in the same PDF.</span></p>
+      <button class="ghost" id="sheetExBtn" type="button">Add exercise program</button>
+    </div>
+    <div class="pages" id="pages"></div>
+  </div>
 </div>
 
 <!-- v16: Return home found entries that aren't in a client record (another tool, or a report without a name) -->
@@ -1513,13 +1537,13 @@ html.row-dragging, html.row-dragging * { cursor: grabbing !important; user-selec
 
 <div class="toast" id="toast" role="status" hidden></div>
 
-<script src="engine.js?v=19" defer></script>
-<script src="report-fonts.js?v=19" defer></script>
-<script src="jspdf.umd.min.js?v=19" defer></script>
-<script src="qrcode.js?v=19" defer></script>
-<script src="report.js?v=19" defer></script>
-<script src="cloud-config.js?v=19" defer></script>
-<script src="cloud.js?v=19" defer></script>
-<script src="app.js?v=19" defer></script>
+<script src="engine.js?v=20" defer></script>
+<script src="report-fonts.js?v=20" defer></script>
+<script src="jspdf.umd.min.js?v=20" defer></script>
+<script src="qrcode.js?v=20" defer></script>
+<script src="report.js?v=20" defer></script>
+<script src="cloud-config.js?v=20" defer></script>
+<script src="cloud.js?v=20" defer></script>
+<script src="app.js?v=20" defer></script>
 </body>
 </html>
