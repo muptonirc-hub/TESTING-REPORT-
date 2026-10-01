@@ -33,8 +33,9 @@
     aiKeyState: $('aiKeyState'), aiErr: $('aiErr'), aiLead: $('aiLead'),
     clientsBtn: $('clientsBtn'), clientsDialog: $('clientsDialog'), clientsList: $('clientsList'), clientsSummary: $('clientsSummary'),
     clientsBackup: $('clientsBackup'), clientsRestore: $('clientsRestore'), clientsClose: $('clientsClose'),
-    clientsTitle: $('clientsTitle'), clientsSearch: $('clientsSearch'), clientsSearchWrap: $('clientsSearchWrap'), clientsNew: $('clientsNew'), clientsFine: $('clientsFine'),
+    clientsEdit: $('clientsEdit'), clientsTitle: $('clientsTitle'), clientsSearch: $('clientsSearch'), clientsSearchWrap: $('clientsSearchWrap'), clientsNew: $('clientsNew'), clientsFine: $('clientsFine'),
     moreBtn: $('moreBtn'), moreMenu: $('moreMenu'), restoreItem: $('restoreItem'), aiItem: $('aiItem'), appbar: document.querySelector('.appbar'),
+    demoItem: $('demoItem'), demoSep: $('demoSep'),
     testsDialog: $('testsDialog'), testsLead: $('testsLead'), testsList: $('testsList'), testsAll: $('testsAll'), testsNone: $('testsNone'), testsDone: $('testsDone'),
     // v13: the clinic store's sign-in card, status bar and dialogs
     cloudBar: $('cloudBar'), signin: $('signin'), signinForm: $('signinForm'), signinEmail: $('signinEmail'), signinPassword: $('signinPassword'), signinShow: $('signinShow'),
@@ -157,9 +158,11 @@
   }
   function tidyState() {
     var H = DATA.ham, A = DATA.acl;
-    if (H.phases.indexOf(state.ham.phase) < 0) state.ham.phase = H.phases[H.phases.length - 1];
-    if (A.phases.indexOf(state.acl.phase) < 0) state.acl.phase = A.phases[A.phases.length - 1];
-    if (A.sexes.indexOf(state.acl.sex) < 0) state.acl.sex = A.sexes[0];
+    // v18: the rehab phase and the ACL norm set are the clinician's choice, never assumed (until v17 a blank one became the
+    // last phase and the first norm set, so results were scored against targets nobody had picked)
+    if (H.phases.indexOf(state.ham.phase) < 0) state.ham.phase = null;
+    if (A.phases.indexOf(state.acl.phase) < 0) state.acl.phase = null;
+    if (A.sexes.indexOf(state.acl.sex) < 0) state.acl.sex = null;
     var pops = E.sportPopulations(DATA.screen);
     if (state.screen.pop !== 'general' && pops.indexOf(state.screen.pop) < 0) state.screen.pop = 'general';
     if (!state.str) state.str = freshTool('str');
@@ -175,6 +178,7 @@
       var ok = state[t].typoOk;
       if (!ok || typeof ok !== 'object' || Array.isArray(ok)) state[t].typoOk = {};
       state[t].onlyPrev = state[t].onlyPrev === true;
+      state[t].showPrev = state[t].showPrev === true;  // v18: + Add previous results was tapped
       // v8 batch B: the coach band (drafts from v7 and earlier have none)
       var co = state[t].coach;
       if (!co || typeof co !== 'object' || Array.isArray(co)) co = state[t].coach = freshCoach();
@@ -224,9 +228,16 @@
     var picked = (s.radar || E.radarDefault(opts)).filter(function (k) { return keys.indexOf(k) >= 0; }).slice(0, 6);
     return { pop: pop, groups: groups, byName: byName, counts: E.counts(groups), prios: E.priorities(groups), radarOptions: opts, radarPicked: picked };
   }
-  function rehabKey(tool) {
+  function rehabKey(tool) {                            // v18: '' until the phase (and for ACL the norm set) is chosen
     var s = state[tool];
+    if (!s.phase || (tool === 'acl' && !s.sex)) return '';
     return tool === 'acl' ? s.phase + '|' + s.sex : s.phase;
+  }
+  // v18: what still has to be chosen before a rehab tool can score anything ('' when nothing)
+  function rehabNeed(t) {
+    if (t !== 'ham' && t !== 'acl') return '';
+    var s = state[t], p = !s.phase, x = t === 'acl' && !s.sex;
+    return p && x ? 'Choose the rehab phase and norm set' : p ? 'Choose the rehab phase' : x ? 'Choose the norm set' : '';
   }
   function computeRehab(tool) {
     var s = state[tool], S = DATA[tool], key = rehabKey(tool), inputs = {};
@@ -237,7 +248,7 @@
         else inputs[m.name] = { result: E.parseInput(v.result), previous: E.parseInput(v.previous) };
       });
     });
-    var groups = E.buildRehabRows(inputs, key, S);
+    var groups = key ? E.buildRehabRows(inputs, key, S) : [];   // v18: nothing is scored before the norms are chosen
     var byName = {};
     E.flatten(groups).forEach(function (r) { byName[r.name] = r; });
     return { key: key, pnorms: S.norms[key] || {}, groups: groups, byName: byName, counts: E.counts(groups), prios: E.priorities(groups, 5), inputs: inputs };
@@ -345,16 +356,37 @@
       ? 'Scan exercise page: photos or screenshots of a handwritten exercise program, several pages at once'
       : 'Scan notes: photo of handwritten results or a VALD app screenshot') + '">';
   }
+  var DOC_ICON = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h6"/></svg>';
+  function scanLabel(t) { return t === 'ex' ? 'Scan exercise page' : t === 'screen' ? 'Photo of notes or a VALD screenshot' : 'Scan notes'; }
+  // v18: the Import results menu (Performance screen): opened from its button; a tap elsewhere, Escape or a choice closes it
+  function importMenu() { return $('importMenu'); }
+  function setImportMenu(open, focusBtn) {
+    var m = importMenu(), b = $('importBtn');
+    if (!m || !b) return;
+    m.hidden = !open;
+    b.setAttribute('aria-expanded', String(open));
+    if (open) focusQuiet(m.querySelector('.menu-item input'));   // the item's own file input (Return opens its picker)
+    else if (focusBtn) focusQuiet(b);
+  }
   var PEOPLE = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.6"/><path d="M5 20a7 7 0 0 1 14 0"/></svg>';
   // the head of the details card: Choose client (report tabs), Scan, Import VALD CSV (Screening) and Done (v11)
+  var IMPORT_LABEL = 'Import<span class="il-more"> results</span>';   // v18: just Import on a phone, so it shares a row with Choose client
   function cardHead(t, h2id) {
     var open = state[t].cardOpen !== false;
     var out = '<div class="card-head"><h2 id="' + h2id + '">' + (t === 'ex' ? 'Patient' : Person(t)) + '</h2><div class="head-actions">';
     out += '<button type="button" class="ghost choose-btn" data-action="choose-client" aria-haspopup="dialog">' + PEOPLE + 'Choose client</button>';   // v15: Exercises too
-    out += '<label class="ghost file-btn scan-btn" id="scanBtn" for="scanFiles">' + CAMERA + '<span data-label>' + (t === 'ex' ? 'Scan exercise page' : 'Scan notes') + '</span>' +
-      (open ? scanInputHtml(t) : '') + '</label>';
     if (t === 'screen') {
-      out += '<label class="ghost file-btn" for="valdFiles">Import VALD CSV<input id="valdFiles" type="file" accept=".csv,text/csv" multiple></label>';
+      // v18: one Import results menu: a photo of notes (or a VALD app screenshot), or a VALD CSV export. Each item is a
+      // label with its file input laid over it, so a tap lands on the input itself (as the buttons did)
+      out += '<div class="import-wrap"><button type="button" class="ghost import-btn" id="importBtn" data-action="import-menu" aria-haspopup="menu" aria-expanded="false" aria-controls="importMenu">' +
+        CAMERA + '<span data-label>' + IMPORT_LABEL + '</span><span class="chev-s" aria-hidden="true"></span></button>' +
+        '<div class="menu import-menu" id="importMenu" role="menu" aria-label="Import results" hidden>' +
+        '<label class="menu-item file-btn scan-btn" id="scanBtn" for="scanFiles" role="menuitem">' + CAMERA + '<span data-label>' + scanLabel(t) + '</span>' + (open ? scanInputHtml(t) : '') + '</label>' +
+        '<label class="menu-item file-btn" for="valdFiles" role="menuitem">' + DOC_ICON + '<span>VALD CSV export</span><input id="valdFiles" type="file" accept=".csv,text/csv" multiple></label>' +
+        '</div></div>';
+    } else {
+      out += '<label class="ghost file-btn scan-btn" id="scanBtn" for="scanFiles">' + CAMERA + '<span data-label>' + scanLabel(t) + '</span>' +
+        (open ? scanInputHtml(t) : '') + '</label>';
     }
     // Done last on the right (on a phone, beside the title)
     return out + '</div><button type="button" class="ghost done-btn" id="athleteDone" data-action="done-athlete"' + (essentials(t) ? '' : ' disabled') + '>Done</button></div>';
@@ -382,14 +414,14 @@
         field(t, 'doi', 'Date of injury', { type: 'date' }) + field(t, 'weeks', 'Weeks since injury', { mode: 'decimal' }) +
         field(t, 'clinician', 'Clinician', { words: true }) + field(t, 'sport', 'Sport', { words: true }) +
         field(t, 'notes', 'Notes', { cls: 'full' });
-      out += select('ham-phase', 'Rehab phase', DATA.ham.phases.map(function (p) { return [p, p]; }), s.phase, 'data-choice="phase"', 'wide');
+      out += select('ham-phase', 'Rehab phase', [['', 'Choose the phase…']].concat(DATA.ham.phases.map(function (p) { return [p, p]; })), s.phase || '', 'data-choice="phase"', 'wide');
     } else {
       out += field(t, 'name', Person(t) + ' name', { cls: 'wide', words: true }) + field(t, 'date', 'Test date', { type: 'date' }) +
         seg(t, 'injured', 'Injured side', ['Left', 'Right']) +
         field(t, 'dos', 'Date of surgery', { type: 'date' }) + field(t, 'months', 'Months since surgery', { mode: 'decimal' }) +
         field(t, 'graft', 'Graft type') + field(t, 'surgeon', 'Surgeon / clinician', { words: true }) +
         field(t, 'sport', 'Sport', { words: true }) + field(t, 'notes', 'Notes', { cls: 'span3' });
-      out += select('acl-phase', 'Rehab phase', DATA.acl.phases.map(function (p) { return [p, p]; }), s.phase, 'data-choice="phase"', 'wide');
+      out += select('acl-phase', 'Rehab phase', [['', 'Choose the phase…']].concat(DATA.acl.phases.map(function (p) { return [p, p]; })), s.phase || '', 'data-choice="phase"', 'wide');
       out += '<div class="f wide"><span id="acl-sex-l">Norm set</span><div class="seg" role="group" aria-labelledby="acl-sex-l">' +
         DATA.acl.sexes.map(function (x) { return '<button type="button" data-choice-seg="sex" data-value="' + esc(x) + '" aria-pressed="' + (s.sex === x) + '">' + esc(x) + '</button>'; }).join('') + '</div></div>';
     }
@@ -409,7 +441,7 @@
     if (blank(m.name)) return false;
     if (t === 'screen') return !!m.sex;
     if (t === 'str') return !blank(m.mass);
-    if (t === 'ham' || t === 'acl') return !!m.injured;
+    if (t === 'ham' || t === 'acl') return !!m.injured && !rehabNeed(t);   // v18: and the phase (and norm set) chosen
     return true;
   }
   function stripHtml(t) {
@@ -584,7 +616,7 @@
     if (m.calc === 'LSI') hint = '<span class="m-unit">enter left & right · LSI = injured ÷ other side</span>';
     // the same words as the column headings: Result (Injured on the hamstring tab) and Previous; Left and Right for an LSI
     var labels = m.calc === 'DSI' ? '' : (m.calc === 'LSI' ? boxLabels('Left', 'Right') : boxLabels(tool === 'ham' ? 'Injured' : 'Result', 'Previous'));
-    var html = '<div class="metric' + (asym ? ' has-side' : '') + (labels ? ' has-bl' : '') + '" data-metric="' + nm + '" data-status="" id="' + id + '">' +
+    var html = '<div class="metric' + (asym ? ' has-side' : '') + (labels ? ' has-bl' : '') + (m.calc === 'LSI' ? ' lsi' : '') + '" data-metric="' + nm + '" data-status="" id="' + id + '">' +
       '<div class="m-label">' + nameHtml(tool, m.name, m.name, id) + '<div class="m-hint">' + hint +
       '<span class="m-target"></span><span class="m-calc"></span><span class="m-prevnote"></span><span class="m-spark"></span></div><div class="m-meter"></div></div>' + labels;
     function input(fieldName, cls, ph, label) { return metricInput(id, nm, v, fieldName, cls, ph, label); }
@@ -608,10 +640,10 @@
     return S.groups.map(function (g, gi) {
       if (!on[gi]) return '';                          // left out under Tests today (v11): not drawn at all
       var collapsed = !!s.collapsed[gi];
-      var hasLsi = g.metrics.some(function (m) { return m.calc === 'LSI'; });
       return '<section class="group' + (collapsed ? ' collapsed' : '') + '" data-group="' + gi + '">' +
         '<button type="button" class="group-head" aria-expanded="' + !collapsed + '"><span class="gt">' + esc(groupTitle(g.title)) + '</span><span class="gc" data-count></span><span class="chev" aria-hidden="true"></span></button>' +
-        '<div class="cols" aria-hidden="true"><span class="c-result">' + (hasLsi ? 'Result / L' : (tool === 'ham' ? 'Injured' : 'Result')) + '</span><span class="c-prev">' + (hasLsi ? 'Previous / R' : 'Previous') + '</span><span class="c-out">Status</span></div>' +
+        // v18: Result and Previous only (a two-sided row labels its own Left and Right boxes)
+        '<div class="cols" aria-hidden="true"><span class="c-result">' + (tool === 'ham' ? 'Injured' : 'Result') + '</span><span class="c-prev">Previous</span><span class="c-out">Status</span></div>' +
         '<div class="group-body">' + g.metrics.map(function (m, mi) { return metricRow(tool, m, gi, mi); }).join('') + '</div></section>';
     }).join('');
   }
@@ -691,7 +723,22 @@
     var on = testsShown(t), n = testParts(t).filter(function (p) { return !on[p.i]; }).length;
     var unit = t === 'str' ? ['test', 'tests'] : ['section', 'sections'];
     return '<div class="tests-bar"><button type="button" class="ghost tests-btn" id="testsBtn" data-action="tests-today" aria-haspopup="dialog">Tests today<span class="chev-s" aria-hidden="true"></span></button>' +
-      (n ? '<span class="tests-hidden" id="testsHidden">' + n + ' ' + unit[n === 1 ? 0 : 1] + ' hidden</span>' : '') + '</div>';
+      (n ? '<span class="tests-hidden" id="testsHidden">' + n + ' ' + unit[n === 1 ? 0 : 1] + ' hidden</span>' : '') +
+      (t !== 'str' ? '<button type="button" class="quiet add-prev" id="addPrev" data-action="add-prev"' + (prevShown(t) ? ' hidden' : '') + '>+ Add previous results</button>' : '') + '</div>';
+  }
+  // v18: the Previous column shows once there is a previous result on the page (a client's record loaded, or one typed),
+  // or after + Add previous results; a first visit has no column of empty boxes. LL Strength has no Previous boxes.
+  function prevShown(t) {
+    var s = state[t];
+    if (t === 'str' || s.showPrev === true) return true;
+    return Object.keys(s.values).some(function (k) { var v = s.values[k]; return !!v && !blank(v.previous); });
+  }
+  function addPrevious() {
+    var t = state.tool;
+    state[t].showPrev = true;
+    refresh();
+    var first = els.entry.querySelector('.group:not(.collapsed):not([hidden]) .metric:not([hidden]) input[data-field="previous"]');
+    if (first) first.focus();                          // the first Previous box, ready to type in
   }
   var testsDirty = false;
   function openTestsDialog() {
@@ -858,6 +905,9 @@
     applyRetest(false);
     refreshClientBar(c);
     syncCard(c);
+    var showPrev = prevShown(t), ap = $('addPrev');   // v18: the Previous column, or + Add previous results
+    els.entry.classList.toggle('no-prev', !showPrev);
+    if (ap) ap.hidden = showPrev;
     if (t === 'str') { refreshStrength(c); showTypo(typoFlags(t, c)); renderSummary(c); renderInterpState(c); saveDraft(); return; }
     var S = DATA[t];
     // context note under the athlete card
@@ -869,6 +919,10 @@
       var gen = !!c.pop.population && c.pop.population.indexOf('General Clinical') === 0;
       note.textContent = (gen ? c.pop.note.replace(/^Auto-selected: /, 'Norms: ').replace(/(\d)-(\d)/g, '$1–$2') : c.pop.note).replace(/([^.])$/, '$1.') +
         (gen && c.pop.ageBand !== 'All ages' ? ' IMTP and DSI use all-ages norms.' : '');
+    } else if (rehabNeed(t)) {
+      var since = sinceText(t), unit = t === 'ham' ? (since === '1' ? ' week since injury.' : ' weeks since injury.') : (since === '1' ? ' month since surgery.' : ' months since surgery.');
+      note.hidden = false; note.className = 'note warn';
+      note.textContent = rehabNeed(t) + ' to score the results.' + (since ? ' ' + since + unit : '');
     } else if (t === 'acl' && !Object.keys(c.pnorms).length) {
       note.hidden = false; note.className = 'note warn';
       note.textContent = 'The source report has no ' + state.acl.sex.toLowerCase() + ' norms for ' + state.acl.phase + ', so results will show n/a.';
@@ -886,9 +940,9 @@
         var m = g.metrics[mi], row = c.byName[m.name], out = el.querySelector('.m-out');
         var norm = t === 'screen' ? screenNorm(m.name, c.pop) : (c.pnorms[m.name] || null);
         var target = el.querySelector('.m-target'), calc = el.querySelector('.m-calc'), meter = el.querySelector('.m-meter');
-        if (t === 'screen' && !c.pop.population) target.textContent = 'choose sex for targets';
-        else if (norm) target.textContent = (t === 'screen' ? 'target ' : 'phase target ') + E.targetStr(norm);
-        else target.textContent = t === 'screen' ? 'no norm' : 'no target this phase';
+        // v18: the target when there is one, else nothing (no 'choose sex for targets' / 'no norm' on every row: the
+        // details card asks for sex or the phase once, and a result's 'No target' pill says the rest)
+        target.textContent = norm && (t !== 'screen' || c.pop.population) ? (t === 'screen' ? 'target ' : 'phase target ') + E.targetStr(norm) : '';
         calc.textContent = '';
         var v = state[t].values[m.name] || {};
         var typed = m.calc === 'LSI' ? (!blank(v.left) || !blank(v.right)) : !blank(v.result);
@@ -899,13 +953,15 @@
         if ((m.calc === 'PERBW' || m.calc === 'PERKG') && typed) {
           calc.textContent = row ? '= ' + E.fmt(row.result) + ' ' + m.unit : (E.parseInput(state.screen.meta.mass) ? '' : 'add mass to score');
         }
-        if (m.calc === 'LSI' && typed && !row) {
-          calc.textContent = (state.acl.meta.injured ? 'enter both sides' : 'set the injured side');
+        if (m.calc === 'LSI' && typed) {
+          // the chip carries the status word. v18: worked out from the two boxes (c.inputs), so it shows before the
+          // phase and norm set are chosen too
+          var lv = c.inputs && c.inputs[m.name] ? c.inputs[m.name].result : null;
+          calc.textContent = lv !== null && lv !== undefined ? '= ' + E.fmt(lv) + '%' : (state.acl.meta.injured ? 'enter both sides' : 'set the injured side');
         }
-        if (m.calc === 'LSI' && row) calc.textContent = '= ' + E.fmt(row.result) + '%';   // the chip carries the status word
         var pn = el.querySelector('.m-prevnote');
-        if (pn) pn.textContent = v.prevDate && !blank(v.previous)
-          ? (m.calc === 'LSI' || m.calc === 'DSI' ? 'prev ' + E.fmt(E.parseInput(v.previous)) + (m.calc === 'LSI' ? '%' : '') + ' ' : 'prev ') + '(' + E.displayIso(v.prevDate) + ')'
+        if (pn) pn.textContent = v.prevDate && !blank(v.previous) && (m.calc === 'LSI' || m.calc === 'DSI')
+          ? 'prev ' + E.fmt(E.parseInput(v.previous)) + (m.calc === 'LSI' ? '%' : '') + ' (' + E.displayIso(v.prevDate) + ')'
           : '';
         setSpark(el, tr[m.name] ? sparkSvg(tr[m.name], m.dir, '') : '');
         if (row) {
@@ -917,7 +973,7 @@
         } else {
           el.dataset.status = '';
           meter.innerHTML = '';
-          out.innerHTML = typed && t === 'screen' && !c.pop.population ? '<span class="m-wait">needs sex</span>' : (typed && E.parseInput(v.result) === null && m.calc !== 'LSI' && m.calc !== 'PERBW' ? '<span class="m-wait">not a number</span>' : '');
+          out.innerHTML = typed && E.parseInput(v.result) === null && m.calc !== 'LSI' && m.calc !== 'PERBW' ? '<span class="m-wait">not a number</span>' : '';
         }
         seen[m.name] = 1;
       });
@@ -969,8 +1025,9 @@
         var v = s.values[m.name] || {};
         if (m.calc === 'DSI') return;                   // worked out, never typed (its two inputs are checked)
         if (m.calc === 'LSI') {                         // the LSI worked out from left and right
-          var row = c.byName[m.name];
-          if (row) add(m.name, ['left', 'right'], E.typoCheck(row.result, m.range, E.parseInput(v.previous), m.jump), E.fmt(row.result), '%',
+          // v18: from the two boxes (c.inputs), so it is checked before the phase and norm set are chosen too
+          var lv = c.inputs && c.inputs[m.name] ? c.inputs[m.name].result : null;
+          if (lv !== null && lv !== undefined) add(m.name, ['left', 'right'], E.typoCheck(lv, m.range, E.parseInput(v.previous), m.jump), E.fmt(lv), '%',
             raw(v.left) + '/' + raw(v.right) + '~' + raw(v.previous), v.prevDate, 'LSI ');
           return;
         }
@@ -1160,12 +1217,17 @@
   // Training status (Full training / Modified / Rehab only; tapping the chosen one again clears it), an optional line
   // of modifications and the next retest date. Printed as a band at the top of the report when any of them is set.
   // Kept with the session in the client's record, but never filled in from records and never sent to Claude.
+  // v18: the optional cards (this one and Interpretation) fold to one line until they're used: opened by hand (this
+  // visit only), or holding something
+  var coachOpen = {}, interpOpen = {};
+  function coachShown(t) { return !!coachOpen[t] || coachSet(state[t].coach); }
   function coachCardHtml() {
-    var co = state[state.tool].coach;
-    return '<section class="card coach" id="coachCard" aria-labelledby="coachTitle">' +
-      '<div class="card-head"><h2 id="coachTitle">' + (state.tool === 'screen' ? 'For the coach' : 'Training status') + '</h2></div>' +
-      '<p class="coach-help">Optional: your call, printed as a band at the top of the report.</p>' +
-      '<div class="coach-fields"><div class="f coach-status"><span id="coachStatusL">' + (state.tool === 'screen' ? 'Training status' : 'Status') + '</span>' +
+    var t = state.tool, co = state[t].coach, open = coachShown(t);
+    return '<section class="card coach' + (open ? '' : ' folded') + '" id="coachCard" aria-labelledby="coachTitle">' +
+      '<div class="card-head"><div class="fold-t"><h2 id="coachTitle">' + (t === 'screen' ? 'For the coach' : 'Training status') + '</h2>' +
+      '<p class="coach-help">Optional: ' + (t === 'screen' ? 'training status' : 'status') + ', modifications and next retest, printed as a band at the top of the report.</p></div>' +
+      '<button type="button" class="ghost fold-add" data-action="coach-open" aria-expanded="' + open + '" aria-controls="coachFields">+ Add</button></div>' +
+      '<div class="coach-fields" id="coachFields"><div class="f coach-status"><span id="coachStatusL">' + (state.tool === 'screen' ? 'Training status' : 'Status') + '</span>' +
       '<div class="seg coach-seg" role="group" aria-labelledby="coachStatusL">' + COACH_STATUS.map(function (o) {
         return '<button type="button" data-coach-status="' + esc(o) + '" data-look="' + COACH_LOOK[o] + '" aria-pressed="' + (co.status === o) + '">' + esc(o) + '</button>';
       }).join('') + '</div></div>' +
@@ -1179,7 +1241,17 @@
     if (!coachSet(co)) return null;
     return { status: co.status, mods: String(co.mods || '').replace(/\s+/g, ' ').trim(), retest: co.retest ? E.displayIso(co.retest) : '' };
   }
+  function openCoach() {                               // v18: + Add on the folded card; focus on the card (no keyboard)
+    var t = state.tool, card = $('coachCard');
+    coachOpen[t] = true;
+    if (!card) return;
+    card.classList.remove('folded');
+    card.querySelector('.fold-add').setAttribute('aria-expanded', 'true');
+    var first = card.querySelector('[data-coach-status]');
+    focusQuiet(first);
+  }
   function setCoachStatus(b) {
+    coachOpen[state.tool] = true;                      // v18: open now, so clearing it again doesn't fold it under the finger
     var co = state[state.tool].coach, v = b.dataset.coachStatus;
     co.status = co.status === v ? '' : v;
     b.parentNode.querySelectorAll('button').forEach(function (x) { x.setAttribute('aria-pressed', String(co.status === x.dataset.coachStatus)); });
@@ -1199,9 +1271,11 @@
   }
   function rtsData(c) {
     var R = DATA.acl && DATA.acl.rts;
-    if (!R || !Array.isArray(R.criteria) || !c || !c.groups) return null;
+    if (!R || !Array.isArray(R.criteria) || !c || !c.inputs) return null;
     var results = {}, units = {};
-    E.flatten(c.groups).forEach(function (r) { var n = E.num(r.result); if (n !== null) results[r.name] = n; });
+    // v18: read from what was typed (c.inputs), not the scored rows: the criteria have their own thresholds, so they
+    // are checked before the rehab phase and norm set are chosen too (the rows wait for those)
+    Object.keys(c.inputs).forEach(function (name) { var n = E.num(c.inputs[name].result); if (n !== null) results[name] = n; });
     DATA.acl.groups.forEach(function (g) { g.metrics.forEach(function (m) { units[m.name] = m.unit || ''; }); });
     var out = E.rtsCheck(R, results, { months: aclMonths() }, units);
     return out.total ? out : null;
@@ -1285,8 +1359,11 @@
       if (c.rows.length) return '';
       return c.tests.length ? 'Add body mass (kg) to score these results.' : 'Enter at least one result to create the report.';
     }
-    if (state.tool === 'screen' && !c.pop.population) return 'Choose Male or Female (or a sport population) to score the results.';
-    if (!c.groups.length) return state.tool === 'screen' ? 'Enter at least one result to create the report.' : 'Enter at least one result to create the rehab report.';
+    var t = state.tool, none = t === 'screen' ? 'Enter at least one result to create the report.' : 'Enter at least one result to create the rehab report.';
+    var need = t === 'screen' ? (c.pop.population ? '' : 'Choose Male or Female (or a sport population)') : rehabNeed(t);
+    if (!hasResults(t)) return none;                  // v18: until then the details card's prompt is the only one
+    if (need) return need + ' to score the results.';
+    if (!c.groups.length) return none;
     return '';
   }
   // one priority (v11): the name with its status on the right and the value and target underneath; the whole row is a
@@ -1325,11 +1402,9 @@
   }
   function renderSummary(c) {
     var t = state.tool, labels = (t === 'screen' || t === 'str') ? TALLY.screen : TALLY.rehab;
-    // the same heading on every report tab (v11); the line under it says what the results are compared against
-    var against = t === 'screen' ? (c.pop.label ? 'Compared against <b>' + esc(c.pop.label) + '</b>' : 'Choose sex to pick the norms')
-      : t === 'str' ? 'Each leg against <b>BASE Health strength targets</b>'
-        : 'Compared against <b>' + esc(state[t].phase) + (t === 'acl' ? ' · ' + esc(state.acl.sex) : '') + ' targets</b>';
-    var head = '<h2>Summary</h2><p class="against">' + against + '</p>';
+    // the same heading on every report tab (v11). v18: no 'Compared against …' line: the details card sets it and the
+    // strip shows it
+    var head = '<h2>Summary</h2>';
     // the headline ring (v11) with the counts beside it (the tiles' markup as a legend): a count takes its status colour
     // only when it is above 0 ('on')
     var tally = '<div class="tally ring-legend">' + TALLY_KEYS.map(function (x) {
@@ -1344,8 +1419,7 @@
     var list;
     if (t === 'str') {
       if (!c.rows.length) {
-        list = '<p class="empty">Each leg is scored as you type.</p>' +
-          '<button type="button" class="quiet demo" data-action="demo">Fill in example results</button>';
+        list = '<p class="empty">Each leg is scored as you type.</p>';   // v18: example results are in the ⋯ menu
       } else if (!c.prios.length) {
         list = '<p class="ok">Nothing below target — every tested result is on target.</p>';
       } else {
@@ -1354,8 +1428,9 @@
         }).join('') + '</ol>' + (c.prios.length > 6 ? '<p class="fine">+ ' + (c.prios.length - 6) + ' more in the report</p>' : '');
       }
     } else if (!c.groups.length) {
-      list = '<p class="empty">Results are scored as you type.</p>' +
-        '<button type="button" class="quiet demo" data-action="demo">Fill in example results</button>';
+      // v18: example results are in the ⋯ menu. Results typed before the norms are chosen wait (the reason is said
+      // once, under Create report)
+      list = '<p class="empty">' + (hasResults(t) ? 'Not scored yet.' : 'Results are scored as you type.') + '</p>';
     } else if (!c.prios.length) {
       list = '<p class="ok">Nothing flagged — every tested metric is on target.</p>';
     } else {
@@ -1399,7 +1474,7 @@
       return;
     }
     if (el.id === 'interpText') { onInterpInput(el); return; }
-    if (el.dataset.coach) { state[t].coach[el.dataset.coach] = el.value; saveDraft(); keepAwake(); return; }
+    if (el.dataset.coach) { coachOpen[t] = true; state[t].coach[el.dataset.coach] = el.value; saveDraft(); keepAwake(); return; }
     unmarkScanned(el);
     if (el.dataset.meta) {
       state[t].meta[el.dataset.meta] = el.value;
@@ -1417,10 +1492,10 @@
   function onChange(e) {
     var el = e.target, t = state.tool;
     if (el.dataset.choice === 'pop') { state.screen.pop = el.value; refresh(); }
-    else if (el.dataset.choice === 'phase') { state[t].phase = el.value; refresh(); }
+    else if (el.dataset.choice === 'phase') { state[t].phase = el.value || null; refresh(); }
     else if (el.id === 'valdFiles') importVald(el.files);
     else if (el.id === 'scanFiles') { var picked = Array.prototype.slice.call(el.files || []); el.value = ''; startScan(picked); }
-    else if (el.dataset.coach) { state[t].coach[el.dataset.coach] = el.value; saveDraft(); }
+    else if (el.dataset.coach) { coachOpen[t] = true; state[t].coach[el.dataset.coach] = el.value; saveDraft(); }
     keepAwake();
   }
   function onClick(e) {
@@ -1437,6 +1512,7 @@
     if (b.dataset.action === 'edit-athlete') { openCard(); return; }
     if (b.dataset.action === 'done-athlete') { closeCard(); return; }
     if (b.dataset.action === 'choose-client') { openClientsDialog('pick'); return; }
+    if (b.dataset.action === 'import-menu') { var im = importMenu(); setImportMenu(!!im && im.hidden, true); return; }   // v18
     if (b.dataset.action === 'tests-today') { openTestsDialog(); return; }
     if (t === 'ex' && exPageButton(b)) return;         // v15: the library and templates pages, library links in the builder
     if (t === 'ex' && exButton(b)) return;
@@ -1458,6 +1534,9 @@
       return;
     }
     if (b.dataset.coachStatus) { setCoachStatus(b); return; }
+    if (b.dataset.action === 'coach-open') { openCoach(); return; }      // v18: the folded cards
+    if (b.dataset.action === 'interp-own') { openInterp(); return; }
+    if (b.dataset.action === 'add-prev') { addPrevious(); return; }     // v18: the Previous column on a first visit
     if (b.dataset.action === 'goto-rts') { gotoRts(); return; }
     if (b.dataset.action === 'typo-ok') { typoOk(b); return; }
     if (b.dataset.action === 'goto-check') { gotoCheck(); return; }
@@ -1494,14 +1573,10 @@
       scanInfo = null; renderScanBar();
     } else if (b.dataset.action === 'ai-draft') {
       draftInterp();
-    } else if (b.dataset.action === 'ai-settings') {
-      openAiSettings(null);
     } else if (b.dataset.action === 'ai-undo') {
       undoInterp();
     } else if (b.dataset.action === 'goto-interp') {
       gotoInterp();
-    } else if (b.dataset.action === 'demo') {
-      fillExample();
     } else if (b.dataset.action === 'report') {
       openReport();
     } else if (b.dataset.radar) {
@@ -1555,7 +1630,11 @@
   }
 
   // ------------------------------------------------------------------ example data (clearly labelled)
+  // v18: from the ⋯ menu, and only on an empty page (until v17 the summary offered it after a client was loaded, where it
+  // renamed them Example Athlete and replaced their previous results)
+  function demoAllowed() { return TOOLS.indexOf(state.tool) >= 0 && !clientContent(state.tool); }
   function fillExample() {
+    if (!demoAllowed()) return;
     var t = state.tool, s = state[t];
     if (t === 'screen') {
       Object.assign(s.meta, { name: 'Example Athlete', sex: 'Male', age: '24', mass: '82', sport: 'AFL', notes: 'Example data — not a real athlete' });
@@ -1566,6 +1645,7 @@
       Object.keys(ex).forEach(function (k) { var v = val('screen', k); v.result = ex[k][0]; v.previous = ex[k][1]; v.side = ex[k][2] || ''; });
     } else if (t === 'ham') {
       Object.assign(s.meta, { name: 'Example Patient', injured: 'Left', sport: 'Soccer', notes: 'Example data — not a real patient' });
+      s.phase = 'Return to Play';                      // v18: chosen here, as the clinician would
       var hx = { 'AKET deficit vs uninjured': ['4', '9'], 'SLR % of uninjured side': ['96', '88'], 'HHD 90° knee-flex % of uninjured': ['91', '80'],
         'Nordic peak force — injured': ['290', '245'], 'Nordic peak-force imbalance': ['22', '41'], '10 m sprint time': ['1.86', '1.95'], 'HaOS score': ['84', '70'] };
       Object.keys(hx).forEach(function (k) { var v = val('ham', k); v.result = hx[k][0]; v.previous = hx[k][1]; });
@@ -1577,6 +1657,7 @@
       Object.keys(sx).forEach(function (k) { var v = val('str', k); v.left = sx[k][0]; v.right = sx[k][1]; });
     } else {
       Object.assign(s.meta, { name: 'Example Patient', injured: 'Right', graft: 'Hamstring', sport: 'Netball', notes: 'Example data — not a real patient' });
+      s.phase = '2 Years'; s.sex = 'Female';           // v18: chosen here, as the clinician would
       var ax = { 'IKDC': ['78', '70'], 'ACL-RSI': ['61', '52'], 'KOOS — Sport & Rec': ['75', '65'], 'Knee extension LSI': ['84', '76'],
         'CMJ — Jump height': ['27.5', '25.9'], 'Single hop LSI': ['88', ''] };
       Object.keys(ax).forEach(function (k) { var v = val('acl', k); v.result = ax[k][0]; v.previous = ax[k][1]; });
@@ -1769,12 +1850,13 @@
     saveDraft();
   }
   // anything of a client's in a tool: a name, a result, a detail, a note, a summary or the coach's call (the
-  // practitioner's own name and the date don't count); for the program, a name or anything in it
-  function clientContent(t) {
-    if (t === 'ex') return !blank(state.ex.meta.name) || exHasContent();
+  // practitioner's own name and the date don't count); for the program, a name or anything in it.
+  // butName (v18): the same, leaving the client's name out
+  function clientContent(t, butName) {
+    if (t === 'ex') return (!butName && !blank(state.ex.meta.name)) || exHasContent();
     var s = state[t], pf = NAME_FIELDS[t];
     if (Object.keys(compactValues(t)).length) return true;
-    if (Object.keys(s.meta).some(function (k) { return k !== 'date' && k !== pf && !blank(s.meta[k]); })) return true;
+    if (Object.keys(s.meta).some(function (k) { return k !== 'date' && k !== pf && !(butName && k === 'name') && !blank(s.meta[k]); })) return true;
     return !blank(s.interp && s.interp.text) || coachSet(s.coach);
   }
   // the tools (and the program) holding entries that aren't in a client record as they are now
@@ -1792,6 +1874,38 @@
     var keep = {}, f = NAME_FIELDS[t];
     if (f && !blank(state[t].meta[f])) keep[f] = state[t].meta[f];
     state[t] = freshTool(t, keep);
+  }
+  // v18: a clean page on this tool for another client (New client, or a different client chosen while the page holds
+  // someone's entries), as Return home does for every tool: the practitioner's name stays. Gives back the Undo.
+  function clearForClient(t) {
+    var snap = JSON.parse(JSON.stringify(state[t])), wasLoaded = exLoaded;
+    resetTool(t);
+    tidyState();
+    var fresh = state[t];
+    if (t === 'ex') { exLoaded = null; fresh.seq = Math.max(fresh.seq, snap.seq || 1); }   // row ids are never reused
+    dropPending(t);
+    return function () {
+      if (state[t] !== fresh) return;                // replaced again since (Return home, Clear all, another client)
+      state[t] = snap;
+      tidyState();
+      if (t === 'ex') exLoaded = wasLoaded;
+      dropPending(t);
+      if (state.tool === t) render();
+      saveDraft();
+      toast('Back as it was');
+    };
+  }
+  // an AI summary or a scan still on its way, and the optional cards opened by hand, belong to the client just cleared
+  function dropPending(t) {
+    delete cardPin[t];
+    if (aiBusy === t) { aiGen++; aiBusy = null; }
+    if (interpMsg.tool === t) interpMsg = { tool: null, kind: '', text: '' };
+    if (interpUndo && interpUndo.tool === t) interpUndo = null;
+    if (scanBusy === t) { scanGen++; scanBusy = null; }
+    if (scanInfo && scanInfo.tool === t) scanInfo = null;
+    delete coachOpen[t]; delete interpOpen[t];
+    if (t === 'ex') exTopOpen = false;
+    retest.tool = null;
   }
   function onHome() {
     if (els.home.disabled || els.sheet.hidden) return;
@@ -1831,6 +1945,8 @@
       if (interpUndo && gone[interpUndo.tool]) interpUndo = null;
       if (scanBusy && gone[scanBusy]) { scanGen++; scanBusy = null; }
       if (scanInfo && gone[scanInfo.tool]) scanInfo = null;
+      Object.keys(gone).forEach(function (t) { delete coachOpen[t]; delete interpOpen[t]; });   // v18: folded again
+      if (gone.ex) exTopOpen = false;
       // the report and its preview go (they hold the client's details)
       reportGen++;
       homeFrom = null;
@@ -1955,9 +2071,11 @@
   // the ⋯ menu (v11): Clear all data…, Back up records…, Restore records…, AI settings…. Arrow keys move between the items;
   // a tap outside, Escape or choosing an item closes it. Items that open a pop-up hand focus back to ⋯ when it closes.
   function menuOpen() { return !els.moreMenu.hidden; }
-  function menuItems() { return Array.prototype.slice.call(els.moreMenu.querySelectorAll('[role="menuitem"]')); }
+  function menuItems() { return Array.prototype.slice.call(els.moreMenu.querySelectorAll('[role="menuitem"]')).filter(function (x) { return !x.hidden; }); }
   function openMenu(last) {
     closePick(false);
+    var demo = demoAllowed();                          // v18: Show example results, on an empty page only
+    els.demoItem.hidden = !demo; els.demoSep.hidden = !demo;
     els.moreMenu.hidden = false;
     els.moreBtn.setAttribute('aria-expanded', 'true');
     var items = menuItems();
@@ -2069,6 +2187,7 @@
     tidyState();
     exLoaded = null;
     cardPin = {};                                      // every details card open again (v11); Tests today is kept
+    coachOpen = {}; interpOpen = {}; exTopOpen = false; // v18: the optional cards fold again
     // an AI draft still on its way belongs to the athlete just cleared: drop it when it arrives
     aiGen++;
     aiBusy = null; interpMsg = { tool: null, kind: '', text: '' }; interpUndo = null;
@@ -2203,13 +2322,17 @@
   }
   function interpBasis(t, c) { return hashStr(interpPayload(t, c)); }
 
+  function interpShown(t) {                            // v18: open when it holds text, is being drafted, has a message, or was opened
+    return !!interpOpen[t] || !blank(state[t].interp.text) || aiBusy === t || interpMsg.tool === t;
+  }
   function interpCardHtml() {
-    var it = state[state.tool].interp;
-    return '<section class="card interp" id="interpCard" aria-labelledby="interpTitle">' +
-      '<div class="card-head"><h2 id="interpTitle">Interpretation</h2><button type="button" class="quiet" data-action="ai-settings">AI settings</button></div>' +
-      '<p class="interp-help">Optional summary for the ' + (state.tool === 'screen' ? 'athlete and coach' : 'patient') + ', printed near the top.</p>' +
+    var t = state.tool, it = state[t].interp;
+    return '<section class="card interp' + (interpShown(t) ? '' : ' folded') + '" id="interpCard" aria-labelledby="interpTitle">' +
+      '<div class="card-head"><div class="fold-t"><h2 id="interpTitle">Interpretation</h2>' +
+      '<p class="interp-help">Optional: a short summary for the ' + (t === 'screen' ? 'athlete and coach' : 'patient') + ', printed near the top of the report.</p></div>' +
       '<div class="interp-bar"><button type="button" class="ghost ai-draft" data-action="ai-draft">' + SPARKLE + '<span data-label>Draft with AI</span></button>' +
-      '<span class="interp-status" id="interpStatus" role="status" aria-live="polite"></span></div>' +
+      '<button type="button" class="quiet interp-own" data-action="interp-own" aria-controls="interpText">Write my own</button></div></div>' +
+      '<span class="interp-status" id="interpStatus" role="status" aria-live="polite"></span>' +
       '<textarea id="interpText" rows="5" autocapitalize="sentences" placeholder="Tap Draft with AI, or type your own summary." aria-labelledby="interpTitle">' + esc(it.text) + '</textarea>' +
       '<p class="fine interp-privacy">Claude sees only the results and basic context. Never the ' + person(state.tool) + '’s name, notes or dates.</p>' +
       '</section>';
@@ -2233,6 +2356,8 @@
     if (interpMsg.tool === t && ((interpMsg.blocker && c && !blocker(c)) || (interpMsg.offline && navigator.onLine !== false))) {
       interpMsg = { tool: null, kind: '', text: '' };
     }
+    var fold = !interpShown(t);                       // v18: folded to its one line until used
+    if (card.classList.contains('folded') !== fold) { card.classList.toggle('folded', fold); if (!fold) fitInterp(); }
     btn.disabled = !!aiBusy;
     btn.classList.toggle('busy', busy);
     btn.querySelector('[data-label]').textContent = busy ? 'Drafting…' : (blank(it.text) ? 'Draft with AI' : 'Redraft with AI');
@@ -2246,9 +2371,13 @@
     st.className = 'interp-status' + (kind ? ' ' + kind : '');
     st.innerHTML = html;
   }
+  // the summary's interpretation line. v18: 'Add an AI interpretation' drafts straight away (until v17 it scrolled down to
+  // a second button); it shows once there is something to interpret, and says when a draft is under way or didn't work
   function interpFlagHtml(t, c) {
     var it = state[t].interp;
-    if (blank(it.text)) return '<button type="button" class="quiet interp-flag" data-action="goto-interp">' + SPARKLE + 'Add an AI interpretation</button>';
+    if (aiBusy === t) return '<p class="interp-flag busy" role="status">' + SPARKLE + 'Drafting the interpretation…</p>';
+    if (interpMsg.tool === t && interpMsg.kind === 'error' && !interpMsg.blocker) return '<button type="button" class="quiet interp-flag stale" data-action="goto-interp">The AI draft didn’t work: see Interpretation</button>';
+    if (blank(it.text)) return blocker(c) ? '' : '<button type="button" class="quiet interp-flag" data-action="ai-draft">' + SPARKLE + 'Add an AI interpretation</button>';
     if (isStale(t, c)) return '<button type="button" class="quiet interp-flag stale" data-action="goto-interp">Interpretation may be out of date</button>';
     return '<button type="button" class="quiet interp-flag ok" data-action="goto-interp">✓ Interpretation included</button>';
   }
@@ -2259,7 +2388,17 @@
     var target = blank(state[state.tool].interp.text) ? card.querySelector('[data-action="ai-draft"]') : $('interpText');
     setTimeout(function () { try { target.focus({ preventScroll: true }); } catch (e) { target.focus(); } }, 350);
   }
+  function openInterp() {                              // v18: Write my own on the folded card: the box, ready to type in
+    var t = state.tool, card = $('interpCard');
+    interpOpen[t] = true;
+    if (!card) return;
+    card.classList.remove('folded');
+    fitInterp();
+    var ta = $('interpText');
+    if (ta) ta.focus();
+  }
   function onInterpInput(el) {
+    interpOpen[state.tool] = true;                     // v18: emptied by hand, it stays open
     var it = state[state.tool].interp;
     it.text = el.value;
     fitInterp();
@@ -2341,7 +2480,7 @@
     if (aiBusy) return;
     var t = state.tool, c = compute(), why = blocker(c);
     interpMsg = { tool: null, kind: '', text: '' };
-    function fail(msg, extra) { interpMsg = Object.assign({ tool: t, kind: 'error', text: msg }, extra || {}); renderInterpState(c); }
+    function fail(msg, extra) { interpMsg = Object.assign({ tool: t, kind: 'error', text: msg }, extra || {}); refresh(); }
     if (why) return fail(why, { blocker: true });
     if (!DATA.ai || !DATA.ai.model) return fail('The AI settings file (interpretation.json) didn’t load. Reopen the app while online.');
     var key = aiKey();
@@ -2349,7 +2488,7 @@
     if (navigator.onLine === false) return fail('No internet connection. Connect to draft with AI, or type your own interpretation.', { offline: true });
     var payload = interpPayload(t, c), basis = hashStr(payload), gen = aiGen;
     aiBusy = t; interpUndo = null;
-    renderInterpState(c);
+    refresh();                                       // v18: the card unfolds and the summary says it's drafting
     callClaude(key, payload).then(function (text) {
       if (gen !== aiGen) return;                     // cleared while waiting
       var it = state[t].interp;
@@ -2730,10 +2869,12 @@
     if (btn) {
       btn.classList.toggle('busy', !!scanBusy);
       btn.setAttribute('aria-disabled', String(!!scanBusy));
-      btn.querySelector('[data-label]').textContent = scanBusy ? 'Reading…' : (t === 'ex' ? 'Scan exercise page' : 'Scan notes');
+      btn.querySelector('[data-label]').textContent = scanBusy ? 'Reading…' : scanLabel(t);
       var inp = $('scanFiles');
       if (inp) inp.disabled = !!scanBusy;
     }
+    var ib = $('importBtn');                           // v18: the Import results button says it's reading too
+    if (ib) { ib.classList.toggle('busy', !!scanBusy); ib.querySelector('[data-label]').innerHTML = scanBusy ? 'Reading…' : IMPORT_LABEL; }
     var sc = $('stripScan');                           // the strip's camera (v11) says the same
     if (sc) {
       sc.classList.toggle('busy', !!scanBusy);
@@ -2778,8 +2919,6 @@
   var EX_LABEL = { name: 'Exercise', sets: 'Sets', reps: 'Reps', load: 'Load', rest: 'Rest', tempo: 'Tempo', side: 'Side', notes: 'Notes' };
   var EX_LEN = { name: 120, notes: 300, heading: 80, title: 120, instructions: 1000 };   // characters kept (other boxes: 60)
   var EX_WORDS = { name: 1, load: 1, side: 1, notes: 1 };                              // boxes that start with a capital
-  var ICON_UP = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M6 11l6-6 6 6"/></svg>';
-  var ICON_DOWN = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M6 13l6 6 6-6"/></svg>';
   // v17: delete is a bin (it shows on every row now, beside More, so it reads as delete rather than close)
   var ICON_TRASH = '<svg viewBox="0 0 24 24" width="19" height="19" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M10 11v6M14 11v6M5.5 7l1 12a2 2 0 0 0 2 1.8h7a2 2 0 0 0 2-1.8l1-12M9 7V4.5h6V7"/></svg>';
   var GRIP = '<svg class="grip-dots" viewBox="0 0 10 16" width="10" height="16" aria-hidden="true" focusable="false" fill="currentColor"><circle cx="2.5" cy="3" r="1.5"/><circle cx="7.5" cy="3" r="1.5"/><circle cx="2.5" cy="8" r="1.5"/><circle cx="7.5" cy="8" r="1.5"/><circle cx="2.5" cy="13" r="1.5"/><circle cx="7.5" cy="13" r="1.5"/></svg>';
@@ -2800,10 +2939,10 @@
       var id = typeof it.id === 'string' && /^r\d{1,9}$/.test(it.id) && !seen[it.id] ? it.id : '';
       if (id) { seen[id] = 1; top = Math.max(top, +id.slice(1)); }
       var o = { kind: it.kind, id: id };
+      o.open = it.open === true;                       // More open (v18: a section's too, for its Move up / Move down)
       if (it.kind === 'section') o.heading = exStr(it.heading);
       else {
         EX_FIELDS.forEach(function (f) { o[f] = exStr(it[f]); });
-        o.open = it.open === true;
         o.lib = typeof it.lib === 'string' && LIB_ID.test(it.lib) ? it.lib : '';   // v15: the library exercise it came from
         if (!o.lib && typeof it.libWas === 'string' && LIB_ID.test(it.libWas)) o.libWas = it.libWas;   // v17: its link before the name was typed over
       }
@@ -2817,7 +2956,7 @@
     Object.keys(sc).forEach(function (k) { if (sc[k] === true && (k === 'title' || k === 'instructions' || seen[k])) keep[k] = true; });
     x.scanned = keep;
     x.cardOpen = x.cardOpen !== false;                 // v11: the patient card open unless folded into the strip
-    x.editing = false;                                 // v11: Edit mode starts off on every visit (never saved)
+    delete x.editing;                                  // v18: no Edit mode (v11–v17 kept it off the draft anyway)
   }
   function newExRow(o) {
     var r = { kind: 'ex', id: 'r' + (state.ex.seq++), open: false };
@@ -2869,33 +3008,39 @@
       field('ex', 'practitioner', 'Clinician', { words: true }) +
       '</div></section>' + stripHtml('ex') + '<div class="scan-bar" id="scanBar" role="status" aria-live="polite" hidden></div><div class="client-bar" id="clientBar" hidden></div>';
   }
+  // v18: the exercises first. The title, general instructions and Save as template sit under them (folded to
+  // "+ Title and instructions" while both are empty); Start from template sits with the add buttons while the program is
+  // empty. No Edit mode: every row has More and its bin, and More holds Move up / Move down.
+  var exTopOpen = false;                               // + Title and instructions tapped (this visit only)
   function exProgramCard() {
-    var x = state.ex;
-    // Edit (v11): shows the move buttons and the link actions on every row (Done hides them again); not kept in the draft.
-    // v17: every row's delete shows all the time
-    return '<section class="card ex-prog" id="exCard" aria-labelledby="exProgH"><div class="card-head"><h2 id="exProgH">Program</h2><div class="ex-headr"><span class="ex-count" id="exCount"></span>' +
-      '<button type="button" class="ghost ex-edit" id="exEdit" data-action="ex-edit"' + (x.items.length ? '' : ' hidden') + '>' + (x.editing ? 'Done' : 'Edit') + '</button></div></div>' +
-      '<div class="ex-top"><label class="f" for="ex-title"><span>Title</span><input id="ex-title" data-ex="title" type="text" value="' + esc(x.title) + '" maxlength="' + EX_LEN.title + '"' +
-      ' placeholder="Optional, e.g. Knee rehab – phase 2" autocapitalize="sentences" autocomplete="off" enterkeyhint="next"></label>' +
-      '<label class="f" for="ex-instructions"><span>General instructions</span><textarea id="ex-instructions" data-ex="instructions" rows="2" maxlength="' + EX_LEN.instructions + '"' +
-      ' placeholder="Optional, e.g. 3 × per week. Ice after if sore." autocapitalize="sentences">' + esc(x.instructions) + '</textarea></label>' +
-      // v15: templates (whole programs to start from)
-      '<div class="ex-tplbar"><button type="button" class="quiet" id="tplStart" data-action="tpl-start" aria-haspopup="dialog">Start from template</button>' +
-      '<button type="button" class="quiet" id="tplSave" data-action="tpl-save" aria-haspopup="dialog">Save as template</button></div></div>' +
-      '<div class="ex-table' + (x.editing ? ' editing' : '') + '" id="exTable">' + exTableHtml() + '</div>' +
+    var x = state.ex, rows = x.items.length > 0, top = exTopOpen || !blank(x.title) || !blank(x.instructions);
+    return '<section class="card ex-prog" id="exCard" aria-labelledby="exProgH"><div class="card-head"><h2 id="exProgH">Program</h2><div class="ex-headr"><span class="ex-count" id="exCount"></span></div></div>' +
+      '<div class="ex-table" id="exTable">' + exTableHtml() + '</div>' +
       // v16: what a row's handle does (read with it), and where a moved row landed (for screen readers)
       '<span class="vh" id="exGripHint">Drag up or down, or use the arrow keys.</span><span class="vh" id="exLive" role="status" aria-live="polite"></span>' +
       '<div class="ex-add"><button type="button" class="ghost" id="exAddLib" data-action="ex-lib" aria-haspopup="dialog">+ From library</button>' +
       '<button type="button" class="ghost" id="exAdd" data-action="ex-add">+ Exercise</button>' +
-      '<button type="button" class="ghost" id="exAddSec" data-action="ex-add-sec">+ Section</button></div></section>';
+      '<button type="button" class="ghost" id="exAddSec" data-action="ex-add-sec">+ Section</button>' +
+      // v15: templates (whole programs to start from)
+      '<button type="button" class="ghost" id="tplStart" data-action="tpl-start" aria-haspopup="dialog"' + (rows ? ' hidden' : '') + '>Start from template</button></div>' +
+      '<div class="ex-top' + (top ? '' : ' folded') + '" id="exTop">' + exTopHtml(top, rows) + '</div></section>';
+  }
+  function exTopHtml(open, rows) {
+    var x = state.ex;
+    return (open ? '<label class="f" for="ex-title"><span>Title</span><input id="ex-title" data-ex="title" type="text" value="' + esc(x.title) + '" maxlength="' + EX_LEN.title + '"' +
+      ' placeholder="Optional, e.g. Knee rehab – phase 2" autocapitalize="sentences" autocomplete="off" enterkeyhint="next"></label>' +
+      '<label class="f" for="ex-instructions"><span>General instructions</span><textarea id="ex-instructions" data-ex="instructions" rows="2" maxlength="' + EX_LEN.instructions + '"' +
+      ' placeholder="Optional, e.g. 3 × per week. Ice after if sore." autocapitalize="sentences">' + esc(x.instructions) + '</textarea></label>' : '') +
+      '<div class="ex-tplbar">' + (open ? '' : '<button type="button" class="quiet" id="exTopOpen" data-action="ex-top-open" aria-controls="exTop">+ Title and instructions</button>') +
+      '<button type="button" class="quiet" id="tplSave" data-action="tpl-save" aria-haspopup="dialog"' + (rows ? '' : ' hidden') + '>Save as template</button></div>';
   }
   // v15: an exercise row linked to a library exercise (the entry, or null when unlinked or the entry has gone)
   function exLinked(it) { return it && it.kind === 'ex' && it.lib ? libGet(it.lib) : null; }
-  // under the name of a linked row: the cues (as printed on the handout), Draft while unchecked, and ▶ when there is a video
+  // under the name of a linked row: the cues (as printed on the handout) and ▶ when there is a video
   function exLibStripHtml(it) {
     var e = exLinked(it);
-    if (!e || (!e.cues.length && e.checked && !hasVideo(e))) return '';
-    return '<span class="el-cues">' + esc(e.cues.join(' · ')) + '</span>' + (e.checked ? '' : '<span class="badge draft">Draft</span>') +
+    if (!e || (!e.cues.length && !hasVideo(e))) return '';
+    return '<span class="el-cues">' + esc(e.cues.join(' · ')) + '</span>' +   // v18: no Draft badge here (the library page shows it)
       (hasVideo(e) ? '<button type="button" class="el-play" data-action="ex-video" aria-label="Watch ' + esc(e.name) + ' video">' + PLAY + '</button>' : '');
   }
   // in the row's details (More) and in Edit mode: Unlink, or Link to an exercise of the same name, or Save to library
@@ -2944,7 +3089,7 @@
   }
   function exTableHtml() {
     var items = state.ex.items;
-    if (!items.length) return '<p class="ex-empty">No exercises yet. Scan the exercise page, or add them below.</p>';
+    if (!items.length) return '<p class="ex-empty">No exercises yet. Add them below, start from a template, or scan the exercise page.</p>';
     var used = exUsed(), n = 0, s = 0, last = items.length - 1;
     var html = '<div class="ex-cols" aria-hidden="true"><span class="c-name">Exercise</span><span class="c-sets">Sets</span><span class="c-reps">Reps</span><span class="c-load">Load</span></div>';
     // "+ Exercise" under the last row of each section (v11); the last section has the one under the table
@@ -2958,16 +3103,18 @@
       if (it.kind === 'section') { groupName = clean1(it.heading) || 'section ' + (s + 1); }
       groupEnd = it.id;
       var sec = it.kind === 'section', who = sec ? 'Section ' + (++s) : 'Exercise ' + (++n), lower = who.toLowerCase(), id = 'ex-' + it.id;
-      var acts = '<div class="ex-acts">' + (sec ? '<span></span>'
-        : '<button type="button" class="ex-btn ex-more" id="' + id + '-more" data-action="ex-more" aria-expanded="' + it.open + '" aria-controls="' + id + '-det">' +
-          (it.open ? 'Less' : 'More') + '<span class="vh"> details, ' + lower + '</span></button>') +
-        '<button type="button" class="ex-btn" id="' + id + '-up" data-action="ex-up" aria-label="Move ' + lower + ' up"' + (i === 0 ? ' disabled' : '') + '>' + ICON_UP + '</button>' +
-        '<button type="button" class="ex-btn" id="' + id + '-down" data-action="ex-down" aria-label="Move ' + lower + ' down"' + (i === last ? ' disabled' : '') + '>' + ICON_DOWN + '</button>' +
+      // More (exercises) and the bin; v18: Move up / Move down are in More (until v17 they needed Edit mode)
+      // a section's More holds just its Move up / Move down (dragging its handle, or the arrow keys on it, move it too)
+      var acts = '<div class="ex-acts"><button type="button" class="ex-btn ex-more" id="' + id + '-more" data-action="ex-more" aria-expanded="' + !!it.open + '" aria-controls="' + id + (sec ? '-libact' : '-det') + '">' +
+          (it.open ? 'Less' : 'More') + '<span class="vh"> ' + (sec ? 'options' : 'details') + ', ' + lower + '</span></button>' +
         '<button type="button" class="ex-btn ex-del" id="' + id + '-del" data-action="ex-del" aria-label="Delete ' + lower + '">' + ICON_TRASH + '</button></div>';
+      var moves = '<button type="button" class="quiet el-move" id="' + id + '-up" data-action="ex-up"' + (i === 0 ? ' disabled' : '') + '>Move up<span class="vh"> ' + lower + '</span></button>' +
+        '<button type="button" class="quiet el-move" id="' + id + '-down" data-action="ex-down"' + (i === last ? ' disabled' : '') + '>Move down<span class="vh"> ' + lower + '</span></button>';
       if (sec) {
-        html += '<div class="ex-row ex-sec" id="' + id + '" data-id="' + it.id + '" role="group" aria-label="' + who + '">' + gripHtml(it, lower, '') +
+        html += '<div class="ex-row ex-sec' + (it.open ? ' open' : '') + '" id="' + id + '" data-id="' + it.id + '" role="group" aria-label="' + who + '">' + gripHtml(it, lower, '') +
           '<input class="ex-in ex-heading" id="' + id + '-heading" data-f="heading" type="text" value="' + esc(it.heading) + '" maxlength="' + EX_LEN.heading + '"' +
-          ' placeholder="Section heading, e.g. Warm-up" aria-label="' + who + ' heading" autocapitalize="sentences" autocomplete="off" enterkeyhint="next">' + acts + '</div>';
+          ' placeholder="Section heading, e.g. Warm-up" aria-label="' + who + ' heading" autocapitalize="sentences" autocomplete="off" enterkeyhint="next">' + acts +
+          (it.open ? '<div class="ex-libact on" id="' + id + '-libact">' + moves + '</div>' : '') + '</div>';
         return;
       }
       // v15: the name column also holds the library strip and the link actions (the name's suggestions open under its box)
@@ -2975,7 +3122,7 @@
       html += '<div class="ex-row" id="' + id + '" data-id="' + it.id + '" role="group" aria-label="' + who + '">' + gripHtml(it, lower, n) +
         '<div class="ex-namecol"><div class="ex-nameb">' + exInput(it, 'name', who) + '</div>' +
         '<div class="ex-lib" id="' + id + '-lib"' + (strip ? '' : ' hidden') + '>' + strip + '</div>' +
-        '<div class="ex-libact' + (it.open ? ' on' : '') + '" id="' + id + '-libact">' + exLibActHtml(it) + '</div></div>' +
+        '<div class="ex-libact' + (it.open ? ' on' : '') + '" id="' + id + '-libact"><span class="el-links" id="' + id + '-links">' + exLibActHtml(it) + '</span>' + moves + '</div></div>' +
         EX_MAIN.map(function (f) { return '<label class="ex-cell c-' + f + '"><span class="ex-cl">' + EX_LABEL[f] + '</span>' + exInput(it, f, who) + '</label>'; }).join('') + acts +
         '<div class="ex-det" id="' + id + '-det"' + (it.open || exHasDet(it) ? '' : ' hidden') + '>' + EX_DETAIL.map(function (f) {
           return '<label class="ex-cell c-' + f + '"' + (it.open || used[f] ? '' : ' hidden') + '><span class="ex-cl">' + EX_LABEL[f] + '</span>' + exInput(it, f, who) + '</label>';
@@ -3024,14 +3171,16 @@
     if (r.top < 120 || r.bottom > window.innerHeight - 110) el.scrollIntoView({ block: 'center', behavior: 'smooth' });
   }
   function refreshEx() {
-    var c = exCounts(), cnt = $('exCount'), eb = $('exEdit');
+    var c = exCounts(), cnt = $('exCount'), rows = state.ex.items.length > 0, ts = $('tplStart'), tv = $('tplSave');
     if (cnt) cnt.textContent = c.exercises ? c.exercises + (c.exercises === 1 ? ' exercise' : ' exercises') + (c.sections ? ' · ' + c.sections + (c.sections === 1 ? ' section' : ' sections') : '') : '';
-    if (eb) eb.hidden = !state.ex.items.length;        // Edit only once there are rows
+    if (ts) ts.hidden = rows;                          // v18: Start from template while the program is empty, Save as template once it isn't
+    if (tv) tv.hidden = !rows;
     syncCard(null);
     refreshExClientBar();
     renderExSummary(c);
     saveDraft();
   }
+  function andList(a) { return a.length > 1 ? a.slice(0, -1).join(', ') + ' and ' + a[a.length - 1] : (a[0] || ''); }
   function renderExSummary(c) {
     var why = c.exercises ? '' : 'Add at least one exercise to create the handout.';
     var cols = exColumns(), later = EX_DETAIL.filter(function (f) { return cols.indexOf(f) < 0; }).map(function (f) { return EX_LABEL[f]; });
@@ -3039,15 +3188,14 @@
     // v15: how many filled rows are linked to the library, and how many of those print a video QR code
     var linked = 0, vids = 0;
     state.ex.items.forEach(function (it) { var e = exFilled(it) && exLinked(it); if (e) { linked++; if (hasVideo(e)) vids++; } });
-    var libText = linked ? linked + ' linked to the library' + (vids ? ' · ' + vids + ' with video (QR codes on the handout)' : '') : '';
-    els.summary.innerHTML = '<div class="sum ex-sum"><div class="sum-scroll"><h2>Exercise handout</h2><p class="against">A branded PDF for the patient to take home.</p>' +
-      '<div class="tally ex-tally"><div><b>' + c.sections + '</b><span>' + (c.sections === 1 ? 'Section' : 'Sections') + '</span></div>' +
-      '<div><b>' + c.exercises + '</b><span>' + (c.exercises === 1 ? 'Exercise' : 'Exercises') + '</span></div></div>' +
-      '<h3>Handout columns</h3><p class="ex-colsline">' + esc(cols.map(function (f) { return EX_LABEL[f]; }).join(' · ')) + '</p>' +
-      (laterText ? '<p class="fine">' + esc(laterText) + '</p>' : '') +
-      (libText ? '<p class="fine ex-libline">' + esc(libText) + '</p>' : '') +
+    // v18: the panel says it in two short lines (until v17: tiles, a column list and notes)
+    var counts = c.exercises + (c.exercises === 1 ? ' exercise' : ' exercises') + (c.sections ? ' · ' + c.sections + (c.sections === 1 ? ' section' : ' sections') : '') +
+      (vids ? ' · ' + vids + (vids === 1 ? ' video' : ' videos') : '');
+    var prints = 'Prints ' + andList(cols.slice(1).map(function (f) { return EX_LABEL[f]; })) + '.' + (laterText ? ' ' + laterText : '');
+    els.summary.innerHTML = '<div class="sum ex-sum"><div class="sum-scroll"><h2>Exercise handout</h2>' +
+      '<p class="ex-sumline">' + esc(counts) + '</p><p class="fine ex-prints">' + esc(prints) + '</p>' +
       '</div><div class="sum-foot"><button type="button" class="primary make" data-action="report"' + (why ? ' disabled' : '') + '>Create handout</button>' +
-      '<p class="fine">' + esc(why || 'Preview, then share or save.') + '</p>' +
+      (why ? '<p class="fine">' + esc(why) + '</p>' : '') +
       '<p class="fine client-line">' + esc(clientLine('ex')) + '</p></div></div>';
     els.dock.innerHTML = '<div class="dt"><span class="ex-dock"><b>' + c.exercises + '</b> ' + (c.exercises === 1 ? 'exercise' : 'exercises') +
       (c.sections ? ' · <b>' + c.sections + '</b> ' + (c.sections === 1 ? 'section' : 'sections') : '') + '</span></div>' +
@@ -3085,7 +3233,7 @@
     if (it.kind === 'ex' && f === 'name') {             // v15: the library's suggestions, and Link to / Save to library follow the name
       var relinked = exRelink(it);                     // v17: and so does the link itself
       exSuggest(row, el, it);
-      var act = $('ex-' + it.id + '-libact'), ah = exLibActHtml(it);
+      var act = $('ex-' + it.id + '-links'), ah = exLibActHtml(it);   // v18: the links only (Move up / down stay)
       if (act && act._h !== ah) { act.innerHTML = ah; act._h = ah; }
       var lst = relinked && $('ex-' + it.id + '-lib'), lsh = relinked ? exLibStripHtml(it) : '';
       if (lst) { lst.innerHTML = lsh; lst._h = lsh; lst.hidden = !lsh; }
@@ -3132,12 +3280,11 @@
       focusEx('ex-' + add.id + '-' + (add.kind === 'ex' ? 'name' : 'heading'));
       return true;
     }
-    if (a === 'ex-edit') {                             // Edit / Done (v11): the move buttons and link actions on every row
-      x.editing = !x.editing;
-      b.textContent = x.editing ? 'Done' : 'Edit';
-      var tbl = $('exTable');
-      if (tbl) tbl.classList.toggle('editing', x.editing);
-      fitExWraps();                                    // the name column is narrower while editing
+    if (a === 'ex-top-open') {                         // v18: + Title and instructions: the two boxes, the title ready to type in
+      exTopOpen = true;
+      var top = $('exTop');
+      if (top) { top.classList.remove('folded'); top.innerHTML = exTopHtml(true, x.items.length > 0); fitExNotes(); applyExMarks(); }
+      focusEx('ex-title');
       return true;
     }
     if (a === 'ex-lib' || a === 'ex-lib-in') { openLibPick(b, a === 'ex-lib-in' ? b.dataset.after : ''); return true; }   // v15: + From library
@@ -3853,7 +4000,7 @@
     els.entry.querySelectorAll('#exTable .ex-row[data-id]').forEach(function (row) {
       var it = exItem(row.dataset.id);
       if (!it || it.kind !== 'ex') return;
-      var s = $('ex-' + it.id + '-lib'), a = $('ex-' + it.id + '-libact'), sh = exLibStripHtml(it), ah = exLibActHtml(it);
+      var s = $('ex-' + it.id + '-lib'), a = $('ex-' + it.id + '-links'), sh = exLibStripHtml(it), ah = exLibActHtml(it);
       if (s && s._h !== sh) { s.innerHTML = sh; s._h = sh; s.hidden = !sh; }
       if (a && a._h !== ah) { a.innerHTML = ah; a._h = ah; }
     });
@@ -4357,6 +4504,10 @@
       c.tests.forEach(function (tt) {
         ['L', 'R'].forEach(function (k) { var cell = tt.sides[k]; if (cell && cell.value !== null) out[tt.id + '|' + k] = cell.value; });
       });
+    } else if (c.inputs) {
+      // hamstring and ACL (v18): what was typed (the LSI worked out), the same numbers as the scored rows, so the
+      // trend lines show before the phase and norm set are chosen too
+      Object.keys(c.inputs).forEach(function (name) { var n = E.num(c.inputs[name].result); if (n !== null) out[name] = n; });
     } else {
       E.flatten(c.groups).forEach(function (r) { var n = E.num(r.result); if (n !== null) out[r.name] = n; });
     }
@@ -4425,7 +4576,7 @@
   // (title, instructions and rows with fresh ids; each row keeps its library link, dose and notes; the cues and video
   // come from the library). The date stays (a new visit). Undo puts back what was replaced.
   var exLoaded = null;                                 // { key, date }: the program loaded last (the client bar says so)
-  function loadProgramFor(key, picked) {
+  function loadProgramFor(key, picked, undoClear, was) {
     var cl = clients.clients[key];
     if (!cl) return;
     var x = state.ex, last = exPrograms(cl).slice(-1)[0];
@@ -4435,7 +4586,8 @@
       exLoaded = null;
       if (picked) foldBeforeRender('ex');
       render();
-      toast(cl.name + ' has no saved programs yet');
+      // v18: the client bar says there are no programs yet; a message only for a page cleared for this client (Undo)
+      if (undoClear) toast('Cleared ' + (was ? was + '’s' : 'the last') + ' program for ' + cl.name, { label: 'Undo', run: undoClear });
       return;
     }
     var had = exHasContent(), before = exSnap(), p = last.program;
@@ -4447,11 +4599,13 @@
     exLoaded = { key: key, date: last.date };
     foldBeforeRender('ex');
     render();
-    toast('Loaded ' + cl.name + '’s program from ' + E.displayIso(last.date), had ? { label: 'Undo', run: function () {
+    // v18: a message only when there is something to undo (the client bar says what was loaded)
+    if (undoClear) toast('Loaded ' + cl.name + '’s program from ' + E.displayIso(last.date), { label: 'Undo', run: undoClear });
+    else if (had) toast('Loaded ' + cl.name + '’s program from ' + E.displayIso(last.date), { label: 'Undo', run: function () {
       if (state.ex !== x) return;
       exLoaded = null;
       exRestore(before, x);
-    } } : null);
+    } });
   }
   // the client bar on the Exercises tab: the record's programs, or that there are none yet
   function refreshExClientBar() {
@@ -4479,7 +4633,7 @@
   // fill Previous results (and unchanging details) from the client's record. picked: chosen in Choose client (v11), which
   // folds the details card once the essentials are in; otherwise it folds when earlier results were loaded (never under a
   // box being typed in, e.g. a name suggestion tapped)
-  function loadHistory(t, key, picked) {
+  function loadHistory(t, key, picked, undo, was) {
     var cl = clients.clients[key];
     if (!cl) return;
     var s = state[t], m = s.meta, date = m.date || todayIso();
@@ -4533,12 +4687,14 @@
         });
       });
     }
-    if (!s.hist || s.hist.key !== key) s.onlyPrev = false;   // "Only last time's tests" starts off for a different client
+    // v18: a returning client starts on "Only last time's tests" (one tap shows them all); the same client reloaded keeps the choice
+    if (!s.hist || s.hist.key !== key) s.onlyPrev = n > 0;
     s.hist = { key: key, name: cl.name, n: n, dates: Object.keys(dates).sort(), date: date };
     hideSuggest();
     if (picked || n) foldBeforeRender(t);
     render();
-    toast(n ? 'Loaded ' + cl.name + ': previous results for ' + n + (n === 1 ? ' test' : ' tests') : cl.name + ': no earlier ' + TOOL_NAMES[t] + ' results; details filled in');
+    // v18: no 'Loaded …' message: the client bar says the same. Only a page cleared for this client has one (with Undo)
+    if (undo) toast('Cleared ' + (was ? was + '’s' : 'the last client’s') + ' entries for ' + cl.name, { label: 'Undo', run: undo });
   }
   function pickClient(key) { if (state.tool === 'ex') loadProgramFor(key, false); else loadHistory(state.tool, key); }
   function suggestClients(t, typed) {
@@ -4619,22 +4775,36 @@
     };
   }
   // The Clients dialog (v11), one searchable list in two modes. pick (Choose client, in the details card): each row is a
-  // button that loads that client, plus New client. manage (the header's Clients button): the rows with a two-tap Delete.
+  // button that loads that client, plus New client. manage (the header's Clients button): v18, the rows load a client
+  // too (until v17 they could only be deleted), and Edit shows each row's two-tap Delete.
   // Back up and Restore are in the ⋯ menu.
-  var clientsMode = 'manage';
+  var clientsMode = 'manage', clientsEditing = false;
   function openClientsDialog(mode) {
     var pick = mode === 'pick' && (TOOLS.indexOf(state.tool) >= 0 || state.tool === 'ex');   // v15: Exercises picks a client too
     clientsMode = pick ? 'pick' : 'manage';
+    clientsEditing = false;
     if (CLOUD) CLOUD.sync({ throttle: true });         // v13: another device may have saved something (the list redraws when it lands)
     els.clientsSearch.value = '';
     els.clientsTitle.textContent = pick ? 'Choose client' : 'Clients';
     els.clientsNew.hidden = !pick;
-    els.clientsClose.textContent = pick ? 'Cancel' : 'Done';
+    els.clientsClose.textContent = pick ? 'Cancel' : 'Close';
     els.clientsClose.className = pick ? 'ghost' : 'primary';
     els.clientsFine.hidden = pick;
+    syncClientsEdit();
     renderClientsList();
-    // no box focused at first (the iPad keyboard would cover the list): the first client, else New client / Done
-    openModal(els.clientsDialog, pick ? els.clientsList.querySelector('.cl-pick') || els.clientsNew : els.clientsClose);
+    // no box focused at first (the iPad keyboard would cover the list): the first client, else New client / Close
+    openModal(els.clientsDialog, els.clientsList.querySelector('.cl-pick') || (pick ? els.clientsNew : els.clientsClose));
+  }
+  function syncClientsEdit() {                         // v18: Edit (manage mode, with clients to delete) ↔ Done
+    els.clientsEdit.hidden = clientsMode !== 'manage' || !clientKeys().length;
+    els.clientsEdit.textContent = clientsEditing ? 'Done' : 'Edit';
+    els.clientsEdit.setAttribute('aria-pressed', String(clientsEditing));
+  }
+  function toggleClientsEdit() {
+    clientsEditing = !clientsEditing;
+    syncClientsEdit();
+    renderClientsList();
+    focusQuiet(els.clientsEdit);
   }
   function clientKeys() {
     return Object.keys(clients.clients).sort(function (a, b) { return clients.clients[a].name.localeCompare(clients.clients[b].name); });
@@ -4652,40 +4822,54 @@
   }
   function renderClientsList() {
     var keys = clientKeys(), total = 0, pick = clientsMode === 'pick', typed = els.clientsSearch.value.trim(), q = E.nameKey(typed);
+    if (!keys.length) clientsEditing = false;          // v18: nothing left to delete
+    syncClientsEdit();
     keys.forEach(function (k) { total += clients.clients[k].sessions.length; });
+    var loads = state.tool === 'ex' ? 'Loading a client fills in their name and their last saved program.' : 'Loading a client fills in their details and their results from last time.';
     els.clientsSummary.textContent = !keys.length ? 'No saved clients yet. A record starts when you create a report with a name filled in.'
-      : pick ? (state.tool === 'ex' ? 'Loading a client fills in their name and their last saved program.' : 'Loading a client fills in their details and their results from last time.')
-        : keys.length + (keys.length === 1 ? ' client, ' : ' clients, ') + total + (total === 1 ? ' session' : ' sessions') + (CLOUD ? ', in the clinic store.' : ', saved on this device.');
+      : pick ? loads
+        : keys.length + (keys.length === 1 ? ' client, ' : ' clients, ') + total + (total === 1 ? ' session' : ' sessions') + (CLOUD ? ', in the clinic store. ' : ', saved on this device. ') +
+          (clientsEditing ? 'Tap Delete to remove a client.' : 'Tap a name to load it here.');
     els.clientsSearchWrap.hidden = !keys.length;
     var shown = q ? keys.filter(function (k) { return k.indexOf(q) >= 0; }) : keys;
     if (!keys.length) { els.clientsList.innerHTML = ''; return; }
     if (!shown.length) { els.clientsList.innerHTML = '<p class="client-none" role="status">No clients match “' + esc(typed) + '”.</p>'; return; }
-    els.clientsList.innerHTML = '<ul class="client-list' + (pick ? ' pick' : '') + '">' + shown.map(function (k) {
+    var del = !pick && clientsEditing;                 // v18: Delete only in Edit; otherwise every row loads its client
+    els.clientsList.innerHTML = '<ul class="client-list' + (del ? '' : ' pick') + '">' + shown.map(function (k) {
       var cl = clients.clients[k], d = '<b>' + esc(cl.name) + '</b><span>' + esc(clientDetail(cl)) + '</span>';
-      return pick ? '<li><button type="button" class="cl-pick" data-action="pick-client" data-key="' + esc(k) + '">' + d + '</button></li>'
+      return !del ? '<li><button type="button" class="cl-pick" data-action="pick-client" data-key="' + esc(k) + '">' + d + '</button></li>'
         : '<li><div class="cl-main">' + d + '</div><button type="button" class="quiet cl-del" data-action="delete-client" data-key="' + esc(k) + '">Delete</button></li>';
     }).join('') + '</ul>';
   }
-  // a client chosen: the name and the existing load (details and previous results), then the card folds if it can
+  // a client chosen (Choose client, or v18 a name tapped in Clients): the name and the existing load (details and
+  // previous results), then the card folds if it can. v18: a page holding another client's entries starts clean first
+  // (until v17 those results stayed and were saved under the client chosen); Undo in the message puts them back.
   function pickFromDialog(key) {
     var t = state.tool;
     closeModal(false);
     if ((TOOLS.indexOf(t) < 0 && t !== 'ex') || !clients.clients[key]) return;
-    if (t === 'ex') loadProgramFor(key, true);         // v15: their last saved program
-    else loadHistory(t, key, true);
+    if (t === 'ex' && state.exPage !== 'builder') state.exPage = 'builder';   // v18: from the library or templates page
+    var cur = E.nameKey(state[t].meta.name), was = clean1(state[t].meta.name);
+    var undo = cur && cur !== key && clientContent(t, true) ? clearForClient(t) : null;
+    if (t === 'ex') loadProgramFor(key, true, undo, was);   // v15: their last saved program
+    else loadHistory(t, key, true, undo, was);
     focusQuiet(state[t].cardOpen === false ? document.querySelector('#athleteStrip [data-action="edit-athlete"]') : document.querySelector('#athleteCard [data-action="choose-client"]'));
   }
-  function newClient() {                               // New client: the name box emptied and ready to type in
+  // New client: a clean page, the name box ready to type in. v18: the page is cleared when it holds someone's entries
+  // (until v17 only the name went, so the last client's details and results were saved under the new one); a page
+  // with no name yet keeps what is on it (results typed before the client was named)
+  function newClient() {
     var t = state.tool;
     closeModal(false);
     if (TOOLS.indexOf(t) < 0 && t !== 'ex') return;
+    var named = !blank(state[t].meta.name), more = named && clientContent(t, true), undo = null;
+    if (named) undo = clearForClient(t);
     if (t === 'ex') exLoaded = null;
-    state[t].meta.name = '';
-    if (state[t].cardOpen === false) setCardOpen(t, true);
+    state[t].cardOpen = true;
+    render();
     var box = $(t + '-name');
-    if (box) box.value = '';
-    refresh();
     if (box) box.focus();
+    if (more) toast('Started a new client', { label: 'Undo', run: undo });
   }
   var delTimer = null;
   function onClientsClick(e) {
@@ -5022,6 +5206,18 @@
       els.entry.addEventListener('focusout', function (e) {
         var to = e.relatedTarget, m = pickMenu();
         if (pickOpen() && to && !m.contains(to) && to !== pickBtn()) closePick(false);
+        var im = importMenu();                                         // v18
+        if (im && !im.hidden && to && !im.contains(to) && to !== $('importBtn')) setImportMenu(false, false);
+      });
+      els.entry.addEventListener('keydown', function (e) {             // v18: Escape and the arrow keys in the Import results menu
+        var im = importMenu();
+        if (!im || im.hidden || !im.contains(e.target)) return;
+        var items = Array.prototype.slice.call(im.querySelectorAll('.menu-item input')), i = items.indexOf(e.target);
+        if (e.key === 'Escape') { e.preventDefault(); setImportMenu(false, true); }
+        else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); items[(i + (e.key === 'ArrowDown' ? 1 : items.length - 1)) % items.length].focus(); }
+      });
+      els.entry.addEventListener('click', function (e) {               // v18: a choice made: the menu closes once its picker is up
+        if (e.target.closest && e.target.closest('#importMenu .menu-item')) setTimeout(function () { setImportMenu(false, false); }, 300);
       });
       // the ⋯ menu (v11)
       els.moreBtn.addEventListener('click', function () { if (menuOpen()) closeMenu(true); else openMenu(false); });
@@ -5030,6 +5226,8 @@
       });
       document.addEventListener('pointerdown', function (e) {       // a tap anywhere else closes it
         if (menuOpen() && !els.moreMenu.contains(e.target) && !els.moreBtn.contains(e.target)) closeMenu(false);
+        var im = importMenu(), ib = $('importBtn');                  // v18: and the Import results menu
+        if (im && !im.hidden && !im.contains(e.target) && !(ib && ib.contains(e.target))) setImportMenu(false, false);
         var pm = pickMenu(), pb = pickBtn();                          // and the tool picker (v14)
         if (pickOpen() && !pm.contains(e.target) && !(pb && pb.contains(e.target))) closePick(false);
       }, true);
@@ -5041,6 +5239,7 @@
       els.clientsBackup.addEventListener('click', menuAction(backupClients));
       els.restoreItem.addEventListener('click', function () { els.clientsRestore.click(); closeMenu(true); });
       els.aiItem.addEventListener('click', menuAction(function () { openAiSettings(null); }));
+      els.demoItem.addEventListener('click', menuAction(fillExample));   // v18
       els.clearCancel.addEventListener('click', function () { closeModal(); });
       els.clearConfirm.addEventListener('click', clearAllData);
       els.aiSave.addEventListener('click', saveAiKey);
@@ -5050,6 +5249,7 @@
       els.clientsBtn.addEventListener('click', function () { openClientsDialog('manage'); });
       els.clientsClose.addEventListener('click', function () { closeModal(); });
       els.clientsNew.addEventListener('click', newClient);
+      els.clientsEdit.addEventListener('click', toggleClientsEdit);   // v18
       els.clientsSearch.addEventListener('input', function () { renderClientsList(); });
       els.clientsRestore.addEventListener('change', function () { restoreClients(els.clientsRestore.files); els.clientsRestore.value = ''; });
       els.clientsList.addEventListener('click', onClientsClick);

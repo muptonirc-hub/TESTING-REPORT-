@@ -270,10 +270,13 @@ html.signed-out .workspace, html.signed-out .dock, html.signed-out .tools, html.
 .entry > .import-log { border: 1px solid var(--line); }
 
 /* ---------- tests today (v11): which sections the entry column shows */
-.tests-bar { display: flex; align-items: center; gap: 12px; margin: -4px 0; min-width: 0; }
+.tests-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; margin: -4px 0; min-width: 0; }   /* v18: + Add previous results wraps under on a narrow phone */
 .tests-btn { min-height: 40px; padding: 8px 14px; font-size: 14.5px; gap: 10px; }
 .tests-btn .chev-s { width: 7px; height: 7px; border-right: 2px solid var(--muted); border-bottom: 2px solid var(--muted); transform: rotate(45deg) translateY(-2px); }
 .tests-hidden { font-size: 13.5px; color: var(--muted); }
+.tests-bar .add-prev { min-height: 40px; padding-inline: 8px; font-size: 14.5px; }
+/* v18: a first visit (no previous result on the page) has no Previous column until + Add previous results */
+.entry.no-prev .metric [data-field="previous"], .entry.no-prev .metric:not(.lsi) .m-bl-b, .entry.no-prev .cols .c-prev { visibility: hidden; }
 .tests-card { max-width: 480px; }
 .tests-links { display: flex; gap: 2px; margin: 8px 0 0 -8px; }
 .tests-links .quiet { min-height: 36px; font-size: 14.5px; }
@@ -368,6 +371,14 @@ html.signed-out .workspace, html.signed-out .dock, html.signed-out .tools, html.
 .metric .m-result { grid-area: result; }
 .metric .m-prev { grid-area: prev; }
 .metric .m-side { grid-area: side; }
+/* v18: a two-sided row (left and right; the app works out the LSI) labels its boxes at every size, so they can't be read
+   as today and last time (a phone shows these labels on every row anyway) */
+@media (min-width: 641px) {
+  .metric.lsi { grid-template-areas: "label bla side blb out" "label result side prev out"; row-gap: 3px; }
+  .metric.lsi .m-bl { display: block; font-size: 11px; font-weight: 700; letter-spacing: .5px; line-height: 1.2; text-transform: uppercase; color: var(--muted); text-align: center; }
+  .metric.lsi .m-bl-a { grid-area: bla; }
+  .metric.lsi .m-bl-b { grid-area: blb; }
+}
 .metric .m-auto {
   grid-column: result / prev; height: 44px; display: flex; align-items: center; justify-content: center;
   border: 1px dashed var(--line-strong); border-radius: 10px; color: var(--muted); font-size: 13.5px; padding: 0 10px; text-align: center;
@@ -634,10 +645,19 @@ html.signed-out .workspace, html.signed-out .dock, html.signed-out .tools, html.
 .client-none { margin: 12px 2px 4px; color: var(--muted); font-size: 14px; }
 
 /* ---------- interpretation card */
-.interp .card-head { margin-bottom: 4px; }
-.interp .card-head .quiet { min-height: 36px; font-size: 14px; }
-.interp-help { margin: 0 0 12px; color: var(--muted); font-size: 13.5px; max-width: 70ch; }
-.interp-bar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
+.interp .card-head { margin-bottom: 10px; }
+.interp-help { margin: 0; color: var(--muted); font-size: 13.5px; max-width: 70ch; }
+.interp-bar { display: flex; align-items: center; gap: 4px 8px; flex-wrap: wrap; }
+.interp-bar .quiet { min-height: 44px; font-size: 14.5px; }
+/* v18: the optional cards (For the coach / Training status, Interpretation) fold to one line until they're used */
+.coach .card-head, .interp .card-head { align-items: center; flex-wrap: wrap; }
+.fold-t { flex: 1 1 260px; min-width: 0; }
+.fold-t h2 + p { margin-top: 3px; }
+.coach.folded .card-head, .interp.folded .card-head { margin-bottom: 0; }
+.coach.folded .coach-fields, .interp.folded .interp-status, .interp.folded textarea, .interp.folded .interp-privacy { display: none; }
+.coach:not(.folded) .fold-add, .interp:not(.folded) .interp-own { display: none; }
+.interp-status:empty { display: none; }
+.interp-status { display: block; margin: -2px 0 10px; }
 .ai-draft svg { color: var(--teal); flex: none; }
 .ai-draft[disabled] { opacity: .6; cursor: default; }
 .ai-draft.busy { opacity: 1; }
@@ -658,6 +678,7 @@ html.signed-out .workspace, html.signed-out .dock, html.signed-out .tools, html.
 .interp textarea::placeholder { color: color-mix(in srgb, var(--muted) 85%, transparent); }
 .interp-privacy { margin: 8px 2px 0; }
 .interp-flag { width: 100%; min-height: 36px; margin: 0 0 10px; font-size: 14px; gap: 6px; }
+p.interp-flag { display: flex; align-items: center; justify-content: center; color: var(--muted); font-weight: 600; }   /* v18: drafting… */
 .interp-flag svg { width: 16px; height: 16px; }
 .interp-flag.ok { color: var(--green-ink); }
 .interp-flag.stale { color: var(--amber-ink); }
@@ -665,6 +686,15 @@ html.signed-out .workspace, html.signed-out .dock, html.signed-out .tools, html.
 /* ---------- scan notes: photo of handwritten results -> boxes filled and highlighted */
 .head-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 .scan-btn svg { color: currentColor; flex: none; }   /* the blue stays for boxes filled by a scan */
+/* v18: Import results (Performance screen): a small menu under its button with the two ways in */
+.import-wrap { position: relative; display: flex; }
+.import-btn { gap: 8px; }
+.import-btn .chev-s { width: 7px; height: 7px; border-right: 2px solid var(--muted); border-bottom: 2px solid var(--muted); transform: rotate(45deg) translateY(-2px); margin-left: 2px; }
+.import-btn.busy { opacity: .75; pointer-events: none; }
+.import-btn.busy svg { animation: ai-pulse 1s ease-in-out infinite alternate; }
+.menu.import-menu { left: auto; right: 0; z-index: 15; min-width: 280px; }   /* under the button, lined up with its right edge */
+.import-menu .menu-item svg { flex: none; color: var(--muted); }
+.import-menu .menu-item:has(input:focus-visible) { outline: 3px solid var(--teal); outline-offset: -3px; }   /* the keyboard's ring (a tap shows none) */
 .scan-btn.busy { opacity: .75; pointer-events: none; }
 .scan-btn.busy svg { animation: ai-pulse 1s ease-in-out infinite alternate; }
 .scan-bar {
@@ -691,8 +721,8 @@ html.signed-out .workspace, html.signed-out .dock, html.signed-out .tools, html.
 .f input.scanned:focus, .metric input.scanned:focus { border-color: var(--teal); box-shadow: 0 0 0 3px color-mix(in srgb, var(--teal) 25%, transparent); }
 .side.scanned { background: var(--scan-soft); border-color: var(--scan-line); box-shadow: inset 0 0 0 1px var(--scan-line); }
 /* ---------- for the coach: training status, modifications, next retest (a band at the top of the report) */
-.coach .card-head { margin-bottom: 4px; }
-.coach-help { margin: 0 0 12px; color: var(--muted); font-size: 13.5px; max-width: 70ch; }
+.coach .card-head { margin-bottom: 12px; }
+.coach-help { margin: 0; color: var(--muted); font-size: 13.5px; max-width: 70ch; }
 .coach-fields { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 12px; }
 .coach-mods { grid-column: 1 / -1; }
 .coach-seg { height: auto; min-height: 44px; }   /* v17: a choice wraps onto two lines rather than spilling out (a phone) */
@@ -752,7 +782,8 @@ html.signed-out .workspace, html.signed-out .dock, html.signed-out .tools, html.
 .f textarea.scanned { background: var(--scan-soft); border-color: var(--scan-line); box-shadow: inset 0 0 0 1px var(--scan-line); }
 .f textarea.scanned:focus { border-color: var(--teal); box-shadow: 0 0 0 3px color-mix(in srgb, var(--teal) 25%, transparent); }
 .ex-count { font-size: 13px; font-weight: 600; color: var(--muted); font-variant-numeric: tabular-nums; }
-.ex-top { display: grid; gap: 12px; margin-bottom: 16px; }
+.ex-top { display: grid; gap: 12px; margin-top: 16px; }   /* v18: under the exercises (title, instructions, templates) */
+.ex-top.folded { margin-top: 10px; }
 .ex-table { container: extable / inline-size; }
 .ex-empty { margin: 0; padding: 18px 14px; border: 1px dashed var(--line-strong); border-radius: 10px; color: var(--muted); font-size: 14px; text-align: center; }
 /* narrow (a phone, or a narrow column): the name on its own line, then sets / reps / load, the details and the row's buttons */
@@ -784,7 +815,7 @@ html.row-dragging, html.row-dragging * { cursor: grabbing !important; user-selec
 .ex-row > .c-sets { grid-area: sets; }
 .ex-row > .c-reps { grid-area: reps; }
 .ex-row > .c-load { grid-area: load; }
-.ex-acts { grid-area: acts; display: grid; grid-template-columns: 52px 40px 40px 40px; gap: 2px; justify-content: end; }
+.ex-acts { grid-area: acts; display: grid; grid-template-columns: 52px 40px; gap: 2px; justify-content: end; }   /* More and the bin (v18: no Edit mode) */
 .ex-det { grid-area: det; display: flex; flex-wrap: wrap; gap: 8px; }
 .ex-det > .ex-cell { flex: 1 1 84px; }
 .ex-det > .c-notes { flex-basis: 100%; }
@@ -801,8 +832,9 @@ html.row-dragging, html.row-dragging * { cursor: grabbing !important; user-selec
 .ex-sec { grid-template-columns: 32px minmax(0, 1fr) auto; grid-template-areas: "num head acts"; align-items: center; margin-top: 10px; padding: 6px 0; border-top: 0; border-radius: 12px; background: var(--field); }
 .ex-sec .ex-grip { align-self: center; margin-left: -8px; color: var(--teal); }   /* the section band's own grip, in teal (40 px: 8 px into the margin) */
 .ex-sec .ex-grip .grip-dots { opacity: .9; }
-.ex-sec .ex-acts { grid-template-columns: 40px 40px 40px; }
-.ex-sec .ex-acts > span:first-child { display: none; }
+.ex-sec .ex-acts { grid-template-columns: 52px 40px; }                    /* v18: More (Move up / Move down) and the bin */
+.ex-sec.open { grid-template-areas: "num head acts" ". mv mv"; }
+.ex-sec .ex-libact { grid-area: mv; }
 .ex-heading { grid-area: head; font-weight: 700; background: var(--surface); }
 .ex-sec + .ex-row { border-top: 0; }
 .ex-btn {
@@ -818,12 +850,8 @@ html.row-dragging, html.row-dragging * { cursor: grabbing !important; user-selec
 .ex-row.scanned .ex-in:focus { border-color: var(--teal); box-shadow: 0 0 0 3px color-mix(in srgb, var(--teal) 25%, transparent); }
 .ex-row.scanned .ex-num { color: var(--scan-ink); }
 .ex-add { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; }
-/* v11: rows show their boxes and More; the move buttons show in Edit mode. v17: every row's delete (a bin) shows all the time */
+/* v18: rows show their boxes, More and the bin; Move up / Move down are in More (the handle still drags, and its arrow keys move) */
 .ex-headr { display: flex; align-items: center; gap: 12px; margin-left: auto; }
-.ex-edit { min-height: 36px; padding: 6px 16px; font-size: 14.5px; }
-.ex-table:not(.editing) .ex-btn:not(.ex-more):not(.ex-del) { display: none; }
-.ex-table:not(.editing) .ex-acts { grid-template-columns: 52px 40px; }
-.ex-table:not(.editing) .ex-sec .ex-acts { grid-template-columns: 40px; }
 .ex-add-in { padding: 0 0 6px 40px; }                 /* "+ Exercise" under the last row of a section */
 .ex-add-in .quiet { min-height: 36px; padding-inline: 6px; font-size: 14.5px; }
 @media (min-width: 600px) {                          /* a little more compact on an iPad (phones keep 44 px boxes) */
@@ -834,7 +862,7 @@ html.row-dragging, html.row-dragging * { cursor: grabbing !important; user-selec
 }
 /* wide (iPad): one line per exercise under the column header; a second line for the details when there are any */
 @container extable (min-width: 660px) {
-  .ex-cols, .ex-row { grid-template-columns: 32px minmax(0, 1fr) 56px 80px 116px 178px; }
+  .ex-cols, .ex-row { grid-template-columns: 32px minmax(0, 1fr) 56px 80px 116px 94px; }
   .ex-cols {
     display: grid; column-gap: 8px; grid-template-areas: "num name sets reps load acts"; padding: 0 0 6px;
     font-size: 11.5px; font-weight: 700; letter-spacing: .6px; text-transform: uppercase; color: var(--muted);
@@ -847,12 +875,7 @@ html.row-dragging, html.row-dragging * { cursor: grabbing !important; user-selec
   .ex-row { grid-template-areas: "num name sets reps load acts" ". det det det det det"; }
   .ex-row:has(> .ex-det[hidden]) { grid-template-areas: "num name sets reps load acts"; }
   .ex-row > .ex-cell .ex-cl { display: none; }
-  .ex-sec { grid-template-columns: 32px minmax(0, 1fr) 178px; grid-template-areas: "num head acts"; }
-  .ex-sec .ex-acts { grid-template-columns: 52px 40px 40px 40px; }
-  .ex-sec .ex-acts > span:first-child { display: block; }
-  .ex-table:not(.editing) .ex-cols, .ex-table:not(.editing) .ex-row:not(.ex-sec) { grid-template-columns: 32px minmax(0, 1fr) 56px 80px 116px 94px; }
-  .ex-table:not(.editing) .ex-sec { grid-template-columns: 32px minmax(0, 1fr) 94px; }   /* its bin under the rows' bins */
-  .ex-table:not(.editing) .ex-sec .ex-acts > span:first-child { display: none; }
+  .ex-sec { grid-template-columns: 32px minmax(0, 1fr) 94px; grid-template-areas: "num head acts"; }   /* its bin under the rows' bins */
   .ex-det > .ex-cell { flex: 0 1 104px; }
   .ex-det > .c-side { flex-basis: 132px; }
   .ex-det > .c-notes { flex: 1 1 220px; }
@@ -920,7 +943,7 @@ html.row-dragging, html.row-dragging * { cursor: grabbing !important; user-selec
 .tpl-acts .tpl-del { color: var(--red-ink); }
 .tpl-acts .tpl-del.armed { background: var(--red); color: #fff; border-radius: 9px; }
 /* the builder: the template buttons, the library strip under a linked exercise and its link action */
-.ex-tplbar { display: flex; flex-wrap: wrap; gap: 0 6px; margin: -6px 0 -4px -8px; }
+.ex-tplbar { display: flex; flex-wrap: wrap; gap: 0 6px; margin: -4px 0 -4px -8px; }
 .ex-tplbar .quiet { min-height: 40px; font-size: 14.5px; }
 .ex-namecol { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
 .ex-nameb { position: relative; min-width: 0; }
@@ -934,7 +957,9 @@ html.row-dragging, html.row-dragging * { cursor: grabbing !important; user-selec
 }
 .el-play:active { background: var(--field); }
 .ex-libact { display: none; flex-wrap: wrap; column-gap: 4px; padding-left: 3px; }
-.ex-libact.on:not(:empty), .ex-table.editing .ex-libact:not(:empty) { display: flex; }
+.ex-libact.on { display: flex; }                       /* More: Swap / the library link, Move up and Move down (v18) */
+.ex-libact .el-links { display: contents; }
+.ex-libact .el-move:disabled { opacity: .35; }
 .ex-libact .quiet { min-height: 34px; padding-inline: 8px; font-size: 14px; white-space: normal; text-align: left; }
 /* an exercise name's suggestions sit in the flow under its box (pushing the row down while open), so they never cover the
    row's own boxes or the buttons below and a tap meant for those can't pick a suggestion */
@@ -998,11 +1023,6 @@ html.row-dragging, html.row-dragging * { cursor: grabbing !important; user-selec
   .toast { bottom: calc(92px + env(safe-area-inset-bottom, 0px)); }
   html { scroll-padding-bottom: 96px; }
 }
-@media (max-width: 1100px) {
-  .tools { margin-left: 0; order: 3; width: 100%; }
-  .tools button { flex: 1; padding-inline: 8px; }
-  .appbar .clients-btn { margin-left: auto; }
-}
 @media (max-width: 760px) {
   .fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .f.span3 { grid-column: 1 / -1; }
@@ -1054,6 +1074,17 @@ html.row-dragging, html.row-dragging * { cursor: grabbing !important; user-selec
   /* phone (v11): a 56 px app bar without the NOOSA line; the two tabs (v14) share the row under it */
   .appbar { padding: calc(env(safe-area-inset-top, 0px) + 6px) max(16px, env(safe-area-inset-right, 0px)) 8px max(16px, env(safe-area-inset-left, 0px)); row-gap: 6px; column-gap: 12px; }
   .brand .logo { height: 28px; }                                   /* phone */
+  /* v18: only a phone puts the two tabs on a row of their own; an iPad held upright (or split screen from 600 px)
+     has room for them beside the logo, as in landscape, so the bar is one row */
+  .tools { margin-left: 0; order: 3; width: 100%; }
+  .tools button { flex: 1; padding-inline: 8px; }
+  .appbar .clients-btn { margin-left: auto; }
+  .import-btn .il-more { display: none; }                         /* v18: Import, so it fits beside Choose client */
+  /* v18: the Import menu is a card under the buttons, as wide as the details card (the button sits mid-row on a phone) */
+  .athlete .card-head { position: relative; }
+  .import-wrap { position: static; }
+  .menu.import-menu { top: calc(100% + 6px); left: 0; right: 0; min-width: 0; padding: 6px; border-width: 1px; border-radius: 14px; }
+  .import-menu .menu-item { white-space: normal; }
   /* the ⋯ menu: full width under the bar */
   .more-wrap { position: static; }
   .menu { top: 100%; left: 0; right: 0; min-width: 0; border-width: 0 0 1px; border-radius: 0 0 16px 16px;
@@ -1152,6 +1183,12 @@ html.row-dragging, html.row-dragging * { cursor: grabbing !important; user-selec
       <button class="menu-item" id="aiItem" type="button" role="menuitem" tabindex="-1" aria-haspopup="dialog">
         <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="currentColor"><path d="M10 2.5l1.8 5.2 5.2 1.8-5.2 1.8L10 16.5l-1.8-5.2L3 9.5l5.2-1.8zM18.5 13l.95 2.55 2.55.95-2.55.95-.95 2.55-.95-2.55L15 16.5l2.55-.95z"/></svg>
         <span>AI settings…</span>
+      </button>
+      <!-- v18: example results (clearly labelled), offered only while the page is empty -->
+      <div class="menu-sep" id="demoSep" role="separator" hidden></div>
+      <button class="menu-item" id="demoItem" type="button" role="menuitem" tabindex="-1" hidden>
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19h16M7 16V10M12 16V6M17 16v-4"/></svg>
+        <span>Show example results</span>
       </button>
     </div>
   </div>
@@ -1269,6 +1306,8 @@ html.row-dragging, html.row-dragging * { cursor: grabbing !important; user-selec
     <p class="modal-fine" id="clientsFine">Records live only on this device. Back them up now and then with Back up records… in the ⋯ menu.</p>
     <div class="modal-actions clients-actions">
       <button class="ghost" id="clientsNew" type="button" hidden>New client</button>
+      <!-- v18: the list loads a client when a name is tapped; Edit shows each row's Delete -->
+      <button class="ghost" id="clientsEdit" type="button" aria-pressed="false" hidden>Edit</button>
       <button class="primary" id="clientsClose" type="button">Done</button>
     </div>
   </div>
@@ -1464,13 +1503,13 @@ html.row-dragging, html.row-dragging * { cursor: grabbing !important; user-selec
 
 <div class="toast" id="toast" role="status" hidden></div>
 
-<script src="engine.js?v=17" defer></script>
-<script src="report-fonts.js?v=17" defer></script>
-<script src="jspdf.umd.min.js?v=17" defer></script>
-<script src="qrcode.js?v=17" defer></script>
-<script src="report.js?v=17" defer></script>
-<script src="cloud-config.js?v=17" defer></script>
-<script src="cloud.js?v=17" defer></script>
-<script src="app.js?v=17" defer></script>
+<script src="engine.js?v=18" defer></script>
+<script src="report-fonts.js?v=18" defer></script>
+<script src="jspdf.umd.min.js?v=18" defer></script>
+<script src="qrcode.js?v=18" defer></script>
+<script src="report.js?v=18" defer></script>
+<script src="cloud-config.js?v=18" defer></script>
+<script src="cloud.js?v=18" defer></script>
+<script src="app.js?v=18" defer></script>
 </body>
 </html>
