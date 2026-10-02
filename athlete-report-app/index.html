@@ -974,6 +974,13 @@ html.row-dragging, html.row-dragging * { cursor: grabbing !important; user-selec
 .ex-lib .el-cues { flex: 0 1 auto; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .ex-lib .el-cues:empty { display: none; }
 .ex-lib .badge { height: 20px; font-size: 11.5px; }
+/* v21: under a suggested row, the finding it is for (in the app only) */
+.ex-why { display: flex; align-items: flex-start; gap: 6px; padding: 0 2px 4px 11px; font-size: 12.5px; line-height: 1.35; color: var(--scan-ink); }
+.ex-why svg { flex: none; width: 14px; height: 14px; margin-top: 2px; }
+.ex-add .ex-suggest svg { width: 16px; height: 16px; color: var(--teal-ink); }
+.ex-add .ex-suggest.busy { opacity: .6; pointer-events: none; }
+.ex-add .ex-suggest.busy svg { animation: ai-pulse 1s ease-in-out infinite alternate; }
+.scan-bar.ai .scan-ico { color: var(--teal-ink); }
 .el-play {
   flex: none; display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 26px; padding: 0;
   border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--teal-ink);
@@ -1537,13 +1544,13 @@ html.row-dragging, html.row-dragging * { cursor: grabbing !important; user-selec
 
 <div class="toast" id="toast" role="status" hidden></div>
 
-<script src="engine.js?v=20" defer></script>
-<script src="report-fonts.js?v=20" defer></script>
-<script src="jspdf.umd.min.js?v=20" defer></script>
-<script src="qrcode.js?v=20" defer></script>
-<script src="report.js?v=20" defer></script>
-<script src="cloud-config.js?v=20" defer></script>
-<script src="cloud.js?v=20" defer></script>
-<script src="app.js?v=20" defer></script>
+<script src="engine.js?v=21" defer></script>
+<script src="report-fonts.js?v=21" defer></script>
+<script src="jspdf.umd.min.js?v=21" defer></script>
+<script src="qrcode.js?v=21" defer></script>
+<script src="report.js?v=21" defer></script>
+<script src="cloud-config.js?v=21" defer></script>
+<script src="cloud.js?v=21" defer></script>
+<script src="app.js?v=21" defer></script>
 </body>
 </html>

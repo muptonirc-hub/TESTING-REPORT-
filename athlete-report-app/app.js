@@ -2048,6 +2048,7 @@
     if (interpMsg.tool === t) interpMsg = { tool: null, kind: '', text: '' };
     if (interpUndo && interpUndo.tool === t) interpUndo = null;
     if (scanBusy === t) { scanGen++; scanBusy = null; }
+    if (t === 'ex' && suggestBusy) { scanGen++; suggestBusy = false; }   // v21
     if (scanInfo && scanInfo.tool === t) scanInfo = null;
     delete coachOpen[t]; delete interpOpen[t];
     if (t === 'ex') exTopOpen = false;
@@ -2090,6 +2091,7 @@
       if (interpMsg.tool && gone[interpMsg.tool]) interpMsg = { tool: null, kind: '', text: '' };
       if (interpUndo && gone[interpUndo.tool]) interpUndo = null;
       if (scanBusy && gone[scanBusy]) { scanGen++; scanBusy = null; }
+      if (suggestBusy && gone.ex) { scanGen++; suggestBusy = false; }   // v21
       if (scanInfo && gone[scanInfo.tool]) scanInfo = null;
       Object.keys(gone).forEach(function (t) { delete coachOpen[t]; delete interpOpen[t]; });   // v18: folded again
       if (gone.ex) exTopOpen = false;
@@ -2337,7 +2339,7 @@
     // an AI draft still on its way belongs to the athlete just cleared: drop it when it arrives
     aiGen++;
     aiBusy = null; interpMsg = { tool: null, kind: '', text: '' }; interpUndo = null;
-    scanBusy = null; scanInfo = null; scanGen++;
+    scanBusy = null; scanInfo = null; scanGen++; suggestBusy = false;
     releaseWake();                                     // nothing entered now: the screen may sleep again
     // drop the last report built (it holds the athlete's details) and its preview, and one still being built (v16)
     reportGen++;
@@ -2852,7 +2854,7 @@
   }
   function startScan(files) {
     var t = state.tool, exm = t === 'ex';                 // exm: the Exercises tab's own prompt, schema and apply step
-    if (!files.length || scanBusy) return;
+    if (!files.length || scanBusy || (exm && suggestBusy)) return;
     var cfg = exm ? exScanCfg() : scanCfg();
     function fail(msg) { scanInfo = { tool: t, kind: 'error', text: msg }; renderScanBar(); }
     if (!DATA.ai || !cfg.model) return fail('The AI settings file (interpretation.json) didn’t load. Reopen the app while online.');
@@ -3039,16 +3041,22 @@
       sc.setAttribute('aria-disabled', String(!!scanBusy));
       sc.title = scanBusy ? 'Reading…' : (t === 'ex' ? 'Scan exercise page' : 'Scan notes');
     }
+    var sg = $('exSuggest');                           // v21: Suggest from the report says it's working
+    if (sg) { sg.classList.toggle('busy', suggestBusy); sg.setAttribute('aria-disabled', String(suggestBusy)); sg.querySelector('[data-label]').textContent = suggestBusy ? 'Suggesting…' : 'Suggest from the report'; }
     if (!bar) return;
     var info = scanInfo && scanInfo.tool === t ? scanInfo : null;
     if (!info) { bar.hidden = true; bar.innerHTML = ''; bar.className = 'scan-bar'; return; }
     bar.hidden = false;
-    bar.className = 'scan-bar ' + info.kind;
+    bar.className = 'scan-bar ' + info.kind + (info.ai ? ' ai' : '');
     var close = '<button type="button" class="quiet scan-x" data-action="scan-close" aria-label="Close this message">×</button>';
-    if (info.kind === 'busy') { bar.innerHTML = '<span class="scan-ico">' + CAMERA + '</span><span class="scan-msg">' + esc(info.text) + '</span>'; return; }
+    var ico = info.ai ? SPARKLE : CAMERA;              // v21: a suggestion from the report, not a photo
+    if (info.kind === 'busy') { bar.innerHTML = '<span class="scan-ico">' + ico + '</span><span class="scan-msg">' + esc(info.text) + '</span>'; return; }
     if (info.kind === 'error') { bar.innerHTML = '<span class="scan-msg">' + esc(info.text) + '</span>' + close; return; }
     var extra = [info.date ? 'test date' : '', info.mass ? 'body mass' : ''].filter(Boolean);
-    var html = '<span class="scan-ico">' + CAMERA + '</span>' + (t === 'ex' ? (info.kind === 'empty'
+    var html = '<span class="scan-ico">' + ico + '</span>' + (info.ai ? (info.kind === 'empty'
+      ? '<span class="scan-msg">Claude didn’t find exercises in the library for the ' + esc(TOOL_NAMES[info.from]) + ' results. Nothing was changed.</span>'
+      : '<span class="scan-msg"><b>Claude suggested ' + info.n + (info.n === 1 ? ' exercise' : ' exercises') + ' from the ' + esc(TOOL_NAMES[info.from]) + ' report' + (info.added ? ', after the ones already there' : '') + '.</b> Check each one, and its sets and reps, before creating the handout.</span>')
+      : t === 'ex' ? (info.kind === 'empty'
       ? '<span class="scan-msg">No exercises were found on the ' + (info.photos > 1 ? 'photos' : 'photo') + '. Check it’s a photo of the exercise page, or try a clearer photo. Nothing was changed.</span>'
       : '<span class="scan-msg"><b>Filled ' + info.n + (info.n === 1 ? ' exercise' : ' exercises') + ' from your notes.</b> Check them against the page before creating the handout.' +
         (info.matched ? ' ' + info.matched + ' matched your library.' : '') + '</span>')
@@ -3058,7 +3066,7 @@
     if (info.undo) html += '<button type="button" class="quiet scan-undo" data-action="scan-undo">Undo</button>';
     html += close;
     if (info.unclear && info.unclear.length) {
-      html += '<div class="scan-unclear"><b>Worth a look:</b><ul>' + info.unclear.map(function (u) { return '<li>' + esc(u) + '</li>'; }).join('') + '</ul></div>';
+      html += '<div class="scan-unclear"><b>' + (info.ai ? 'From Claude:' : 'Worth a look:') + '</b><ul>' + info.unclear.map(function (u) { return '<li>' + esc(u) + '</li>'; }).join('') + '</ul></div>';
     }
     bar.innerHTML = html;
   }
@@ -3104,6 +3112,7 @@
         EX_FIELDS.forEach(function (f) { o[f] = exStr(it[f]); });
         o.lib = typeof it.lib === 'string' && LIB_ID.test(it.lib) ? it.lib : '';   // v15: the library exercise it came from
         if (!o.lib && typeof it.libWas === 'string' && LIB_ID.test(it.libWas)) o.libWas = it.libWas;   // v17: its link before the name was typed over
+        if (!blank(it.why)) o.why = clean1(it.why).slice(0, 120);   // v21: the finding a suggested exercise is for
       }
       list.push(o);
     });
@@ -3183,7 +3192,9 @@
       '<button type="button" class="ghost" id="exAdd" data-action="ex-add">+ Exercise</button>' +
       '<button type="button" class="ghost" id="exAddSec" data-action="ex-add-sec">+ Section</button>' +
       // v15: templates (whole programs to start from)
-      '<button type="button" class="ghost" id="tplStart" data-action="tpl-start" aria-haspopup="dialog"' + (rows ? ' hidden' : '') + '>Start from template</button></div>' +
+      '<button type="button" class="ghost" id="tplStart" data-action="tpl-start" aria-haspopup="dialog"' + (rows ? ' hidden' : '') + '>Start from template</button>' +
+      // v21: Claude picks exercises from the library for the linked report's results
+      '<button type="button" class="ghost ex-suggest" id="exSuggest" data-action="ex-suggest"' + (suggestTool() ? '' : ' hidden') + '>' + SPARKLE + '<span data-label>Suggest from the report</span></button></div>' +
       '<div class="ex-top' + (top ? '' : ' folded') + '" id="exTop">' + exTopHtml(top, rows) + '</div></section>';
   }
   function exTopHtml(open, rows) {
@@ -3250,7 +3261,7 @@
   }
   function exTableHtml() {
     var items = state.ex.items;
-    if (!items.length) return '<p class="ex-empty">No exercises yet. Add them below, start from a template, or scan the exercise page.</p>';
+    if (!items.length) return '<p class="ex-empty">No exercises yet. Add them below, start from a template, ' + (suggestTool() ? 'scan the exercise page, or let Claude suggest them from the report.' : 'or scan the exercise page.') + '</p>';   // v21
     var used = exUsed(), n = 0, s = 0, last = items.length - 1;
     var html = '<div class="ex-cols" aria-hidden="true"><span class="c-name">Exercise</span><span class="c-sets">Sets</span><span class="c-reps">Reps</span><span class="c-load">Load</span></div>';
     // "+ Exercise" under the last row of each section (v11); the last section has the one under the table
@@ -3283,6 +3294,7 @@
       html += '<div class="ex-row" id="' + id + '" data-id="' + it.id + '" role="group" aria-label="' + who + '">' + gripHtml(it, lower, n) +
         '<div class="ex-namecol"><div class="ex-nameb">' + exInput(it, 'name', who) + '</div>' +
         '<div class="ex-lib" id="' + id + '-lib"' + (strip ? '' : ' hidden') + '>' + strip + '</div>' +
+        (blank(it.why) ? '' : '<div class="ex-why">' + SPARKLE + '<span>' + esc(it.why) + '</span></div>') +   // v21: the finding a suggested exercise is for (not printed)
         '<div class="ex-libact' + (it.open ? ' on' : '') + '" id="' + id + '-libact"><span class="el-links" id="' + id + '-links">' + exLibActHtml(it) + '</span>' + moves + '</div></div>' +
         EX_MAIN.map(function (f) { return '<label class="ex-cell c-' + f + '"><span class="ex-cl">' + EX_LABEL[f] + '</span>' + exInput(it, f, who) + '</label>'; }).join('') + acts +
         '<div class="ex-det" id="' + id + '-det"' + (it.open || exHasDet(it) ? '' : ' hidden') + '>' + EX_DETAIL.map(function (f) {
@@ -3336,6 +3348,8 @@
     if (cnt) cnt.textContent = c.exercises ? c.exercises + (c.exercises === 1 ? ' exercise' : ' exercises') + (c.sections ? ' · ' + c.sections + (c.sections === 1 ? ' section' : ' sections') : '') : '';
     if (ts) ts.hidden = rows;                          // v18: Start from template while the program is empty, Save as template once it isn't
     if (tv) tv.hidden = !rows;
+    var sg = $('exSuggest');                           // v21: while linked to a Performance screen or LL Strength report with results
+    if (sg) sg.hidden = !suggestTool();
     syncCard(null);
     refreshExClientBar();
     renderExSummary(c);
@@ -3459,6 +3473,7 @@
       return true;
     }
     if (a === 'ex-lib' || a === 'ex-lib-in') { openLibPick(b, a === 'ex-lib-in' ? b.dataset.after : ''); return true; }   // v15: + From library
+    if (a === 'ex-suggest') { startExSuggest(); return true; }   // v21
     if (!a || a.indexOf('ex-') !== 0) return false;
     var row = b.closest('.ex-row'), i = row ? exIndex(row.dataset.id) : -1;
     if (i < 0) return true;
@@ -3810,13 +3825,163 @@
     renderExTable();
   }
   function undoExScan() {
-    var u = scanInfo && scanInfo.tool === 'ex' && scanInfo.undo, x = state.ex;
+    var u = scanInfo && scanInfo.tool === 'ex' && scanInfo.undo, x = state.ex, ai = !!(scanInfo && scanInfo.ai);
     if (!u) return;
     x.title = u.title; x.instructions = u.instructions; x.items = u.items; x.scanned = u.scanned;
     x.seq = Math.max(x.seq, u.seq);                    // ids are never reused
     scanInfo = null;
     render();
-    toast('Scan undone');
+    toast(ai ? 'Suggestions undone' : 'Scan undone');   // v21
+  }
+
+  // ---- Suggest from the report (v21): Claude picks exercises from the clinic's library for the linked report's results
+  // Matthew: "an ai section to create a exercise list based on the findings in the screening report". The builder, linked
+  // to a Performance screen or LL Strength report with scored results, offers "Suggest from the report". Claude gets the
+  // same de-identified results text as the interpretation (no name, date or practitioner), the interpretation itself if
+  // there is one (the clinician's emphasis; the patient's name taken out should it be in there), the exercises already in
+  // the program, and the library as a menu (id, name, body areas, type, equipment, checked). It answers with library ids
+  // only: anything else is dropped. The rows arrive linked to the library (cues and video as usual), with sets and reps
+  // and a one-line "why" under each (shown in the app, never printed), in the blue "check me" look of a scan, with Undo.
+  // Hamstring and ACL wait until the library can say which rehab phase an exercise suits.
+  var SUGGEST_TOOLS = ['screen', 'str'];
+  var EX_SUGGEST_DEFAULT = {
+    effort: 'medium', max_tokens: 4000, timeout_s: 90, max_exercises: 8,
+    system: [
+      'You suggest an exercise program for a sports physiotherapist at BASE Health Noosa, a clinic in Queensland, Australia, from the results of a testing report. Your suggestions fill a draft that the physiotherapist checks, edits and then prints as a handout for the person tested. The physiotherapist makes every clinical decision; you are saving them the first draft.',
+      'Choose only from the library listed in the request, giving each exercise’s id exactly as written. Never invent an exercise or use an id that isn’t in the list. If a priority has no suitable exercise in the library, say so in notes instead of forcing a poor fit.',
+      'Pick 4 to 8 exercises in all (fewer when there are few findings), aimed at the main priorities: results marked Off target first, then Close, then at most one exercise that keeps up a clear strength if there is room. Don’t repeat an exercise already in the program. When two library exercises fit equally well, prefer one marked checked by a clinician.',
+      'Group them into 1 to 3 short sections with plain headings, for example "Hamstring strength" or "Jump power"; one section with an empty heading is fine when they don’t split.',
+      'For each exercise give sets and reps as plain numbers or ranges ("3", "8–10", or "30 s" for a hold), sensible for the exercise type: strength 3 × 6–10; isometric holds 3–5 × 20–45 s; plyometric 3 × 5–8; mobility 2 × 8–12 or 30–60 s; balance and control 2–3 × 30–45 s. Leave load, rest and tempo to the physiotherapist (don’t give them).',
+      'why: one short line, under 80 characters, naming the finding the exercise is for, with its number and target, for example "Nordic L/R imbalance 12.9%, target ≤ 9" or "Right calf 22 reps, left 27". Plain Australian English, no jargon.',
+      'title: a short title for the program from its focus, for example "Jump power and hamstring strength", or an empty string.',
+      'notes: anything the physiotherapist should know, one sentence each: a priority with no suitable library exercise, or a finding that needs their judgement. Leave notes empty when there is nothing to say.',
+      'Use only the information given. Don’t diagnose, predict injury or give medical advice, and never say anything about being cleared to return to sport. Refer to the person as the athlete or the patient, never by a name.'
+    ]
+  };
+  var suggestBusy = false;                             // one suggestion at a time (and never alongside a scan)
+  function exSuggestCfg() {                            // same model, key and endpoint as the interpretation; "exercise_suggest" in interpretation.json overrides
+    var cfg = Object.assign({}, EX_SUGGEST_DEFAULT), ai = DATA.ai || {};
+    cfg.model = ai.model; cfg.endpoint = ai.endpoint;
+    if (ai.exercise_suggest && typeof ai.exercise_suggest === 'object') Object.keys(ai.exercise_suggest).forEach(function (k) { cfg[k] = ai.exercise_suggest[k]; });
+    return cfg;
+  }
+  function suggestTool() {                             // the linked report Claude can suggest from, or ''
+    var lt = linkedTool();
+    return SUGGEST_TOOLS.indexOf(lt) >= 0 && hasResults(lt) ? lt : '';
+  }
+  // the patient's name taken out of free text (the interpretation can be typed by hand)
+  function withoutName(text, name, who) {
+    var words = clean1(name).split(' ').filter(function (w) { return w.length >= 2; });
+    if (!words.length) return text;
+    var esc1 = function (w) { return w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); };
+    var re = new RegExp('\\b(?:' + [words.map(esc1).join('\\s+')].concat(words.map(esc1)).join('|') + ')\\b([’\']s)?', 'gi');   // the whole name first, then each word
+    return text.replace(re, function (m, poss) { return 'the ' + who + (poss ? '’s' : ''); });
+  }
+  function libLine(e) {
+    return e.id + ' | ' + clean1(e.name) + ' | ' + (Array.isArray(e.areas) && e.areas.length ? e.areas.map(clean1).join(', ') : '—') + ' | ' + clean1(e.type || '—') +
+      ' | ' + clean1(e.equipment || '—') + ' | ' + (e.checked ? 'checked' : 'not yet checked');
+  }
+  function exSuggestRequest(lt, c, max) {
+    var L = ['Suggest the exercise program for this report, choosing from the clinic’s library below (at most ' + max + ' exercises).', '', interpPayload(lt, c)];
+    var it = state[lt].interp, who = person(lt);
+    if (!blank(it.text)) L.push('', 'The physiotherapist’s interpretation of these results (their emphasis): ' + withoutName(clean1(it.text), state[lt].meta.name, who));
+    var have = state.ex.items.filter(function (r) { return r.kind === 'ex' && !blank(r.name); }).map(function (r) { return clean1(r.name); });
+    if (have.length) L.push('', 'Already in the program (don’t repeat these): ' + have.join('; '));
+    L.push('', 'Library (id | name | body areas | type | equipment | checked by a clinician):');
+    libList().slice(0, 300).forEach(function (e) { L.push(libLine(e)); });
+    return L.join('\n');
+  }
+  function exSuggestSchema() {
+    var str = { type: 'string' };
+    var ex = { type: 'object', properties: { id: str, sets: str, reps: str, why: str }, required: ['id', 'sets', 'reps', 'why'], additionalProperties: false };
+    return {
+      type: 'object',
+      properties: {
+        title: str,
+        sections: { type: 'array', items: { type: 'object', properties: { heading: str, exercises: { type: 'array', items: ex } }, required: ['heading', 'exercises'], additionalProperties: false } },
+        notes: { type: 'array', items: str }
+      },
+      required: ['title', 'sections', 'notes'],
+      additionalProperties: false
+    };
+  }
+  function startExSuggest() {
+    if (suggestBusy || scanBusy) return;
+    var lt = suggestTool(), x = state.ex;
+    function fail(msg) { scanInfo = { tool: 'ex', kind: 'error', ai: true, text: msg }; renderScanBar(); }
+    if (!lt) return;
+    var cfg = exSuggestCfg(), c = computeFor(lt), why = blocker(c, lt);
+    if (why) return fail(TOOL_NAMES[lt] + ' report: ' + why.charAt(0).toLowerCase() + why.slice(1) + ' Then suggest again.');
+    if (!DATA.ai || !cfg.model) return fail('The AI settings file (interpretation.json) didn’t load. Reopen the app while online.');
+    if (!aiKey()) { openAiSettings(function () { if (state.tool === 'ex') startExSuggest(); }, 'To suggest exercises from a report, the app needs a Claude API key. ' + ONCE_NOTE()); return; }
+    if (navigator.onLine === false) return fail('No internet connection. Connect to suggest exercises, or add them from the library.');
+    var gen = scanGen, max = cfg.max_exercises || 8;
+    suggestBusy = true;
+    scanInfo = { tool: 'ex', kind: 'busy', ai: true, text: 'Choosing exercises from the ' + TOOL_NAMES[lt] + ' report… this can take up to a minute.' };
+    renderScanBar();
+    var body = {
+      model: cfg.model, max_tokens: cfg.max_tokens || 4000, system: [].concat(cfg.system || []).join('\n'),
+      messages: [{ role: 'user', content: exSuggestRequest(lt, c, max) }],
+      output_config: { format: { type: 'json_schema', schema: exSuggestSchema() } }
+    };
+    if (cfg.effort) body.output_config.effort = cfg.effort;
+    claudeRequest(aiKey(), body, cfg.endpoint, cfg.timeout_s || 90, 'suggest exercises').then(function (j) {
+      if (gen !== scanGen || state.ex !== x) return;
+      if (j.stop_reason === 'max_tokens') throw new Error('Claude’s answer was cut short. Try again.');
+      if (j.stop_reason === 'refusal') throw new Error('Claude didn’t suggest exercises for these results. Add them from the library instead.');
+      var out;
+      try { out = JSON.parse(replyText(j)); } catch (e) { throw new Error('Claude’s answer couldn’t be read. Try again.'); }
+      applyExSuggest(out, lt, max);
+    }).catch(function (err) {
+      if (gen !== scanGen || state.ex !== x) return;
+      scanInfo = { tool: 'ex', kind: 'error', ai: true, text: err && err.message ? err.message : 'Something went wrong suggesting exercises. Try again.' };
+    }).then(function () {
+      if (gen !== scanGen) return;
+      suggestBusy = false;
+      if (state.tool === 'ex' && state.exPage === 'builder') {
+        if (scanInfo && scanInfo.undo) { renderExTable(); foldNow('ex', false); }
+        renderScanBar();
+        var bar = $('scanBar');
+        if (bar && !bar.hidden && bar.scrollIntoView) {
+          var r = bar.getBoundingClientRect(), top = appbarH + (state.ex.cardOpen === false ? 48 : 0);
+          if (r.top < top || r.bottom > window.innerHeight) bar.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        }
+      } else if (scanInfo && scanInfo.undo) { foldBeforeRender('ex'); saveDraft(); }   // suggested while on another page: folded there for when it's opened
+    });
+  }
+  // the suggested rows into the program: linked to the library, marked to check; after the rows already there. Only ids in
+  // the library count (each once); Undo puts back exactly what was there
+  function applyExSuggest(out, lt, max) {
+    var x = state.ex, found = [], n = 0, seen = {}, dropped = 0;
+    x.items.forEach(function (r) { if (r.kind === 'ex' && r.lib) seen[r.lib] = true; });
+    (out && Array.isArray(out.sections) ? out.sections : []).forEach(function (sec) {
+      if (!sec || typeof sec !== 'object') return;
+      var rows = [];
+      (Array.isArray(sec.exercises) ? sec.exercises : []).forEach(function (e) {
+        var id = e && typeof e === 'object' ? String(e.id || '').trim() : '', lib = libGet(id);
+        if (!lib || lib.deleted) { if (id) dropped++; return; }
+        if (seen[lib.id] || n >= max) return;
+        seen[lib.id] = true; n++;
+        rows.push({ name: lib.name, sets: exTidy(e.sets, 'sets'), reps: exTidy(e.reps, 'reps'), lib: lib.id, why: clean1(e.why).slice(0, 120) });
+      });
+      if (!rows.length) return;
+      var h = exTidy(sec.heading, 'heading');
+      if (h) found.push({ heading: h });
+      rows.forEach(function (r) { found.push({ row: r }); });
+    });
+    var notes = (out && Array.isArray(out.notes) ? out.notes : []).map(function (u) { return clean1(u); }).filter(Boolean).slice(0, 8);
+    if (dropped) notes.push(dropped + (dropped === 1 ? ' suggestion wasn’t' : ' suggestions weren’t') + ' in the library and ' + (dropped === 1 ? 'was' : 'were') + ' left out.');
+    if (!n) { scanInfo = { tool: 'ex', kind: 'empty', ai: true, from: lt, unclear: notes, undo: null }; return; }
+    var before = exSnap(), added = x.items.some(function (r) { return r.kind === 'ex' && !blank(r.name); });
+    found.forEach(function (f) {
+      var it = f.heading ? newExSection(f.heading) : newExRow(f.row);
+      if (!f.heading) it.why = f.row.why;
+      x.scanned[it.id] = true;
+      x.items.push(it);
+    });
+    var title = exTidy(out.title, 'title');
+    if (title && blank(x.title)) { x.title = title; x.scanned.title = true; }
+    scanInfo = { tool: 'ex', kind: 'done', ai: true, from: lt, n: n, added: added, unclear: notes, undo: before };
   }
 
   // ------------------------------------------------------------------ exercise library (v15)
