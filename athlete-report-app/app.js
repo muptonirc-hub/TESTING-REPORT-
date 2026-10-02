@@ -3055,7 +3055,9 @@
     var extra = [info.date ? 'test date' : '', info.mass ? 'body mass' : ''].filter(Boolean);
     var html = '<span class="scan-ico">' + ico + '</span>' + (info.ai ? (info.kind === 'empty'
       ? '<span class="scan-msg">Claude didn’t find exercises in the library for the ' + esc(TOOL_NAMES[info.from]) + ' results. Nothing was changed.</span>'
-      : '<span class="scan-msg"><b>Claude suggested ' + info.n + (info.n === 1 ? ' exercise' : ' exercises') + ' from the ' + esc(TOOL_NAMES[info.from]) + ' report' + (info.added ? ', after the ones already there' : '') + '.</b> Check each one, and its sets and reps, before creating the handout.</span>')
+      : '<span class="scan-msg"><b>Claude suggested ' + info.n + (info.n === 1 ? ' exercise' : ' exercises') + ' from the ' + esc(TOOL_NAMES[info.from]) + ' report' + (info.added ? ', after the ones already there' : '') +
+        (info.own ? (info.own === info.n ? (info.n === 1 ? ', not in the library' : ', none in the library') : ', ' + info.own + ' not in the library') : '') + '.</b> Check each one, and its sets and reps, before creating the handout.' +
+        (info.own ? ' More › Save to library keeps an exercise of Claude’s for next time.' : '') + '</span>')
       : t === 'ex' ? (info.kind === 'empty'
       ? '<span class="scan-msg">No exercises were found on the ' + (info.photos > 1 ? 'photos' : 'photo') + '. Check it’s a photo of the exercise page, or try a clearer photo. Nothing was changed.</span>'
       : '<span class="scan-msg"><b>Filled ' + info.n + (info.n === 1 ? ' exercise' : ' exercises') + ' from your notes.</b> Check them against the page before creating the handout.' +
@@ -3840,21 +3842,24 @@
   // same de-identified results text as the interpretation (no name, date or practitioner), the interpretation itself if
   // there is one (the clinician's emphasis; the patient's name taken out should it be in there), the exercises already in
   // the program, and the library as a menu (id, name, body areas, type, equipment, checked). It answers with library ids
-  // only: anything else is dropped. The rows arrive linked to the library (cues and video as usual), with sets and reps
-  // and a one-line "why" under each (shown in the app, never printed), in the blue "check me" look of a scan, with Undo.
-  // Hamstring and ACL wait until the library can say which rehab phase an exercise suits.
+  // where the library fits; v22 (Matthew, after trying it): where the library has nothing suitable, or something clearly
+  // better exists, Claude gives an exercise of its own by name, with a short note for the handout. Library rows arrive
+  // linked (cues and video as usual); Claude's own arrive unlinked, "Not in the library" on their why line, with Save to
+  // library one tap away in More. Each row has sets and reps and a one-line "why" under it (shown in the app, never
+  // printed), in the blue "check me" look of a scan, with Undo. A name of Claude's that is a library exercise after all is
+  // linked to it. Hamstring and ACL wait until the library can say which rehab phase an exercise suits.
   var SUGGEST_TOOLS = ['screen', 'str'];
   var EX_SUGGEST_DEFAULT = {
     effort: 'medium', max_tokens: 4000, timeout_s: 90, max_exercises: 8,
     system: [
       'You suggest an exercise program for a sports physiotherapist at BASE Health Noosa, a clinic in Queensland, Australia, from the results of a testing report. Your suggestions fill a draft that the physiotherapist checks, edits and then prints as a handout for the person tested. The physiotherapist makes every clinical decision; you are saving them the first draft.',
-      'Choose only from the library listed in the request, giving each exercise’s id exactly as written. Never invent an exercise or use an id that isn’t in the list. If a priority has no suitable exercise in the library, say so in notes instead of forcing a poor fit.',
+      'Prefer the clinic’s library listed in the request: when it has a suitable exercise, give its id exactly as written there (and leave name empty). When the library has nothing suitable for a priority, or a clearly better exercise exists, give an exercise of your own instead: leave id empty and give its name (a clear, full name in sentence case, with the equipment or variation in the name) and one short note, under 100 characters, telling the person how to do it, which prints on their handout. Never use an id that isn’t in the list.',
       'Pick 4 to 8 exercises in all (fewer when there are few findings), aimed at the main priorities: results marked Off target first, then Close, then at most one exercise that keeps up a clear strength if there is room. Don’t repeat an exercise already in the program. When two library exercises fit equally well, prefer one marked checked by a clinician.',
       'Group them into 1 to 3 short sections with plain headings, for example "Hamstring strength" or "Jump power"; one section with an empty heading is fine when they don’t split.',
       'For each exercise give sets and reps as plain numbers or ranges ("3", "8–10", or "30 s" for a hold), sensible for the exercise type: strength 3 × 6–10; isometric holds 3–5 × 20–45 s; plyometric 3 × 5–8; mobility 2 × 8–12 or 30–60 s; balance and control 2–3 × 30–45 s. Leave load, rest and tempo to the physiotherapist (don’t give them).',
       'why: one short line, under 80 characters, naming the finding the exercise is for, with its number and target, for example "Nordic L/R imbalance 12.9%, target ≤ 9" or "Right calf 22 reps, left 27". Plain Australian English, no jargon.',
       'title: a short title for the program from its focus, for example "Jump power and hamstring strength", or an empty string.',
-      'notes: anything the physiotherapist should know, one sentence each: a priority with no suitable library exercise, or a finding that needs their judgement. Leave notes empty when there is nothing to say.',
+      'notes: anything the physiotherapist should know, one sentence each: why an exercise of your own was chosen over the library, or a finding that needs their judgement. Leave notes empty when there is nothing to say.',
       'Use only the information given. Don’t diagnose, predict injury or give medical advice, and never say anything about being cleared to return to sport. Refer to the person as the athlete or the patient, never by a name.'
     ]
   };
@@ -3893,7 +3898,7 @@
   }
   function exSuggestSchema() {
     var str = { type: 'string' };
-    var ex = { type: 'object', properties: { id: str, sets: str, reps: str, why: str }, required: ['id', 'sets', 'reps', 'why'], additionalProperties: false };
+    var ex = { type: 'object', properties: { id: str, name: str, sets: str, reps: str, note: str, why: str }, required: ['id', 'name', 'sets', 'reps', 'note', 'why'], additionalProperties: false };
     return {
       type: 'object',
       properties: {
@@ -3949,20 +3954,27 @@
       } else if (scanInfo && scanInfo.undo) { foldBeforeRender('ex'); saveDraft(); }   // suggested while on another page: folded there for when it's opened
     });
   }
-  // the suggested rows into the program: linked to the library, marked to check; after the rows already there. Only ids in
-  // the library count (each once); Undo puts back exactly what was there
+  // the suggested rows into the program: library rows linked, Claude's own unlinked (v22), all marked to check; after the
+  // rows already there. An id not in the library with no name is dropped; each exercise once; Undo puts back exactly what
+  // was there
   function applyExSuggest(out, lt, max) {
-    var x = state.ex, found = [], n = 0, seen = {}, dropped = 0;
-    x.items.forEach(function (r) { if (r.kind === 'ex' && r.lib) seen[r.lib] = true; });
+    var x = state.ex, found = [], n = 0, own = 0, seen = {}, dropped = 0, lib = libList();
+    x.items.forEach(function (r) { if (r.kind !== 'ex') return; if (r.lib) seen[r.lib] = true; var k = E.libKey(r.name); if (k) seen['~' + k] = true; });
     (out && Array.isArray(out.sections) ? out.sections : []).forEach(function (sec) {
       if (!sec || typeof sec !== 'object') return;
       var rows = [];
       (Array.isArray(sec.exercises) ? sec.exercises : []).forEach(function (e) {
-        var id = e && typeof e === 'object' ? String(e.id || '').trim() : '', lib = libGet(id);
-        if (!lib || lib.deleted) { if (id) dropped++; return; }
-        if (seen[lib.id] || n >= max) return;
-        seen[lib.id] = true; n++;
-        rows.push({ name: lib.name, sets: exTidy(e.sets, 'sets'), reps: exTidy(e.reps, 'reps'), lib: lib.id, why: clean1(e.why).slice(0, 120) });
+        if (!e || typeof e !== 'object') return;
+        var id = String(e.id || '').trim(), name = exTidy(e.name, 'name'), entry = libGet(id);
+        if (entry && entry.deleted) entry = null;
+        if (!entry && name) entry = E.libMatch(name, lib);        // Claude's own name that is a library exercise after all
+        if (!entry && !name) { if (id) dropped++; return; }
+        var key = entry ? entry.id : '~' + E.libKey(name);
+        if (seen[key] || (entry && seen['~' + E.libKey(entry.name)]) || n >= max) return;
+        seen[key] = true; n++;
+        var why = clean1(e.why).slice(0, 100);
+        if (entry) rows.push({ name: entry.name, sets: exTidy(e.sets, 'sets'), reps: exTidy(e.reps, 'reps'), lib: entry.id, why: why });
+        else { own++; rows.push({ name: name, sets: exTidy(e.sets, 'sets'), reps: exTidy(e.reps, 'reps'), notes: exTidy(e.note, 'notes').slice(0, 120), lib: '', why: 'Not in the library' + (why ? ' · ' + why : '') }); }
       });
       if (!rows.length) return;
       var h = exTidy(sec.heading, 'heading');
@@ -3981,7 +3993,7 @@
     });
     var title = exTidy(out.title, 'title');
     if (title && blank(x.title)) { x.title = title; x.scanned.title = true; }
-    scanInfo = { tool: 'ex', kind: 'done', ai: true, from: lt, n: n, added: added, unclear: notes, undo: before };
+    scanInfo = { tool: 'ex', kind: 'done', ai: true, from: lt, n: n, own: own, added: added, unclear: notes, undo: before };
   }
 
   // ------------------------------------------------------------------ exercise library (v15)
