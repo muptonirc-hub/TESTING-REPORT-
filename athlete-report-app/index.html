@@ -279,6 +279,13 @@ html.signed-out .workspace, html.signed-out .dock, html.signed-out .tools, html.
 /* v18: a first visit (no previous result on the page) has no Previous column until + Add previous results */
 .entry.no-prev .metric [data-field="previous"], .entry.no-prev .metric:not(.lsi) .m-bl-b, .entry.no-prev .cols .c-prev { visibility: hidden; }
 .tests-card { max-width: 480px; }
+/* v23: the Suggest from the report dialog: four choices as segmented controls */
+.plan-card { max-width: 480px; }
+.plan-fields { display: grid; gap: 12px; margin-top: 14px; }
+.plan-fields .f { display: grid; gap: 6px; }
+.plan-fields .f > span { font-size: 13px; font-weight: 650; color: var(--muted); }
+.plan-fields .seg button { font-size: 14.5px; padding: 0 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+@media (max-width: 359px) { .plan-fields .seg button { font-size: 13.5px; padding: 0 4px; } }
 .tests-links { display: flex; gap: 2px; margin: 8px 0 0 -8px; }
 .tests-links .quiet { min-height: 36px; font-size: 14.5px; }
 .tests-list { list-style: none; margin: 4px 0 0; padding: 0; border: 1px solid var(--line); border-radius: 12px; background: var(--field); max-height: 52vh; overflow-y: auto; }
@@ -1367,6 +1374,19 @@ html.row-dragging, html.row-dragging * { cursor: grabbing !important; user-selec
   </div>
 </div>
 
+<!-- v23: Suggest from the report asks about the person and the setting first; the choices are kept with the program -->
+<div class="modal" id="suggestDialog" role="dialog" aria-modal="true" aria-labelledby="suggestTitle" aria-describedby="suggestLead" hidden>
+  <div class="modal-card plan-card">
+    <h2 id="suggestTitle">Suggest from the report</h2>
+    <p id="suggestLead"></p>
+    <div class="plan-fields" id="suggestPlan"></div>
+    <div class="modal-actions">
+      <button class="ghost" id="suggestCancel" type="button">Cancel</button>
+      <button class="primary" id="suggestGo" type="button">Suggest</button>
+    </div>
+  </div>
+</div>
+
 <!-- v13, cloud mode: the practitioner's name on this device (⋯ › Change your name…) -->
 <div class="modal" id="nameDialog" role="dialog" aria-modal="true" aria-labelledby="nameTitle" aria-describedby="nameLead" hidden>
   <div class="modal-card">
@@ -1544,13 +1564,13 @@ html.row-dragging, html.row-dragging * { cursor: grabbing !important; user-selec
 
 <div class="toast" id="toast" role="status" hidden></div>
 
-<script src="engine.js?v=22" defer></script>
-<script src="report-fonts.js?v=22" defer></script>
-<script src="jspdf.umd.min.js?v=22" defer></script>
-<script src="qrcode.js?v=22" defer></script>
-<script src="report.js?v=22" defer></script>
-<script src="cloud-config.js?v=22" defer></script>
-<script src="cloud.js?v=22" defer></script>
-<script src="app.js?v=22" defer></script>
+<script src="engine.js?v=23" defer></script>
+<script src="report-fonts.js?v=23" defer></script>
+<script src="jspdf.umd.min.js?v=23" defer></script>
+<script src="qrcode.js?v=23" defer></script>
+<script src="report.js?v=23" defer></script>
+<script src="cloud-config.js?v=23" defer></script>
+<script src="cloud.js?v=23" defer></script>
+<script src="app.js?v=23" defer></script>
 </body>
 </html>

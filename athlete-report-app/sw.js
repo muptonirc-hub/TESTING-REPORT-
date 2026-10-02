@@ -4,9 +4,9 @@
    falling back to the saved copy when offline or when the network takes longer than 4 seconds.
    Google's endpoints (the clinic store, v13) and the exercise videos (YouTube, Vimeo, v15) are on other origins, so they are
    never cached or intercepted here. */
-var CACHE = 'bh-athlete-report-v22';
-var FILES = ['./', 'index.html', 'app.js?v=22', 'engine.js?v=22', 'qrcode.js?v=22', 'report.js?v=22', 'report-fonts.js?v=22', 'jspdf.umd.min.js?v=22', 'cloud-config.js?v=22', 'cloud.js?v=22',
-  'norms.json', 'strength_norms.json', 'hamstring_norms.json', 'acl_norms.json', 'interpretation.json', 'explainers.json', 'exercise_library.json', 'manifest.webmanifest',
+var CACHE = 'bh-athlete-report-v23';
+var FILES = ['./', 'index.html', 'app.js?v=23', 'engine.js?v=23', 'qrcode.js?v=23', 'report.js?v=23', 'report-fonts.js?v=23', 'jspdf.umd.min.js?v=23', 'cloud-config.js?v=23', 'cloud.js?v=23',
+  'norms.json', 'strength_norms.json', 'hamstring_norms.json', 'acl_norms.json', 'interpretation.json', 'explainers.json', 'exercise_library.json', 'programming_guide.md', 'manifest.webmanifest',
   'icon-192.png', 'icon-512.png', 'icon-maskable-512.png', 'apple-touch-icon.png', 'rajdhani-600.woff2', 'rajdhani-700.woff2'];
 
 self.addEventListener('install', function (event) {

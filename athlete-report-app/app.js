@@ -37,6 +37,7 @@
     moreBtn: $('moreBtn'), moreMenu: $('moreMenu'), restoreItem: $('restoreItem'), aiItem: $('aiItem'), appbar: document.querySelector('.appbar'),
     demoItem: $('demoItem'), demoSep: $('demoSep'),
     testsDialog: $('testsDialog'), testsLead: $('testsLead'), testsList: $('testsList'), testsAll: $('testsAll'), testsNone: $('testsNone'), testsDone: $('testsDone'),
+    suggestDialog: $('suggestDialog'), suggestLead: $('suggestLead'), suggestPlan: $('suggestPlan'), suggestCancel: $('suggestCancel'), suggestGo: $('suggestGo'),   // v23
     // v13: the clinic store's sign-in card, status bar and dialogs
     cloudBar: $('cloudBar'), signin: $('signin'), signinForm: $('signinForm'), signinEmail: $('signinEmail'), signinPassword: $('signinPassword'), signinShow: $('signinShow'),
     signinName: $('signinName'), signinBtn: $('signinBtn'), signinErr: $('signinErr'), accountTpl: $('accountTpl'),
@@ -3092,7 +3093,16 @@
   var GRIP = '<svg class="grip-dots" viewBox="0 0 10 16" width="10" height="16" aria-hidden="true" focusable="false" fill="currentColor"><circle cx="2.5" cy="3" r="1.5"/><circle cx="7.5" cy="3" r="1.5"/><circle cx="2.5" cy="8" r="1.5"/><circle cx="7.5" cy="8" r="1.5"/><circle cx="2.5" cy="13" r="1.5"/><circle cx="7.5" cy="13" r="1.5"/></svg>';
 
   // link (v19): the Screening tool whose report this program prints after ('' when it prints on its own)
-  function freshEx() { return { meta: { name: '', date: todayIso(), practitioner: userName() }, title: '', instructions: '', items: [], seq: 1, scanned: {}, cardOpen: true, link: '' }; }
+  function freshEx() { return { meta: { name: '', date: todayIso(), practitioner: userName() }, title: '', instructions: '', items: [], seq: 1, scanned: {}, cardOpen: true, link: '', plan: freshPlan() }; }
+  // v23: what Suggest from the report asks before it suggests (the person and the setting); kept with the program and saved with it
+  var PLAN = { sessions: ['2', '3', '4'], setting: ['Gym', 'Home', 'Both'], level: ['New', 'Trained'], weeks: ['4', '6', '8'] };
+  var PLAN_LABEL = { sessions: 'Sessions a week', setting: 'Where', level: 'Experience (new to training, or trained)', weeks: 'Block (weeks)' };
+  function freshPlan() { return { sessions: '3', setting: 'Gym', level: 'Trained', weeks: '6' }; }
+  function tidyPlan(p) {
+    var out = freshPlan();
+    if (p && typeof p === 'object') Object.keys(PLAN).forEach(function (k) { var v = k === 'level' && p[k] === 'New to training' ? 'New' : p[k]; if (PLAN[k].indexOf(v) >= 0) out[k] = v; });
+    return out;
+  }
   function exStr(v) { return typeof v === 'string' ? v : (typeof v === 'number' && isFinite(v) ? String(v) : ''); }
   // drafts from v9 and earlier have no program; anything malformed in a stored one is tidied
   function tidyEx() {
@@ -3127,6 +3137,7 @@
     x.scanned = keep;
     x.cardOpen = x.cardOpen !== false;                 // v11: the patient card open unless folded into the strip
     x.link = TOOLS.indexOf(x.link) >= 0 ? x.link : ''; // v19: the report it prints after (drafts from v18: none)
+    x.plan = tidyPlan(x.plan);                         // v23
     delete x.editing;                                  // v18: no Edit mode (v11–v17 kept it off the draft anyway)
   }
   function newExRow(o) {
@@ -3718,7 +3729,7 @@
         title: title, instructions: instructions,
         groups: groups.filter(function (g) { return g.rows.length; })
       }),
-      program: { title: title, instructions: instructions, items: items }
+      program: { title: title, instructions: instructions, items: items, plan: tidyPlan(x.plan) }   // v23: the plan goes with the saved program
     };
   }
 
@@ -3854,9 +3865,11 @@
     system: [
       'You suggest an exercise program for a sports physiotherapist at BASE Health Noosa, a clinic in Queensland, Australia, from the results of a testing report. Your suggestions fill a draft that the physiotherapist checks, edits and then prints as a handout for the person tested. The physiotherapist makes every clinical decision; you are saving them the first draft.',
       'Prefer the clinic’s library listed in the request: when it has a suitable exercise, give its id exactly as written there (and leave name empty). When the library has nothing suitable for a priority, or a clearly better exercise exists, give an exercise of your own instead: leave id empty and give its name (a clear, full name in sentence case, with the equipment or variation in the name) and one short note, under 100 characters, telling the person how to do it, which prints on their handout. Never use an id that isn’t in the list.',
+      'Follow the clinic’s programming guide in the request for everything it covers: which exercise family fits each finding, one exercise per training quality (never two with the same effect, such as a box jump and a squat jump), how many exercises, the order of the session, the training variables by intent, the weekly structure for the sessions given, the setting, the experience level and the block length. Where the guide is silent, use standard strength and conditioning practice.',
       'Pick 4 to 8 exercises in all (fewer when there are few findings), aimed at the main priorities: results marked Off target first, then Close, then at most one exercise that keeps up a clear strength if there is room. Don’t repeat an exercise already in the program. When two library exercises fit equally well, prefer one marked checked by a clinician.',
-      'Group them into 1 to 3 short sections with plain headings, for example "Hamstring strength" or "Jump power"; one section with an empty heading is fine when they don’t split.',
-      'For each exercise give sets and reps as plain numbers or ranges ("3", "8–10", or "30 s" for a hold), sensible for the exercise type: strength 3 × 6–10; isometric holds 3–5 × 20–45 s; plyometric 3 × 5–8; mobility 2 × 8–12 or 30–60 s; balance and control 2–3 × 30–45 s. Leave load, rest and tempo to the physiotherapist (don’t give them).',
+      'Group them into 1 to 4 short sections in session order, each heading naming the intent of the block, for example "Power", "Strength" or "Hamstrings and hips"; one section with an empty heading is fine when they don’t split.',
+      'For each exercise give every variable: sets and reps as plain numbers or ranges ("3", "8–10", or "30 s" for a hold); load as a short guide the person can act on ("Body weight", "Heavy, 2 reps in reserve", "A weight you could lift 8 times"); rest ("2 min", "60 s"); tempo only where it matters ("3 s down", "3-0-3", or empty); side ("Each side", "Left", "Right", or empty). Put the intent cue in note (under 100 characters), for example "Every rep as fast as you can on the way up"; for an exercise of your own the note also says how to do it.',
+      'instructions: one line of general instructions for the handout from the plan, for example "3 sessions a week for 6 weeks, at least a day between sessions", or an empty string.',
       'why: one short line, under 80 characters, naming the finding the exercise is for, with its number and target, for example "Nordic L/R imbalance 12.9%, target ≤ 9" or "Right calf 22 reps, left 27". Plain Australian English, no jargon.',
       'title: a short title for the program from its focus, for example "Jump power and hamstring strength", or an empty string.',
       'notes: anything the physiotherapist should know, one sentence each: why an exercise of your own was chosen over the library, or a finding that needs their judgement. Leave notes empty when there is nothing to say.',
@@ -3886,33 +3899,45 @@
     return e.id + ' | ' + clean1(e.name) + ' | ' + (Array.isArray(e.areas) && e.areas.length ? e.areas.map(clean1).join(', ') : '—') + ' | ' + clean1(e.type || '—') +
       ' | ' + clean1(e.equipment || '—') + ' | ' + (e.checked ? 'checked' : 'not yet checked');
   }
-  function exSuggestRequest(lt, c, max) {
-    var L = ['Suggest the exercise program for this report, choosing from the clinic’s library below (at most ' + max + ' exercises).', '', interpPayload(lt, c)];
+  function guideText(cfg) {                            // the guide without its sources list, within a size cap
+    var g = String(DATA.guide || ''), i = g.search(/^## Sources/m);
+    if (i > 0) g = g.slice(0, i);
+    var cap = cfg && cfg.guide_max_chars ? cfg.guide_max_chars : 24000;
+    return g.trim().slice(0, cap);
+  }
+  function exSuggestRequest(lt, c, max, cfg) {
+    var L = ['Suggest the exercise program for this report, choosing from the clinic’s library below (at most ' + max + ' exercises), following the clinic’s programming guide at the end for selection, order and the training variables.', '', interpPayload(lt, c)];
+    L.push('', 'The program: ' + planLines(tidyPlan(state.ex.plan)));   // v23
     var it = state[lt].interp, who = person(lt);
     if (!blank(it.text)) L.push('', 'The physiotherapist’s interpretation of these results (their emphasis): ' + withoutName(clean1(it.text), state[lt].meta.name, who));
     var have = state.ex.items.filter(function (r) { return r.kind === 'ex' && !blank(r.name); }).map(function (r) { return clean1(r.name); });
     if (have.length) L.push('', 'Already in the program (don’t repeat these): ' + have.join('; '));
     L.push('', 'Library (id | name | body areas | type | equipment | checked by a clinician):');
     libList().slice(0, 300).forEach(function (e) { L.push(libLine(e)); });
+    var g = guideText(cfg);
+    if (g) L.push('', 'Clinic programming guide (follow it; it takes precedence over general knowledge):', '', g);
     return L.join('\n');
   }
   function exSuggestSchema() {
     var str = { type: 'string' };
-    var ex = { type: 'object', properties: { id: str, name: str, sets: str, reps: str, note: str, why: str }, required: ['id', 'name', 'sets', 'reps', 'note', 'why'], additionalProperties: false };
+    var ex = { type: 'object', properties: { id: str, name: str, sets: str, reps: str, load: str, rest: str, tempo: str, side: str, note: str, why: str },
+      required: ['id', 'name', 'sets', 'reps', 'load', 'rest', 'tempo', 'side', 'note', 'why'], additionalProperties: false };
     return {
       type: 'object',
       properties: {
-        title: str,
+        title: str, instructions: str,
         sections: { type: 'array', items: { type: 'object', properties: { heading: str, exercises: { type: 'array', items: ex } }, required: ['heading', 'exercises'], additionalProperties: false } },
         notes: { type: 'array', items: str }
       },
-      required: ['title', 'sections', 'notes'],
+      required: ['title', 'instructions', 'sections', 'notes'],
       additionalProperties: false
     };
   }
+  // v23: Suggest from the report asks about the person and the setting first (a small dialog; the choices are kept with the
+  // program), then sends the request
   function startExSuggest() {
     if (suggestBusy || scanBusy) return;
-    var lt = suggestTool(), x = state.ex;
+    var lt = suggestTool();
     function fail(msg) { scanInfo = { tool: 'ex', kind: 'error', ai: true, text: msg }; renderScanBar(); }
     if (!lt) return;
     var cfg = exSuggestCfg(), c = computeFor(lt), why = blocker(c, lt);
@@ -3920,16 +3945,46 @@
     if (!DATA.ai || !cfg.model) return fail('The AI settings file (interpretation.json) didn’t load. Reopen the app while online.');
     if (!aiKey()) { openAiSettings(function () { if (state.tool === 'ex') startExSuggest(); }, 'To suggest exercises from a report, the app needs a Claude API key. ' + ONCE_NOTE()); return; }
     if (navigator.onLine === false) return fail('No internet connection. Connect to suggest exercises, or add them from the library.');
+    renderPlanDialog(lt);
+    openModal(els.suggestDialog, els.suggestGo);
+  }
+  function renderPlanDialog(lt) {
+    var plan = state.ex.plan = tidyPlan(state.ex.plan);
+    els.suggestLead.textContent = 'Claude gets the ' + TOOL_NAMES[lt] + ' results (no name or date), your interpretation, the exercises already here, the library and the clinic’s programming guide' + (DATA.guide ? '' : ' (not loaded: reopen the app online to fetch it)') + '. About 3 cents.';
+    els.suggestPlan.innerHTML = Object.keys(PLAN).map(function (k) {
+      return '<div class="f"><span id="plan-' + k + '-l">' + esc(PLAN_LABEL[k]) + '</span><div class="seg" role="group" aria-labelledby="plan-' + k + '-l">' +
+        PLAN[k].map(function (o) { return '<button type="button" data-plan="' + k + '" data-value="' + esc(o) + '" aria-pressed="' + (plan[k] === o) + '">' + esc(o) + '</button>'; }).join('') + '</div></div>';
+    }).join('');
+  }
+  function onPlanClick(e) {
+    var b = e.target.closest('button[data-plan]');
+    if (!b) return;
+    var k = b.dataset.plan;
+    state.ex.plan[k] = b.dataset.value;
+    b.parentNode.querySelectorAll('button').forEach(function (x) { x.setAttribute('aria-pressed', String(x.dataset.value === b.dataset.value)); });
+    saveDraft();
+  }
+  function planLines(plan) {
+    return 'Sessions a week: ' + plan.sessions + '. Setting: ' + plan.setting.toLowerCase() + '. Training experience: ' + (plan.level === 'New' ? 'new to training' : 'trained') + '. Block length: ' + plan.weeks + ' weeks.';
+  }
+  function runExSuggest() {
+    closeModal(false);
+    if (suggestBusy || scanBusy) return;
+    var lt = suggestTool(), x = state.ex;
+    if (!lt || !aiKey()) return;
+    var cfg = exSuggestCfg(), c = computeFor(lt);
+    if (blocker(c, lt)) return;
     var gen = scanGen, max = cfg.max_exercises || 8;
     suggestBusy = true;
     scanInfo = { tool: 'ex', kind: 'busy', ai: true, text: 'Choosing exercises from the ' + TOOL_NAMES[lt] + ' report… this can take up to a minute.' };
     renderScanBar();
     var body = {
       model: cfg.model, max_tokens: cfg.max_tokens || 4000, system: [].concat(cfg.system || []).join('\n'),
-      messages: [{ role: 'user', content: exSuggestRequest(lt, c, max) }],
+      messages: [{ role: 'user', content: exSuggestRequest(lt, c, max, cfg) }],
       output_config: { format: { type: 'json_schema', schema: exSuggestSchema() } }
     };
     if (cfg.effort) body.output_config.effort = cfg.effort;
+    focusQuiet($('exSuggest'));
     claudeRequest(aiKey(), body, cfg.endpoint, cfg.timeout_s || 90, 'suggest exercises').then(function (j) {
       if (gen !== scanGen || state.ex !== x) return;
       if (j.stop_reason === 'max_tokens') throw new Error('Claude’s answer was cut short. Try again.');
@@ -3973,8 +4028,11 @@
         if (seen[key] || (entry && seen['~' + E.libKey(entry.name)]) || n >= max) return;
         seen[key] = true; n++;
         var why = clean1(e.why).slice(0, 100);
-        if (entry) rows.push({ name: entry.name, sets: exTidy(e.sets, 'sets'), reps: exTidy(e.reps, 'reps'), lib: entry.id, why: why });
-        else { own++; rows.push({ name: name, sets: exTidy(e.sets, 'sets'), reps: exTidy(e.reps, 'reps'), notes: exTidy(e.note, 'notes').slice(0, 120), lib: '', why: 'Not in the library' + (why ? ' · ' + why : '') }); }
+        var row = { sets: exTidy(e.sets, 'sets'), reps: exTidy(e.reps, 'reps'), load: exTidy(e.load, 'load'), rest: exTidy(e.rest, 'rest'), tempo: exTidy(e.tempo, 'tempo'), side: exTidy(e.side, 'side'),
+          notes: exTidy(e.note, 'notes').slice(0, 160) };   // v23: every variable (the guide sets them), the intent cue in the notes
+        if (entry) { row.name = entry.name; row.lib = entry.id; row.why = why; }
+        else { own++; row.name = name; row.lib = ''; row.why = 'Not in the library' + (why ? ' · ' + why : ''); }
+        rows.push(row);
       });
       if (!rows.length) return;
       var h = exTidy(sec.heading, 'heading');
@@ -3991,8 +4049,9 @@
       x.scanned[it.id] = true;
       x.items.push(it);
     });
-    var title = exTidy(out.title, 'title');
+    var title = exTidy(out.title, 'title'), instr = exTidy(out.instructions, 'instructions');
     if (title && blank(x.title)) { x.title = title; x.scanned.title = true; }
+    if (instr && blank(x.instructions)) { x.instructions = instr; x.scanned.instructions = true; }   // v23: e.g. "3 sessions a week for 6 weeks"
     scanInfo = { tool: 'ex', kind: 'done', ai: true, from: lt, n: n, own: own, added: added, unclear: notes, undo: before };
   }
 
@@ -4942,6 +5001,7 @@
     x.title = exTidy(exStr(p.title), 'title');
     x.instructions = exTidy(exStr(p.instructions), 'instructions');
     x.items = progItems(p.items).map(function (it) { return it.kind === 'section' ? newExSection(it.heading) : newExRow(it); });
+    if (p.plan) x.plan = tidyPlan(p.plan);             // v23: the client's last plan (sessions a week, setting, experience, block)
     x.scanned = {};
     if (scanInfo && scanInfo.tool === 'ex') scanInfo = null;   // a scan's Undo no longer applies to this program
     exLoaded = { key: key, date: last.date };
@@ -5520,6 +5580,12 @@
       return r.json();
     });
   }
+  function fetchText(url) {                            // v23: the programming guide (markdown)
+    return fetch(url).then(function (r) {
+      if (!r.ok) throw new Error(url + ' (' + r.status + ')');
+      return r.text();
+    });
+  }
   function start() {
     // the AI settings are optional: the app works without them (the Draft button explains)
     var ai = fetchJson('interpretation.json').catch(function () { return null; });
@@ -5527,8 +5593,11 @@
     var explain = fetchJson('explainers.json').catch(function () { return null; });
     // v15: and the starter exercise library (without it the library holds only the clinic's own exercises)
     var starter = fetchJson('exercise_library.json').catch(function () { return null; });
-    Promise.all([fetchJson('norms.json'), fetchJson('hamstring_norms.json'), fetchJson('acl_norms.json'), fetchJson('strength_norms.json'), ai, explain, starter]).then(function (r) {
+    // v23: the clinic's programming guide, which Suggest from the report follows (without it Claude works from the prompt alone)
+    var guide = fetchText('programming_guide.md').catch(function () { return ''; });
+    Promise.all([fetchJson('norms.json'), fetchJson('hamstring_norms.json'), fetchJson('acl_norms.json'), fetchJson('strength_norms.json'), ai, explain, starter, guide]).then(function (r) {
       DATA.screen = r[0]; DATA.ham = r[1]; DATA.acl = r[2]; DATA.str = r[3]; DATA.ai = r[4];
+      DATA.guide = typeof r[7] === 'string' && r[7].indexOf('<') !== 0 ? r[7] : '';   // (an HTML 404 page from an older cache is not a guide)
       DATA.explain = r[5] && r[5].metrics && typeof r[5].metrics === 'object' ? r[5] : { metrics: {} };
       localLib = loadItems(LIB_STORE);                 // v15: local mode's library and templates (cloud mode reads the store's cache)
       localTpl = loadItems(TPL_STORE);
@@ -5629,6 +5698,9 @@
       wireExDialogs();                                 // v15: the library editor, + From library, the video player, templates
       els.back.addEventListener('click', closeReport);
       els.sheetExBtn.addEventListener('click', addProgramFromReport);   // v20
+      els.suggestPlan.addEventListener('click', onPlanClick);            // v23: the Suggest from the report dialog
+      els.suggestCancel.addEventListener('click', function () { closeModal(); });
+      els.suggestGo.addEventListener('click', runExSuggest);
       // v20: the version running, at the foot of the ⋯ menu (from app.js's own ?v= in index.html)
       var appScript = document.querySelector('script[src*="app.js"]'), appV = appScript && /[?&]v=(\d+)/.exec(appScript.getAttribute('src') || '');
       if ($('menuVer')) $('menuVer').textContent = 'BASE Health Report' + (appV ? ' · version ' + appV[1] : '');
