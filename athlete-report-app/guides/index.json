@@ -1,0 +1,155 @@
+{
+  "about": "The evidence guide library (v24). Each guide is a markdown draft written from peer-reviewed sources for the clinic to review and edit on GitHub; the app picks up edits the next time it opens online. This file says which guides travel with a request to Claude. Suggest from the report always sends 'always'; when a condition is chosen (or the report is a rehab report: by_tool names the condition for each rehab tool and the label shown, and the report's rehab phase stands in for the stage) it also sends 'rehab' and the condition's guides. The app sends each guide without its '## Sources' section. Guide ids are the file names without .md. A condition's label is what the menu shows (keep it short); its detail goes to Claude with the label. A guide's short name is what the Suggest dialog lists.",
+  "always": [
+    "training-variables"
+  ],
+  "rehab": [
+    "rehab-principles"
+  ],
+  "by_tool": {
+    "ham": {
+      "condition": "strain",
+      "label": "Hamstring strain"
+    },
+    "acl": {
+      "condition": "acl",
+      "label": "ACL reconstruction"
+    }
+  },
+  "stages": [
+    "Early",
+    "Middle",
+    "Late",
+    "Ongoing"
+  ],
+  "stage_help": {
+    "Early": "settle symptoms, protect the healing tissue and restore basic movement and strength",
+    "Middle": "build strength, capacity and control",
+    "Late": "return to running, sport-specific loading and return to sport",
+    "Ongoing": "maintenance and prevention after the return to sport"
+  },
+  "conditions": [
+    {
+      "id": "none",
+      "label": "No injury or condition",
+      "detail": "",
+      "guides": []
+    },
+    {
+      "id": "tendon",
+      "label": "Tendinopathy",
+      "detail": "patellar, Achilles, gluteal, proximal hamstring or lateral elbow tendinopathy",
+      "guides": [
+        "tendinopathy"
+      ]
+    },
+    {
+      "id": "strain",
+      "label": "Muscle strain",
+      "detail": "hamstring, calf, quadriceps or adductor strain",
+      "guides": [
+        "muscle-strains"
+      ]
+    },
+    {
+      "id": "acl",
+      "label": "ACL reconstruction",
+      "detail": "",
+      "guides": [
+        "acl"
+      ]
+    },
+    {
+      "id": "ankle",
+      "label": "Ankle sprain or instability",
+      "detail": "lateral ankle sprain or chronic ankle instability",
+      "guides": [
+        "ankle-sprain"
+      ]
+    },
+    {
+      "id": "groin",
+      "label": "Groin or hip-related pain",
+      "detail": "adductor-, iliopsoas-, inguinal- or pubic-related groin pain, or hip-related pain such as FAI syndrome",
+      "guides": [
+        "groin-pain"
+      ]
+    },
+    {
+      "id": "shoulder",
+      "label": "Shoulder (rotator cuff)",
+      "detail": "rotator cuff related shoulder pain, a cuff tear or repair",
+      "guides": [
+        "rotator-cuff"
+      ]
+    },
+    {
+      "id": "knee",
+      "label": "Patellofemoral pain or OA",
+      "detail": "patellofemoral pain, or knee or hip osteoarthritis",
+      "guides": [
+        "pfp-oa"
+      ]
+    },
+    {
+      "id": "back",
+      "label": "Low back pain",
+      "detail": "acute, recurrent or persistent non-specific low back pain",
+      "guides": [
+        "low-back-pain"
+      ]
+    }
+  ],
+  "guides": {
+    "training-variables": {
+      "title": "Training variables: what the evidence says",
+      "short": "training variables",
+      "file": "guides/training-variables.md"
+    },
+    "rehab-principles": {
+      "title": "Rehabilitation principles: loading, pain, criteria and return to sport",
+      "short": "rehab principles",
+      "file": "guides/rehab-principles.md"
+    },
+    "muscle-strains": {
+      "title": "Muscle strain injuries: hamstring in depth, calf, adductor and quadriceps",
+      "short": "muscle strains",
+      "file": "guides/muscle-strains.md"
+    },
+    "acl": {
+      "title": "ACL reconstruction: rehabilitation and return to sport",
+      "short": "ACL reconstruction",
+      "file": "guides/acl.md"
+    },
+    "tendinopathy": {
+      "title": "Tendinopathy: patellar in depth; Achilles, gluteal, proximal hamstring and lateral elbow",
+      "short": "tendinopathy",
+      "file": "guides/tendinopathy.md"
+    },
+    "ankle-sprain": {
+      "title": "Lateral ankle sprain and chronic ankle instability",
+      "short": "ankle sprain",
+      "file": "guides/ankle-sprain.md"
+    },
+    "groin-pain": {
+      "title": "Groin pain in athletes: adductor-, iliopsoas-, inguinal-, pubic- and hip-related",
+      "short": "groin pain",
+      "file": "guides/groin-pain.md"
+    },
+    "rotator-cuff": {
+      "title": "Rotator cuff related shoulder pain, cuff tears and repair, and the overhead athlete",
+      "short": "rotator cuff",
+      "file": "guides/rotator-cuff.md"
+    },
+    "pfp-oa": {
+      "title": "Patellofemoral pain and knee/hip osteoarthritis: exercise-based management",
+      "short": "patellofemoral pain and OA",
+      "file": "guides/pfp-oa.md"
+    },
+    "low-back-pain": {
+      "title": "Low back pain in active adults and athletes: exercise-based management",
+      "short": "low back pain",
+      "file": "guides/low-back-pain.md"
+    }
+  }
+}
