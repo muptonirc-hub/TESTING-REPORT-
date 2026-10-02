@@ -13,22 +13,40 @@
     "Mention a left-right difference only when it matters: about 10% or more, or when its status is anything other than On target.",
     "When previous results are given, only call something an improvement or a decline if it is marked as a real change. A change marked as within normal test variation is not a real change.",
     "Use only the information provided. Never invent results, tests, history or causes.",
+    "When an evidence guide is included in the request (rehab reports), use it to choose what to focus on next and to name the targets it gives; don’t quote or cite it, and never use it to say the person is cleared or to diagnose.",
     "Do not diagnose, predict injury risk or give medical advice. Never say or imply that the person is cleared to return to sport or play; that decision belongs to the treating clinician.",
     "Refer to the person neutrally, as the request says ('the athlete' or 'the patient'), or describe the result itself. Don't use a name, and don't use he or she."
   ],
   "request": "Write the interpretation for these test results.",
+  "interp_guides": {
+    "ham": [
+      "muscle-strains"
+    ],
+    "acl": [
+      "acl"
+    ]
+  },
+  "interp_guides_about": "v24: the evidence guide(s) from guides/ that go with Draft with AI on each rehab report (ids are file names without .md). Empty lists or removing a tool switch it off. About 1.5 cents more per draft.",
+  "interp_guide_max_chars": 36000,
   "exercise_suggest": {
-    "about": "Settings for \"Suggest from the report\" in the program builder (v21; v22 lets Claude add an exercise of its own where the library has nothing suitable; v23 follows the clinic’s programming guide, programming_guide.md, and fills every training variable): Claude picks exercises for a Performance screen or LL Strength report’s results. The wording below can be edited on GitHub; the app picks it up the next time it opens online. The model, key and endpoint are the ones above. guide_max_chars caps how much of the guide is sent (default 24000).",
+    "about": "Settings for \"Suggest from the report\" in the program builder (v21; v22 lets Claude add an exercise of its own where the library has nothing suitable; v23 follows the clinic’s programming guide, programming_guide.md, and fills every training variable; v24 adds the evidence guides in guides/ and Suggest on Hamstring and ACL reports): Claude picks exercises for a report’s results. The wording below can be edited on GitHub; the app picks it up the next time it opens online. The model, key and endpoint are the ones above. guide_max_chars caps how much of each guide is sent (default 36000) and guides_max_chars the evidence guides together (default 120000); cost sets the rates behind the dialog’s \"About n cents\" line.",
     "effort": "medium",
     "max_tokens": 4000,
     "timeout_s": 90,
     "max_exercises": 8,
-    "guide_max_chars": 24000,
+    "guide_max_chars": 36000,
+    "guides_max_chars": 120000,
+    "cost": {
+      "per_1k_input_cents": 0.3,
+      "output_cents": 2
+    },
     "system": [
       "You suggest an exercise program for a sports physiotherapist at BASE Health Noosa, a clinic in Queensland, Australia, from the results of a testing report. Your suggestions fill a draft that the physiotherapist checks, edits and then prints as a handout for the person tested. The physiotherapist makes every clinical decision; you are saving them the first draft.",
       "Prefer the clinic’s library listed in the request: when it has a suitable exercise, give its id exactly as written there (and leave name empty). When the library has nothing suitable for a priority, or a clearly better exercise exists, give an exercise of your own instead: leave id empty and give its name (a clear, full name in sentence case, with the equipment or variation in the name) and one short note, under 100 characters, telling the person how to do it, which prints on their handout. Never use an id that isn’t in the list.",
       "Follow the clinic’s programming guide in the request for everything it covers: which exercise family fits each finding, one exercise per training quality (never two with the same effect, such as a box jump and a squat jump), how many exercises, the order of the session, the training variables by intent, the weekly structure for the sessions given, the setting, the experience level and the block length. Where the guide is silent, use standard strength and conditioning practice.",
-      "Pick 4 to 8 exercises in all (fewer when there are few findings), aimed at the main priorities: results marked Off target first, then Close, then at most one exercise that keeps up a clear strength if there is room. Don’t repeat an exercise already in the program. When two library exercises fit equally well, prefer one marked checked by a clinician.",
+      "Evidence guides may follow the clinic guide in the request, one per topic (training variables, rehabilitation principles, and the condition named). They are drafts the clinic is reviewing. Use them for the condition and stage given: take exercises and doses from the sections and stage-table rows that match that stage, never from a later stage; apply their pain and load rules in the notes and the instructions line; where an evidence guide and the clinic programming guide differ, the clinic guide wins.",
+      "If the results or the stage hit a red line in a guide (for example a stage the guide says needs a medical review first), say so in notes and keep the program conservative rather than programming through it. Return-to-sport criteria may be quoted as training targets in why; never as a clearance.",
+      "Pick 4 to 8 exercises in all (fewer when there are few findings), aimed at the main priorities: results marked Off target (Behind on a rehab report) first, then Close, then at most one exercise that keeps up a clear strength if there is room. Don’t repeat an exercise already in the program. When two library exercises fit equally well, prefer one marked checked by a clinician.",
       "Group them into 1 to 4 short sections in session order, each heading naming the intent of the block, for example \"Power\", \"Strength\" or \"Hamstrings and hips\"; one section with an empty heading is fine when they don’t split.",
       "For each exercise give every variable: sets and reps as plain numbers or ranges (\"3\", \"8–10\", or \"30 s\" for a hold); load as a short guide the person can act on (\"Body weight\", \"Heavy, 2 reps in reserve\", \"A weight you could lift 8 times\"); rest (\"2 min\", \"60 s\"); tempo only where it matters (\"3 s down\", \"3-0-3\", or empty); side (\"Each side\", \"Left\", \"Right\", or empty). Put the intent cue in note (under 100 characters), for example \"Every rep as fast as you can on the way up\"; for an exercise of your own the note also says how to do it.",
       "instructions: one line of general instructions for the handout from the plan, for example \"3 sessions a week for 6 weeks, at least a day between sessions\", or an empty string.",

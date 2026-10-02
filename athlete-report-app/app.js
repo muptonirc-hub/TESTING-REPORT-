@@ -17,7 +17,7 @@
   'use strict';
   var E = window.BHEngine;
   var CLOUD = window.BHCloud && window.BHCloud.enabled ? window.BHCloud : null;   // v13: the clinic store, or null in local mode
-  var DATA = {};
+  var DATA = { guides: {}, guideIndex: null };         // v24: the evidence guides land here at start
   var STORE = 'bh-athlete-report-draft-v1';
   var IS_IOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
   var state = null;
@@ -2624,11 +2624,22 @@
   function replyText(j) {
     return ((j && j.content) || []).filter(function (b) { return b && b.type === 'text'; }).map(function (b) { return b.text; }).join('\n');
   }
-  function callClaude(key, payload) {
+  // v24: the evidence guide(s) that go with an interpretation request, by tool (interpretation.json › interp_guides, e.g.
+  // {"ham": ["muscle-strains"], "acl": ["acl"]}; absent or empty = none). Without their sources lists, within a cap.
+  function interpGuideText(t) {
+    var cfg = DATA.ai || {}, map = cfg.interp_guides && typeof cfg.interp_guides === 'object' ? cfg.interp_guides : {};
+    var ids = Array.isArray(map[t]) ? map[t].filter(function (id) { return typeof id === 'string'; }) : [], cap = cfg.interp_guide_max_chars || 36000, parts = [];
+    ids.forEach(function (id) {
+      var body = bodyOf(DATA.guides[id], cap), meta = DATA.guideIndex && DATA.guideIndex.guides ? DATA.guideIndex.guides[id] : null;
+      if (body) parts.push('### Guide: ' + (clean1(meta && meta.title) || id) + '\n\n' + body);
+    });
+    return parts.length ? 'Evidence guide for this condition (a draft the clinic is reviewing; use it for what to focus on next and for the targets it names; never for a diagnosis or a clearance):\n\n' + parts.join('\n\n') : '';
+  }
+  function callClaude(key, payload, extra) {           // extra (v24): text sent after the payload but not part of the draft's basis
     var cfg = DATA.ai;
     var body = {
       model: cfg.model, max_tokens: cfg.max_tokens || 2000, system: [].concat(cfg.system || []).join('\n'),
-      messages: [{ role: 'user', content: (cfg.request || 'Write the interpretation for these test results.') + '\n\n' + payload }]
+      messages: [{ role: 'user', content: (cfg.request || 'Write the interpretation for these test results.') + '\n\n' + payload + (extra ? '\n\n' + extra : '') }]
     };
     if (cfg.effort) body.output_config = { effort: cfg.effort };
     return claudeRequest(key, body, cfg.endpoint, cfg.timeout_s || 60).then(function (j) {
@@ -2650,7 +2661,7 @@
     var payload = interpPayload(t, c), basis = hashStr(payload), gen = aiGen;
     aiBusy = t; interpUndo = null;
     refresh();                                       // v18: the card unfolds and the summary says it's drafting
-    callClaude(key, payload).then(function (text) {
+    callClaude(key, payload, interpGuideText(t)).then(function (text) {   // v24: the condition's evidence guide on rehab reports
       if (gen !== aiGen) return;                     // cleared while waiting
       var it = state[t].interp;
       if (!blank(it.text)) interpUndo = { tool: t, text: it.text, ai: it.ai, basis: it.basis };
@@ -3094,13 +3105,21 @@
 
   // link (v19): the Screening tool whose report this program prints after ('' when it prints on its own)
   function freshEx() { return { meta: { name: '', date: todayIso(), practitioner: userName() }, title: '', instructions: '', items: [], seq: 1, scanned: {}, cardOpen: true, link: '', plan: freshPlan() }; }
-  // v23: what Suggest from the report asks before it suggests (the person and the setting); kept with the program and saved with it
+  // v23: what Suggest from the report asks before it suggests (the person and the setting); kept with the program and saved with it.
+  // v24: plus a condition (an id from guides/index.json, 'none' for none) and its stage, which pick the evidence guides sent
   var PLAN = { sessions: ['2', '3', '4'], setting: ['Gym', 'Home', 'Both'], level: ['New', 'Trained'], weeks: ['4', '6', '8'] };
   var PLAN_LABEL = { sessions: 'Sessions a week', setting: 'Where', level: 'Experience (new to training, or trained)', weeks: 'Block (weeks)' };
-  function freshPlan() { return { sessions: '3', setting: 'Gym', level: 'Trained', weeks: '6' }; }
+  var STAGES_DEFAULT = ['Early', 'Middle', 'Late', 'Ongoing'];
+  function stageList() { var g = DATA.guideIndex; return g && Array.isArray(g.stages) && g.stages.length ? g.stages.map(clean1).filter(Boolean) : STAGES_DEFAULT; }
+  function freshPlan() { return { sessions: '3', setting: 'Gym', level: 'Trained', weeks: '6', condition: 'none', stage: '' }; }
   function tidyPlan(p) {
     var out = freshPlan();
-    if (p && typeof p === 'object') Object.keys(PLAN).forEach(function (k) { var v = k === 'level' && p[k] === 'New to training' ? 'New' : p[k]; if (PLAN[k].indexOf(v) >= 0) out[k] = v; });
+    if (p && typeof p === 'object') {
+      Object.keys(PLAN).forEach(function (k) { var v = k === 'level' && p[k] === 'New to training' ? 'New' : p[k]; if (PLAN[k].indexOf(v) >= 0) out[k] = v; });
+      if (typeof p.condition === 'string' && /^[a-z0-9-]{1,32}$/.test(p.condition)) out.condition = p.condition;   // v24: checked against the index when used
+      if (typeof p.stage === 'string' && stageList().indexOf(p.stage) >= 0) out.stage = p.stage;
+    }
+    if (out.condition === 'none') out.stage = '';
     return out;
   }
   function exStr(v) { return typeof v === 'string' ? v : (typeof v === 'number' && isFinite(v) ? String(v) : ''); }
@@ -3858,15 +3877,17 @@
   // linked (cues and video as usual); Claude's own arrive unlinked, "Not in the library" on their why line, with Save to
   // library one tap away in More. Each row has sets and reps and a one-line "why" under it (shown in the app, never
   // printed), in the blue "check me" look of a scan, with Undo. A name of Claude's that is a library exercise after all is
-  // linked to it. Hamstring and ACL wait until the library can say which rehab phase an exercise suits.
-  var SUGGEST_TOOLS = ['screen', 'str'];
+  // linked to it. v24: Hamstring and ACL reports suggest too, with the evidence guides for the condition and the report's phase.
+  var SUGGEST_TOOLS = ['screen', 'str', 'ham', 'acl'];
   var EX_SUGGEST_DEFAULT = {
     effort: 'medium', max_tokens: 4000, timeout_s: 90, max_exercises: 8,
     system: [
       'You suggest an exercise program for a sports physiotherapist at BASE Health Noosa, a clinic in Queensland, Australia, from the results of a testing report. Your suggestions fill a draft that the physiotherapist checks, edits and then prints as a handout for the person tested. The physiotherapist makes every clinical decision; you are saving them the first draft.',
       'Prefer the clinic’s library listed in the request: when it has a suitable exercise, give its id exactly as written there (and leave name empty). When the library has nothing suitable for a priority, or a clearly better exercise exists, give an exercise of your own instead: leave id empty and give its name (a clear, full name in sentence case, with the equipment or variation in the name) and one short note, under 100 characters, telling the person how to do it, which prints on their handout. Never use an id that isn’t in the list.',
       'Follow the clinic’s programming guide in the request for everything it covers: which exercise family fits each finding, one exercise per training quality (never two with the same effect, such as a box jump and a squat jump), how many exercises, the order of the session, the training variables by intent, the weekly structure for the sessions given, the setting, the experience level and the block length. Where the guide is silent, use standard strength and conditioning practice.',
-      'Pick 4 to 8 exercises in all (fewer when there are few findings), aimed at the main priorities: results marked Off target first, then Close, then at most one exercise that keeps up a clear strength if there is room. Don’t repeat an exercise already in the program. When two library exercises fit equally well, prefer one marked checked by a clinician.',
+      'Evidence guides may follow the clinic guide in the request, one per topic (training variables, rehabilitation principles, and the condition named). They are drafts the clinic is reviewing. Use them for the condition and stage given: take exercises and doses from the sections and stage-table rows that match that stage, never from a later stage; apply their pain and load rules in the notes and the instructions line; where an evidence guide and the clinic programming guide differ, the clinic guide wins.',
+      'If the results or the stage hit a red line in a guide (for example a stage the guide says needs a medical review first), say so in notes and keep the program conservative rather than programming through it. Return-to-sport criteria may be quoted as training targets in why; never as a clearance.',
+      'Pick 4 to 8 exercises in all (fewer when there are few findings), aimed at the main priorities: results marked Off target (Behind on a rehab report) first, then Close, then at most one exercise that keeps up a clear strength if there is room. Don’t repeat an exercise already in the program. When two library exercises fit equally well, prefer one marked checked by a clinician.',
       'Group them into 1 to 4 short sections in session order, each heading naming the intent of the block, for example "Power", "Strength" or "Hamstrings and hips"; one section with an empty heading is fine when they don’t split.',
       'For each exercise give every variable: sets and reps as plain numbers or ranges ("3", "8–10", or "30 s" for a hold); load as a short guide the person can act on ("Body weight", "Heavy, 2 reps in reserve", "A weight you could lift 8 times"); rest ("2 min", "60 s"); tempo only where it matters ("3 s down", "3-0-3", or empty); side ("Each side", "Left", "Right", or empty). Put the intent cue in note (under 100 characters), for example "Every rep as fast as you can on the way up"; for an exercise of your own the note also says how to do it.',
       'instructions: one line of general instructions for the handout from the plan, for example "3 sessions a week for 6 weeks, at least a day between sessions", or an empty string.',
@@ -3877,6 +3898,7 @@
     ]
   };
   var suggestBusy = false;                             // one suggestion at a time (and never alongside a scan)
+  var guidesReady = Promise.resolve();                 // v24: the guide library's load (set at start)
   function exSuggestCfg() {                            // same model, key and endpoint as the interpretation; "exercise_suggest" in interpretation.json overrides
     var cfg = Object.assign({}, EX_SUGGEST_DEFAULT), ai = DATA.ai || {};
     cfg.model = ai.model; cfg.endpoint = ai.endpoint;
@@ -3899,15 +3921,61 @@
     return e.id + ' | ' + clean1(e.name) + ' | ' + (Array.isArray(e.areas) && e.areas.length ? e.areas.map(clean1).join(', ') : '—') + ' | ' + clean1(e.type || '—') +
       ' | ' + clean1(e.equipment || '—') + ' | ' + (e.checked ? 'checked' : 'not yet checked');
   }
-  function guideText(cfg) {                            // the guide without its sources list, within a size cap
-    var g = String(DATA.guide || ''), i = g.search(/^## Sources/m);
+  function bodyOf(text, cap) {                         // a guide without its sources list, within a size cap
+    var g = String(text || ''), i = g.search(/^## Sources/m);
     if (i > 0) g = g.slice(0, i);
-    var cap = cfg && cfg.guide_max_chars ? cfg.guide_max_chars : 24000;
     return g.trim().slice(0, cap);
   }
+  function guideCap(cfg) { return cfg && cfg.guide_max_chars ? cfg.guide_max_chars : 36000; }
+  function guideText(cfg) { return bodyOf(DATA.guide, guideCap(cfg)); }
+  // v24: the evidence guides. guides/index.json says which travel with a request: 'always' (training variables) with every
+  // suggestion; 'rehab' (rehabilitation principles) plus the condition's own guide when a condition is chosen in the plan, or
+  // when the report is a rehab report (by_tool). Each goes without its sources list, within the per-guide cap, and the whole
+  // bundle within guides_max_chars. The physiotherapist sets the condition and the stage; the app never infers either.
+  function conditionList() { var g = DATA.guideIndex; return g && Array.isArray(g.conditions) ? g.conditions.filter(function (c) { return c && typeof c === 'object' && /^[a-z0-9-]{1,32}$/.test(String(c.id || '')); }) : []; }
+  function conditionFor(lt, plan) {                    // the condition a request is for: the report's (rehab reports) or the plan's; null for none
+    var g = DATA.guideIndex, by = g && g.by_tool ? g.by_tool[lt] : null, fixed = typeof by === 'string' ? { condition: by, label: '' } : (by && typeof by === 'object' ? by : null);
+    var id = fixed ? String(fixed.condition || '') : (plan && plan.condition) || 'none';
+    if (!id || id === 'none') return null;
+    var hit = conditionList().filter(function (c) { return c.id === id; })[0];
+    if (!hit) return null;
+    return fixed ? { id: id, label: clean1(fixed.label) || clean1(hit.label) || id, detail: '', guides: Array.isArray(hit.guides) ? hit.guides : [], fixed: true }
+      : { id: id, label: clean1(hit.label) || id, detail: clean1(hit.detail), guides: Array.isArray(hit.guides) ? hit.guides : [], fixed: false };
+  }
+  function stageFor(lt, plan) {                        // the stage line for the request: a rehab report's phase, or the plan's stage
+    if (lt === 'ham' || lt === 'acl') { var ph = clean1(state[lt].phase); return ph ? 'Rehab phase (set by the physiotherapist on the report): ' + ph + '.' : ''; }
+    var s = plan && plan.stage, g = DATA.guideIndex, help = g && g.stage_help && typeof g.stage_help[s] === 'string' ? clean1(g.stage_help[s]) : '';
+    return s ? 'Stage (set by the physiotherapist): ' + s.toLowerCase() + (help ? ' (' + help + ')' : '') + '.' : '';
+  }
+  function guideBundle(lt, plan, cfg) {                // { ids, titles, text, chars } of the evidence guides for this request
+    var g = DATA.guideIndex, ids = [], out = { ids: [], titles: [], shorts: [], text: '', chars: 0 };
+    if (!g) return out;
+    var cond = conditionFor(lt, plan);
+    [].concat(Array.isArray(g.always) ? g.always : []).forEach(function (id) { if (ids.indexOf(id) < 0) ids.push(id); });
+    if (cond) [].concat(Array.isArray(g.rehab) ? g.rehab : [], cond.guides).forEach(function (id) { if (ids.indexOf(id) < 0) ids.push(id); });
+    var cap = guideCap(cfg), total = cfg && cfg.guides_max_chars ? cfg.guides_max_chars : 120000, parts = [];
+    ids.forEach(function (id) {
+      var body = bodyOf(DATA.guides[id], cap), meta = g.guides && g.guides[id];
+      if (!body) return;
+      var title = clean1(meta && meta.title) || id;
+      out.ids.push(id); out.titles.push(title); out.shorts.push(clean1(meta && meta.short) || id);
+      parts.push('### Guide: ' + title + '\n\n' + body);
+    });
+    out.text = parts.join('\n\n').slice(0, total);
+    out.chars = out.text.length;
+    return out;
+  }
+  function guidesMissing(lt, plan) {                   // ids the index names for this request that didn't load
+    var g = DATA.guideIndex; if (!g) return [];
+    var cond = conditionFor(lt, plan), ids = [].concat(Array.isArray(g.always) ? g.always : [], cond ? [].concat(Array.isArray(g.rehab) ? g.rehab : [], cond.guides) : []);
+    return ids.filter(function (id, i) { return ids.indexOf(id) === i && !DATA.guides[id]; });
+  }
   function exSuggestRequest(lt, c, max, cfg) {
+    var plan = tidyPlan(state.ex.plan);
     var L = ['Suggest the exercise program for this report, choosing from the clinic’s library below (at most ' + max + ' exercises), following the clinic’s programming guide at the end for selection, order and the training variables.', '', interpPayload(lt, c)];
-    L.push('', 'The program: ' + planLines(tidyPlan(state.ex.plan)));   // v23
+    L.push('', 'The program: ' + planLines(plan));   // v23
+    var cond = conditionFor(lt, plan), stage = stageFor(lt, plan);   // v24
+    if (cond) L.push('Condition (set by the physiotherapist): ' + cond.label + (cond.detail ? ' (' + cond.detail + ')' : '') + '.' + (stage ? ' ' + stage : ''));
     var it = state[lt].interp, who = person(lt);
     if (!blank(it.text)) L.push('', 'The physiotherapist’s interpretation of these results (their emphasis): ' + withoutName(clean1(it.text), state[lt].meta.name, who));
     var have = state.ex.items.filter(function (r) { return r.kind === 'ex' && !blank(r.name); }).map(function (r) { return clean1(r.name); });
@@ -3916,7 +3984,16 @@
     libList().slice(0, 300).forEach(function (e) { L.push(libLine(e)); });
     var g = guideText(cfg);
     if (g) L.push('', 'Clinic programming guide (follow it; it takes precedence over general knowledge):', '', g);
+    var ev = guideBundle(lt, plan, cfg);
+    if (ev.text) L.push('', 'Evidence guides (drafts the clinic is reviewing; use them for the condition and stage given; where they and the clinic programming guide differ, the clinic guide wins):', '', ev.text);
     return L.join('\n');
+  }
+  // v24: what a suggestion will cost, from the text about to be sent (about 4 characters a token) at the rates in
+  // interpretation.json › exercise_suggest › cost (cents per 1,000 input tokens, and cents for the answer)
+  function suggestCents(cfg, chars) {
+    var cost = cfg && cfg.cost && typeof cfg.cost === 'object' ? cfg.cost : {};
+    var inRate = isFinite(cost.per_1k_input_cents) ? +cost.per_1k_input_cents : 0.3, outCents = isFinite(cost.output_cents) ? +cost.output_cents : 2;
+    return Math.max(1, Math.round(chars / 4 / 1000 * inRate + outCents));
   }
   function exSuggestSchema() {
     var str = { type: 'string' };
@@ -3945,16 +4022,49 @@
     if (!DATA.ai || !cfg.model) return fail('The AI settings file (interpretation.json) didn’t load. Reopen the app while online.');
     if (!aiKey()) { openAiSettings(function () { if (state.tool === 'ex') startExSuggest(); }, 'To suggest exercises from a report, the app needs a Claude API key. ' + ONCE_NOTE()); return; }
     if (navigator.onLine === false) return fail('No internet connection. Connect to suggest exercises, or add them from the library.');
-    renderPlanDialog(lt);
-    openModal(els.suggestDialog, els.suggestGo);
+    var gen = scanGen;
+    guidesReady.then(function () {                     // v24: the guide library is usually long loaded; if not, the dialog waits for it
+      if (gen !== scanGen || state.tool !== 'ex' || suggestBusy || scanBusy || suggestTool() !== lt) return;
+      renderPlanDialog(lt);
+      openModal(els.suggestDialog, els.suggestGo);
+    });
+  }
+  // v24: the lead says what goes and what it costs; the condition row (a menu on a Performance screen or LL Strength
+  // report; the report's own condition and phase on a rehab report) and the stage row (while a condition is chosen)
+  function suggestLeadText(lt) {
+    var plan = tidyPlan(state.ex.plan), cfg = exSuggestCfg(), cond = conditionFor(lt, plan), ev = guideBundle(lt, plan, cfg);
+    var what = 'Claude gets the ' + TOOL_NAMES[lt] + ' results (no name or date), your interpretation, the exercises already here, the library, the clinic’s programming guide' +
+      (DATA.guide ? '' : ' (not loaded: reopen the app online to fetch it)');
+    if (ev.ids.length) what += ' and the evidence guide' + (ev.ids.length > 1 ? 's' : '') + ' (' + ev.shorts.join(', ') + ')';
+    var missing = guidesMissing(lt, plan);
+    if (missing.length) what += ' (' + missing.join(', ') + ' not loaded: reopen the app online to fetch ' + (missing.length > 1 ? 'them' : 'it') + ')';
+    else if (!DATA.guideIndex) what += ' (evidence guides not loaded: reopen the app online to fetch them)';
+    var chars = 0;
+    try { var c = computeFor(lt); chars = exSuggestRequest(lt, c, cfg.max_exercises || 8, cfg).length + [].concat(cfg.system || []).join('\n').length; } catch (e) { chars = 40000; }
+    return what + '. About ' + suggestCents(cfg, chars) + ' cents.';
   }
   function renderPlanDialog(lt) {
     var plan = state.ex.plan = tidyPlan(state.ex.plan);
-    els.suggestLead.textContent = 'Claude gets the ' + TOOL_NAMES[lt] + ' results (no name or date), your interpretation, the exercises already here, the library and the clinic’s programming guide' + (DATA.guide ? '' : ' (not loaded: reopen the app online to fetch it)') + '. About 3 cents.';
-    els.suggestPlan.innerHTML = Object.keys(PLAN).map(function (k) {
+    els.suggestLead.textContent = suggestLeadText(lt);
+    var rows = Object.keys(PLAN).map(function (k) {
       return '<div class="f"><span id="plan-' + k + '-l">' + esc(PLAN_LABEL[k]) + '</span><div class="seg" role="group" aria-labelledby="plan-' + k + '-l">' +
         PLAN[k].map(function (o) { return '<button type="button" data-plan="' + k + '" data-value="' + esc(o) + '" aria-pressed="' + (plan[k] === o) + '">' + esc(o) + '</button>'; }).join('') + '</div></div>';
-    }).join('');
+    });
+    var cond = conditionFor(lt, plan), conds = conditionList();
+    if (cond && cond.fixed) {                           // a rehab report: its condition and phase, shown, not chosen
+      var ph = clean1(state[lt].phase);
+      rows.push('<div class="f cond"><span>Condition and phase, from this report</span><p class="plan-fixed" id="planFixed">' + esc(cond.label) + (ph ? ' · ' + esc(ph) : '') + '</p></div>');
+    } else if (conds.length) {
+      rows.push('<div class="f cond"><label for="planCondition">Condition (optional: adds its evidence guide)</label><select id="planCondition" data-plan-select="condition">' +
+        conds.map(function (c) { return '<option value="' + esc(c.id) + '"' + (c.id === plan.condition ? ' selected' : '') + '>' + esc(c.label) + '</option>'; }).join('') + '</select></div>');
+      if (cond) {
+        var st = stageList();
+        rows.push('<div class="f"><span id="plan-stage-l">Stage (early, middle, late, or ongoing maintenance)</span><div class="seg stage" role="group" aria-labelledby="plan-stage-l">' +
+          st.map(function (o) { return '<button type="button" data-plan="stage" data-value="' + esc(o) + '" aria-pressed="' + (plan.stage === o) + '">' + esc(o) + '</button>'; }).join('') + '</div></div>');
+      }
+    }
+    els.suggestPlan.innerHTML = rows.join('');
+    els.suggestPlan.dataset.tool = lt;
   }
   function onPlanClick(e) {
     var b = e.target.closest('button[data-plan]');
@@ -3963,6 +4073,16 @@
     state.ex.plan[k] = b.dataset.value;
     b.parentNode.querySelectorAll('button').forEach(function (x) { x.setAttribute('aria-pressed', String(x.dataset.value === b.dataset.value)); });
     saveDraft();
+  }
+  function onPlanChange(e) {                           // v24: the condition menu
+    var s = e.target.closest('select[data-plan-select]');
+    if (!s) return;
+    var plan = state.ex.plan, lt = els.suggestPlan.dataset.tool;
+    plan.condition = s.value;
+    if (plan.condition !== 'none' && stageList().indexOf(plan.stage) < 0) plan.stage = stageList()[0];
+    if (plan.condition === 'none') plan.stage = '';
+    saveDraft();
+    if (lt) { renderPlanDialog(lt); var again = $('planCondition'); if (again) again.focus(); }
   }
   function planLines(plan) {
     return 'Sessions a week: ' + plan.sessions + '. Setting: ' + plan.setting.toLowerCase() + '. Training experience: ' + (plan.level === 'New' ? 'new to training' : 'trained') + '. Block length: ' + plan.weeks + ' weeks.';
@@ -5595,6 +5715,18 @@
     var starter = fetchJson('exercise_library.json').catch(function () { return null; });
     // v23: the clinic's programming guide, which Suggest from the report follows (without it Claude works from the prompt alone)
     var guide = fetchText('programming_guide.md').catch(function () { return ''; });
+    // v24: the evidence guide library (about 300 KB): guides/index.json names the guides and says which go with which
+    // request; each file is fetched on its own so one missing file costs only that guide (an HTML 404 page from an older
+    // cache is not a guide). It loads alongside the app rather than before it: Suggest from the report waits for it.
+    guidesReady = fetchJson('guides/index.json').then(function (ix) {
+      if (!ix || typeof ix !== 'object' || !ix.guides || typeof ix.guides !== 'object') return;
+      var ids = Object.keys(ix.guides).filter(function (id) { return /^[a-z0-9-]{1,40}$/.test(id) && ix.guides[id] && typeof ix.guides[id].file === 'string'; });
+      return Promise.all(ids.map(function (id) { return fetchText(ix.guides[id].file).catch(function () { return ''; }); })).then(function (texts) {
+        var texts2 = {};
+        ids.forEach(function (id, i) { if (typeof texts[i] === 'string' && texts[i] && texts[i].indexOf('<') !== 0) texts2[id] = texts[i]; });
+        DATA.guideIndex = ix; DATA.guides = texts2;
+      });
+    }).catch(function () { /* no guide library: Suggest says so */ });
     Promise.all([fetchJson('norms.json'), fetchJson('hamstring_norms.json'), fetchJson('acl_norms.json'), fetchJson('strength_norms.json'), ai, explain, starter, guide]).then(function (r) {
       DATA.screen = r[0]; DATA.ham = r[1]; DATA.acl = r[2]; DATA.str = r[3]; DATA.ai = r[4];
       DATA.guide = typeof r[7] === 'string' && r[7].indexOf('<') !== 0 ? r[7] : '';   // (an HTML 404 page from an older cache is not a guide)
@@ -5699,6 +5831,7 @@
       els.back.addEventListener('click', closeReport);
       els.sheetExBtn.addEventListener('click', addProgramFromReport);   // v20
       els.suggestPlan.addEventListener('click', onPlanClick);            // v23: the Suggest from the report dialog
+      els.suggestPlan.addEventListener('change', onPlanChange);          // v24: its condition menu
       els.suggestCancel.addEventListener('click', function () { closeModal(); });
       els.suggestGo.addEventListener('click', runExSuggest);
       // v20: the version running, at the foot of the ⋯ menu (from app.js's own ?v= in index.html)

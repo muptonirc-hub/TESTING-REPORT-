@@ -1,6 +1,6 @@
 # BASE Health Noosa — exercise programming guide
 
-**What this is.** The reference Claude follows when it suggests an exercise program from a Performance & Readiness screen or a Lower-Limb Strength report ("Suggest from the report" in the program builder). It covers how to pick exercises for each finding, how many to pick, the order of a session, and the training variables (sets, reps, load, rest, tempo, intent). The physiotherapist checks and edits every suggestion; this guide shapes the first draft.
+**What this is.** The reference Claude follows when it suggests an exercise program from a testing report ("Suggest from the report" in the program builder): a Performance & Readiness screen, a Lower-Limb Strength report or, from v24, a Hamstring or ACL rehab report. It covers how to pick exercises for each finding, how many to pick, the order of a session, and the training variables (sets, reps, load, rest, tempo, intent). The physiotherapist checks and edits every suggestion; this guide shapes the first draft.
 
 **Status: a first draft written from published evidence (sources at the end) for the clinic to review and edit.** Where BASE does things differently, change this file: the app reads it the next time it opens online. Keep each rule short and concrete; Claude follows what is written here over its general knowledge.
 
@@ -87,14 +87,14 @@ Give every exercise sets, reps, a load guide, rest, tempo where it matters, and 
 
 | Intent | Sets × reps | Load guide | Rest | Tempo | Cue for the notes |
 |---|---|---|---|---|---|
-| **Maximal strength** | 3–5 × 3–6 | Heavy: about 85% of 1RM, or 2 RIR | 2–3 min (up to 5 min on the biggest lifts) | Controlled down (2 s), drive up fast | "Every rep as fast as you can on the way up" |
-| **Power / ballistic** (jumps, throws, Olympic-lift derivatives) | 3–5 × 3–6 | Body weight or light (0–30% of 1RM); loaded jumps light | 2–3 min, full recovery | Explosive; reset between reps | "Maximal effort every rep; stop the set if it slows" |
+| **Maximal strength** | 3–5 × 3–6 | Heavy: about 85% of 1RM, or 2 RIR; stop the set when bar speed drops clearly (about 10–20% slower) rather than grinding | 2–3 min (up to 5 min on the biggest lifts); 1–2 min is enough for someone new to training | Controlled down (2 s), drive up fast | "Every rep as fast as you can on the way up" |
+| **Power / ballistic** (jumps, throws, Olympic-lift derivatives) | 3–5 × 3–6 | Body weight for jumps; loaded jumps about 30% of 1RM; Olympic-lift derivatives and other loaded power work 30–70% of 1RM; stop the set when speed drops (about 10–20% slower) | 2–3 min, full recovery | Explosive; reset between reps | "Maximal effort every rep; stop the set if it slows" |
 | **Plyometric, fast-SSC** (pogos, hurdle hops, drop jumps) | 3–5 × 5–8 contacts; about 60–100 ground contacts per session for a beginner, up to 120–140 for the well trained | Body weight | 90 s – 2 min between sets (work:rest about 1:5 to 1:10) | Shortest ground contact possible | "Stiff ankle, short contact, land quietly" |
-| **Hypertrophy / strength capacity** | 3–4 × 8–12 | Moderate: 2–3 RIR | 60–90 s | 2 s down, 1–2 s up | "Smooth and controlled, 2–3 reps in reserve" |
+| **Hypertrophy / strength capacity** | 3–4 × 8–12; for a trained person aim for 10–20 hard sets per muscle group across the week | Moderate: 2–3 RIR | 60–90 s | 2 s down, 1–2 s up | "Smooth and controlled, 2–3 reps in reserve" |
 | **Local endurance / capacity** (calf raise reps, bridges) | 2–3 × 15–25+ | Body weight to light | 45–60 s | Rhythmic | "Steady rhythm, full range, stop 2 reps short of failure" |
 | **Eccentric hamstring (Nordic)** | Start 2 × 5, build to 3 × 8–12 over 6–10 weeks | Body weight (partner or strap) | 2 min | Lower over 3–4 s, push back up | "Lower as slowly as you can; keep hips straight" |
 | **Eccentric emphasis (other)** | 3 × 6–8 | Moderate | 90 s – 2 min | 3–4 s lowering, normal lift | "Slow on the way down" |
-| **Copenhagen adduction** | Start 2 × 6 per side, build to 3 × 12–15 over 8 weeks; short lever before long lever | Body weight | 60–90 s | Controlled | "Keep the body in a straight line; lower under control" |
+| **Copenhagen adduction** | One set per side, 2–3 times a week: start 3–5 reps, build to 12–15 over 8 weeks (a second set is optional); short lever before long lever; then one set a week to keep it | Body weight | 60–90 s | Controlled | "Keep the body in a straight line; lower under control" |
 | **Heavy slow resistance (tendon loading)** | 3–4 × 15 reps in weeks 1–3, to 4 × 6 by week 12 | 15RM progressing to 6RM | 2–3 min | 3 s up, 3 s down | "Slow and heavy both ways" |
 | **Isometric hold** (tendon pain, or isometric strength) | 5 × 30–45 s | About 70% of maximum, heavy | 2 min | Hold still | "Hold hard and still; breathe" |
 | **Isometric for force / rate of force** (IMTP holds, isometric squat) | 3–5 × 3–5 s maximal | Maximal effort against an immovable bar | 2–3 min | Build to maximum fast | "Pull as hard and fast as you can" |
@@ -143,7 +143,7 @@ The handout's general instructions should say the sessions per week and the bloc
 - Never a diagnosis, an injury prediction or a return-to-sport decision: the physiotherapist owns those.
 - No maximal plyometrics, drop jumps, heavy eccentrics or maximal isometrics for someone new to training, or where the report's notes mention pain; start with the easier version of the family.
 - A change the report marks as "within normal variation" is not a change; don't program for it.
-- This guide covers the Performance screen and the Lower-Limb Strength battery only. Hamstring and ACL rehab programs follow their own phase-based criteria and are not suggested from here yet.
+- Hamstring and ACL rehab programs (and any program with a condition chosen) also follow the evidence guides sent with the request (rehab principles and the condition's guide): the physiotherapist's rehab phase or stage decides which rows of their stage tables apply, and nothing from a later stage is programmed. Where this guide and an evidence guide differ, this guide wins.
 - When the library has nothing suitable and nothing better is clearly justified, say so in the notes rather than inventing something elaborate.
 
 ---
