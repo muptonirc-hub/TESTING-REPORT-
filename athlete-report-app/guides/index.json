@@ -1,8 +1,9 @@
 {
-  "about": "The evidence guide library (v24; v25 adds two guides). Each guide is a markdown draft written from peer-reviewed sources for the clinic to review and edit on GitHub; the app picks up edits the next time it opens online. This file says which guides travel with a request to Claude. Suggest from the report always sends 'always' (training variables, and how to read the performance tests); when a condition is chosen (or the report is a rehab report: by_tool names the condition for each rehab tool and the label shown, and the report's rehab phase stands in for the stage) it also sends 'rehab' (rehabilitation principles, and how to combine rehab and performance work in one program) and the condition's guides. The app sends each guide without its '## Sources' section. Guide ids are the file names without .md. A condition's label is what the menu shows (keep it short); its detail goes to Claude with the label. A guide's short name is what the Suggest dialog lists. 'sides' are the choices offered for a condition's side on Performance and LL Strength reports (v25); rehab reports use the report's injured side.",
+  "about": "The evidence guide library (v24; v25 adds two guides; v26 a third, block design). Each guide is a markdown draft written from peer-reviewed sources for the clinic to review and edit on GitHub; the app picks up edits the next time it opens online. This file says which guides travel with a request to Claude. Suggest from the report always sends 'always' (training variables, how to read the performance tests, and how to design the block: one focus and the week by training day); when a condition is chosen (or the report is a rehab report: by_tool names the condition for each rehab tool and the label shown, and the report's rehab phase stands in for the stage) it also sends 'rehab' (rehabilitation principles, and how to combine rehab and performance work in one program) and the condition's guides. The app sends each guide without its '## Sources' section. Guide ids are the file names without .md. A condition's label is what the menu shows (keep it short); its detail goes to Claude with the label. A guide's short name is what the Suggest dialog lists. 'sides' are the choices offered for a condition's side on Performance and LL Strength reports (v25); rehab reports use the report's injured side.",
   "always": [
     "training-variables",
-    "performance-tests"
+    "performance-tests",
+    "block-design"
   ],
   "rehab": [
     "rehab-principles",
@@ -117,6 +118,11 @@
       "title": "Reading the Performance screen: what each measure means and the training it points to",
       "short": "performance tests",
       "file": "guides/performance-tests.md"
+    },
+    "block-design": {
+      "title": "Designing the block: one focus, the week by training day, and what to defer",
+      "short": "block design",
+      "file": "guides/block-design.md"
     },
     "rehab-principles": {
       "title": "Rehabilitation principles: loading, pain, criteria and return to sport",
