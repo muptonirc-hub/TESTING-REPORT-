@@ -3,12 +3,12 @@
    Online it always asks the server first (so updated norms and app files show up straight away),
    falling back to the saved copy when offline or when the network takes longer than 4 seconds.
    Google's endpoints (the clinic store, v13) and the exercise videos (YouTube, Vimeo, v15) are on other origins, so they are
-   never cached or intercepted here. v24 adds the evidence guide library (guides/); v25 two more guides. */
-var CACHE = 'bh-athlete-report-v25';
-var FILES = ['./', 'index.html', 'app.js?v=25', 'engine.js?v=25', 'qrcode.js?v=25', 'report.js?v=25', 'report-fonts.js?v=25', 'jspdf.umd.min.js?v=25', 'cloud-config.js?v=25', 'cloud.js?v=25',
+   never cached or intercepted here. v24 adds the evidence guide library (guides/); v25 two more guides; v26 a third. */
+var CACHE = 'bh-athlete-report-v26';
+var FILES = ['./', 'index.html', 'app.js?v=26', 'engine.js?v=26', 'qrcode.js?v=26', 'report.js?v=26', 'report-fonts.js?v=26', 'jspdf.umd.min.js?v=26', 'cloud-config.js?v=26', 'cloud.js?v=26',
   'norms.json', 'strength_norms.json', 'hamstring_norms.json', 'acl_norms.json', 'interpretation.json', 'explainers.json', 'exercise_library.json', 'programming_guide.md', 'manifest.webmanifest',
   'guides/index.json', 'guides/training-variables.md', 'guides/rehab-principles.md', 'guides/muscle-strains.md', 'guides/acl.md', 'guides/tendinopathy.md', 'guides/ankle-sprain.md',
-  'guides/groin-pain.md', 'guides/rotator-cuff.md', 'guides/pfp-oa.md', 'guides/low-back-pain.md', 'guides/performance-tests.md', 'guides/rehab-performance.md',
+  'guides/groin-pain.md', 'guides/rotator-cuff.md', 'guides/pfp-oa.md', 'guides/low-back-pain.md', 'guides/performance-tests.md', 'guides/rehab-performance.md', 'guides/block-design.md',
   'icon-192.png', 'icon-512.png', 'icon-maskable-512.png', 'apple-touch-icon.png', 'rajdhani-600.woff2', 'rajdhani-700.woff2'];
 
 self.addEventListener('install', function (event) {

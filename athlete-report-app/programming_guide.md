@@ -116,7 +116,7 @@ Give every exercise sets, reps, a load guide, rest, tempo where it matters, and 
 - Each muscle group or quality twice a week beats once; the main lifts are better spread over the week than crammed into one day.
 - **Time-poor:** one or two hard sets of 6–12 reps per main lift, two or three days a week, maintains and still improves strength.
 
-The handout's general instructions should say the sessions per week and the block length in one line (for example "3 sessions a week for 6 weeks, at least a day between sessions").
+The program is written out by training day: one section per day with a heading that says what the day is for ("Day 1: Power and main strength", "Day 2: Strength and hamstrings", "Day 3: Capacity and control"), 3–5 exercises a day. The same exercise may appear on two days with a heavier and a lighter load; never two exercises for the same quality on one day. Someone new to training can repeat the same two or three full-body sessions. The handout's general instructions should say the sessions per week and the block length in one line (for example "3 sessions a week for 6 weeks, at least a day between sessions").
 
 ---
 
@@ -138,21 +138,34 @@ The handout's general instructions should say the sessions per week and the bloc
 
 ---
 
-## 8. One program for a condition and the performance findings (v25)
+## 8. One focus per block (v26)
+
+A block is not a little of everything. Each block has one focus, chosen in this order and named in the program's title:
+
+1. **An injury or condition that explains the flagged results** (same side, a quality it is known to lower at this stage) leads the block; its loading goes first on its days (section 9).
+2. **Otherwise the largest deficit in the quality the sport needs most.** Low absolute strength (IMTP relative force, quad ISO, the main lifts) → maximal strength first, with one ballistic exercise kept; strength adequate but a low DSI, RSI or jump → ballistic and reactive power, with one heavy lift kept; a one-sided deficit with a consistent direction → the weaker side's quality.
+3. **At most one secondary quality**, and one heavy exercise that keeps up a clear strength if there is room.
+4. **Everything else is deferred**, by name, to a later block, in the order strength (or rehab loading) → power and speed → sport-specific; the rationale lists what was deferred and what re-test opens the next block.
+
+The focus decides what comes first in the session, what gets the most sets and what is progressed; it does not ban the other qualities. The evidence guide "Designing the block" carries the detail: the single-focus block is best supported for power, speed-strength and jump, and for sequencing strength before power; for maximal strength and size, undulating and mixed sessions do as well.
+
+---
+
+## 9. One program for a condition and the performance findings (v25)
 
 When a condition is given with the request (chosen in the Suggest dialog with its side and stage, or fixed by a Hamstring or ACL report with its injured side and phase), the report is read as a whole before any exercise is chosen. The evidence guide "Rehab and performance in one program" carries the detail; BASE's rules are:
 
 1. **Sort the flagged findings first.** Explained by the condition: same side or region, and a quality that condition is known to lower at this stage (quadriceps and jump symmetry after ACL reconstruction; calf strength, hop reactive strength and RFD with Achilles tendinopathy; eccentric knee-flexor strength after a hamstring strain; knee-extensor strength with patellar tendinopathy or patellofemoral pain; adductor strength with groin pain; balance and eversion strength after an ankle sprain). Separate: the other side, another region, or a quality the condition does not touch. Keep: a clear strength the sport needs.
-2. **One section each, named for its purpose**: "Rehab: <condition>" (the condition's loading, from the stage's rows), "Performance: <what it targets>" (the separate deficits, within the stage's pain and load rules for the affected tissue), and "Keep up" when a strength is kept with one or two heavy exercises. A deficit the condition explains is not given a second exercise in the performance section.
+2. **Each day's heading says whether it is rehab-led or performance-led** ("Day 1: Rehab: Achilles loading, plus strength"; "Day 2: Performance: jump power"; "Day 3: Capacity and keep-up"): the condition's loading from the stage's rows, the separate deficits within the stage's pain and load rules for the affected tissue, and a strength kept with one or two heavy exercises. A deficit the condition explains is not given a second exercise as performance work.
 3. **Say what leads.** Early and middle stages: rehab leads; the performance section stays small, trains the other side and the untouched qualities, and avoids the injured tissue's high-strain loads (plyometrics, sprints, cutting). Late: the two merge; the condition's energy-storage, running and change-of-direction work doubles as the performance block. Ongoing: performance leads with a maintenance dose for the condition. Strength before power for a weak athlete; ballistic and reactive work for a strong athlete with a low DSI or RSI.
-4. **Session order stays as section 3**: fast first, heavy next, the condition's eccentric and isometric work after the strength lifts unless it is the main priority, capacity last.
+4. **Session order stays as section 3** on each day: fast first, heavy next, the condition's eccentric and isometric work after the strength lifts unless it is the main priority, capacity last.
 5. **Progression inside the block goes on the exercise** ("weeks 1–3 double leg, from week 4 single leg"), and the instructions line agrees with it.
 6. **A rationale for the physiotherapist** comes with every suggestion (kept with the program, never printed): what leads and why, which findings were treated as the condition and which as separate, what was held back because of the stage, what the next block adds and the sign that opens it (a 24-hour pain level, a symmetry, a test number, a time floor), and what to re-test. The physiotherapist edits or clears it.
 7. **Never infer** a condition, a side or a stage from the numbers; without a condition there is no rehab section. Where the side is not given, a one-sided deficit is left unresolved and the rationale says so.
 
 ---
 
-## 9. Red lines
+## 10. Red lines
 
 - Never a diagnosis, an injury prediction or a return-to-sport decision: the physiotherapist owns those.
 - No maximal plyometrics, drop jumps, heavy eccentrics or maximal isometrics for someone new to training, or where the report's notes mention pain; start with the easier version of the family.

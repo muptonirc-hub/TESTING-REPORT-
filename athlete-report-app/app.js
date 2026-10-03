@@ -3908,22 +3908,22 @@
   // Keep up, says what leads the block, and writes a rationale for the physiotherapist that stays with the program (never printed).
   var SUGGEST_TOOLS = ['screen', 'str', 'ham', 'acl'];
   var EX_SUGGEST_DEFAULT = {
-    effort: 'medium', max_tokens: 5000, timeout_s: 90, max_exercises: 8,
+    effort: 'medium', max_tokens: 6000, timeout_s: 120, max_per_day: 5,   // v26: the cap is per training day (days = the plan's sessions a week)
     system: [
       'You suggest an exercise program for a sports physiotherapist at BASE Health Noosa, a clinic in Queensland, Australia, from the results of a testing report. Your suggestions fill a draft that the physiotherapist checks, edits and then prints as a handout for the person tested. The physiotherapist makes every clinical decision; you are saving them the first draft.',
       'Prefer the clinic’s library listed in the request: when it has a suitable exercise, give its id exactly as written there (and leave name empty). When the library has nothing suitable for a priority, or a clearly better exercise exists, give an exercise of your own instead: leave id empty and give its name (a clear, full name in sentence case, with the equipment or variation in the name) and one short note, under 100 characters, telling the person how to do it, which prints on their handout. Never use an id that isn’t in the list.',
       'Follow the clinic’s programming guide in the request for everything it covers: which exercise family fits each finding, one exercise per training quality (never two with the same effect, such as a box jump and a squat jump), how many exercises, the order of the session, the training variables by intent, the weekly structure for the sessions given, the setting, the experience level and the block length. Where the guide is silent, use standard strength and conditioning practice.',
-      'Evidence guides may follow the clinic guide in the request, one per topic (training variables, rehabilitation principles, and the condition named). They are drafts the clinic is reviewing. Use them for the condition and stage given: take exercises and doses from the sections and stage-table rows that match that stage, never from a later stage; apply their pain and load rules in the notes and the instructions line; where an evidence guide and the clinic programming guide differ, the clinic guide wins.',
+      'Evidence guides may follow the clinic guide in the request, one per topic (training variables, reading the performance tests, designing the block, rehabilitation principles, rehab and performance together, and the condition named). They are drafts the clinic is reviewing. Use them for the condition and stage given: take exercises and doses from the sections and stage-table rows that match that stage, never from a later stage; apply their pain and load rules in the notes and the instructions line; where an evidence guide and the clinic programming guide differ, the clinic guide wins.',
       'If the results or the stage hit a red line in a guide (for example a stage the guide says needs a medical review first), say so in notes and keep the program conservative rather than programming through it. Return-to-sport criteria may be quoted as training targets in why; never as a clearance.',
       'Read the whole report before choosing anything. When a condition is given (with its side and stage, or a rehab report’s injured side and phase), sort the flagged results into three groups: those the condition plausibly explains (same side or region, a quality the condition is known to lower at this stage, as the rehab-and-performance guide’s table says); deficits independent of it (the other side, another region, or a quality the condition doesn’t touch); and strengths worth keeping. A deficit the condition explains is treated inside the rehab section through the stage’s own rows, never chased with a separate performance exercise. An independent deficit gets its own work now, within the stage’s pain and load rules for the affected tissue. Where the side isn’t given, say so in the rationale and treat a one-sided deficit as unresolved rather than guessing.',
       'Decide what leads this block and say so: in the early and middle stages the condition leads and the performance section stays small and away from the injured tissue’s high-strain loads; in the late stage the two merge, with the condition’s energy-storage, running and change-of-direction work doubling as the performance section; ongoing, performance leads with a maintenance dose for the condition. Power rests on strength: for a weak athlete strength leads and ballistic work stays light; for a strong athlete with a low DSI or RSI, ballistic and reactive work leads.',
-      'Pick 4 to 8 exercises in all (fewer when there are few findings), aimed at the main priorities: results marked Off target (Behind on a rehab report) first, then Close, then at most one exercise that keeps up a clear strength if there is room. Don’t repeat an exercise already in the program. When two library exercises fit equally well, prefer one marked checked by a clinician.',
-      'Group them into 1 to 4 short sections in session order. With a condition, name the sections for their purpose: "Rehab: <condition>" for the condition’s own loading, "Performance: <what it targets>" for the independent deficits, and "Keep up" for a strength kept with one or two heavy exercises; without a condition, each heading names the intent of the block, for example "Power", "Strength" or "Hamstrings and hips"; one section with an empty heading is fine when they don’t split. Where the first and second halves of the block differ (double to single leg, isometric to loaded, a load step), say so in the exercise’s note ("weeks 1–3 …; from week 4 …") and keep the instructions line consistent with it.',
-      'rationale: 3 to 6 plain sentences for the physiotherapist (never printed on the handout): which section leads this block and why; which findings you treated as the condition (named, with the number and side) and which as separate; what was left out or kept light because of the stage; what the next block adds or swaps and the sign or test result that opens it (a 24-hour pain level, a symmetry, a test number, a time floor); and what to re-test and when. Without a condition, two or three sentences on the priorities and the next block.',
+      'One focus per block, not a little of everything. Choose it in this order and name it in the title: a condition or injury that explains the flagged results leads; otherwise the largest deficit in the quality the sport needs most, reading results marked Off target (Behind on a rehab report) first, then Close, with strength before power when absolute strength is low and ballistic or reactive work when strength is adequate but DSI, RSI or jump are low; at most one secondary quality; one heavy exercise keeps up a clear strength if there is room. The focus gets the first slot on its days and the most sets. Every other flagged result is deferred to a later block and named in the rationale, not programmed now. Don’t repeat an exercise already in the program. When two library exercises fit equally well, prefer one marked checked by a clinician.',
+      'Lay the program out by training day, as the request’s layout line says: one section per day, 3 to 5 exercises each, heading "Day 1: <what the day is for>" and so on (for example "Day 1: Power and main strength", "Day 2: Rehab: Achilles loading, plus strength", "Day 3: Capacity and control"). Follow the clinic guide’s weekly structure for that number of days: the focus on the freshest days and on at least two days, heavy and high-strain work on the same tissue 48 hours or more apart, the main lifts spread across the week. The same exercise may appear on two days with different loads (a heavier and a lighter day); never two exercises for the same quality on one day. Someone new to training may get the same two or three full-body sessions repeated. Where the first and second halves of the block differ (double to single leg, isometric to loaded, a load step), say so in the exercise’s note ("weeks 1–3 …; from week 4 …") and keep the instructions line consistent with it.',
+      'rationale: 3 to 6 plain sentences for the physiotherapist (never printed on the handout), starting "Focus: … Secondary: … Deferred: …": what this block is for and why it leads; which findings you treated as the condition (named, with the number and side) and which as separate; which findings were deferred and to which block; what was left out or kept light because of the stage; what the next block adds or swaps and the sign or test result that opens it (a 24-hour pain level, a symmetry, a test number, a time floor); and what to re-test and when.',
       'For each exercise give every variable: sets and reps as plain numbers or ranges ("3", "8–10", or "30 s" for a hold); load as a short guide the person can act on ("Body weight", "Heavy, 2 reps in reserve", "A weight you could lift 8 times"); rest ("2 min", "60 s"); tempo only where it matters ("3 s down", "3-0-3", or empty); side ("Each side", "Left", "Right", or empty). Put the intent cue in note (under 100 characters), for example "Every rep as fast as you can on the way up"; for an exercise of your own the note also says how to do it.',
       'instructions: one line of general instructions for the handout from the plan, for example "3 sessions a week for 6 weeks, at least a day between sessions", or an empty string.',
       'why: one short line, under 80 characters, naming the finding the exercise is for, with its number and target, for example "Nordic L/R imbalance 12.9%, target ≤ 9" or "Right calf 22 reps, left 27". Plain Australian English, no jargon.',
-      'title: a short title for the program from its focus, for example "Jump power and hamstring strength", or an empty string.',
+      'title: a short title naming the block’s focus, for example "Block 1: jump power (strength kept)" or "Achilles loading, weeks 1–6", or an empty string.',
       'notes: anything the physiotherapist should know, one sentence each: why an exercise of your own was chosen over the library, or a finding that needs their judgement. Leave notes empty when there is nothing to say.',
       'Use only the information given. Don’t diagnose, predict injury or give medical advice, and never say anything about being cleared to return to sport. Refer to the person as the athlete or the patient, never by a name.'
     ]
@@ -3978,6 +3978,14 @@
     var s = plan && plan.stage, g = DATA.guideIndex, help = g && g.stage_help && typeof g.stage_help[s] === 'string' ? clean1(g.stage_help[s]) : '';
     return s ? 'Stage (set by the physiotherapist): ' + s.toLowerCase() + (help ? ' (' + help + ')' : '') + '.' : '';
   }
+  // v26: the program is laid out by training day: as many days as the plan's sessions a week (2–4), 3–5 exercises a day
+  function planDays(plan) { var n = parseInt(plan && plan.sessions, 10); return n >= 2 && n <= 4 ? n : 3; }
+  function perDay(cfg) { var n = cfg && parseInt(cfg.max_per_day, 10); return n >= 2 && n <= 8 ? n : 5; }
+  function layoutLine(plan) {
+    var d = planDays(plan), names = [];
+    for (var i = 1; i <= d; i++) names.push('Day ' + i);
+    return 'Layout: ' + d + ' training days a week, so write the program out by day (' + names.join(', ') + '), each a short session of 3 to 5 exercises with its own emphasis; the same exercise may appear on more than one day with different loads.';
+  }
   function sideFor(lt, plan) {                         // v25: the condition's side for the request: the report's injured side, or the plan's ('' when not chosen)
     var s = lt === 'ham' || lt === 'acl' ? clean1(state[lt].meta.injured) : (plan && plan.side) || '';
     return !s ? '' : (s === 'Both' ? 'both sides' : s.toLowerCase() + ' side');
@@ -4007,8 +4015,8 @@
   }
   function exSuggestRequest(lt, c, max, cfg) {
     var plan = tidyPlan(state.ex.plan);
-    var L = ['Suggest the exercise program for this report, choosing from the clinic’s library below (at most ' + max + ' exercises), following the clinic’s programming guide at the end for selection, order and the training variables.', '', interpPayload(lt, c)];
-    L.push('', 'The program: ' + planLines(plan));   // v23
+    var L = ['Suggest the exercise program for this report, choosing from the clinic’s library below (at most ' + max + ' exercises a day), following the clinic’s programming guide at the end for selection, order and the training variables.', '', interpPayload(lt, c)];
+    L.push('', 'The program: ' + planLines(plan), layoutLine(plan));   // v23; v26: the layout by day
     var cond = conditionFor(lt, plan), stage = stageFor(lt, plan), side = sideFor(lt, plan);   // v24; v25: the side
     if (cond) L.push('Condition (set by the physiotherapist): ' + cond.label + (cond.detail ? ' (' + cond.detail + ')' : '') + ', ' + (side || 'side not given') + '.' + (stage ? ' ' + stage : ''));
     var it = state[lt].interp, who = person(lt);
@@ -4076,7 +4084,7 @@
     if (missing.length) what += ' (' + missing.join(', ') + ' not loaded: reopen the app online to fetch ' + (missing.length > 1 ? 'them' : 'it') + ')';
     else if (!DATA.guideIndex) what += ' (evidence guides not loaded: reopen the app online to fetch them)';
     var chars = 0;
-    try { var c = computeFor(lt); chars = exSuggestRequest(lt, c, cfg.max_exercises || 8, cfg).length + [].concat(cfg.system || []).join('\n').length; } catch (e) { chars = 40000; }
+    try { var c = computeFor(lt); chars = exSuggestRequest(lt, c, perDay(cfg), cfg).length + [].concat(cfg.system || []).join('\n').length; } catch (e) { chars = 40000; }
     return what + '. About ' + suggestCents(cfg, chars) + ' cents.';
   }
   function renderPlanDialog(lt) {
@@ -4133,18 +4141,18 @@
     if (!lt || !aiKey()) return;
     var cfg = exSuggestCfg(), c = computeFor(lt);
     if (blocker(c, lt)) return;
-    var gen = scanGen, max = cfg.max_exercises || 8;
+    var gen = scanGen, max = perDay(cfg);           // v26: per day
     suggestBusy = true;
     scanInfo = { tool: 'ex', kind: 'busy', ai: true, text: 'Choosing exercises from the ' + TOOL_NAMES[lt] + ' report… this can take up to a minute.' };
     renderScanBar();
     var body = {
-      model: cfg.model, max_tokens: cfg.max_tokens || 5000, system: [].concat(cfg.system || []).join('\n'),
+      model: cfg.model, max_tokens: cfg.max_tokens || 6000, system: [].concat(cfg.system || []).join('\n'),
       messages: [{ role: 'user', content: exSuggestRequest(lt, c, max, cfg) }],
       output_config: { format: { type: 'json_schema', schema: exSuggestSchema() } }
     };
     if (cfg.effort) body.output_config.effort = cfg.effort;
     focusQuiet($('exSuggest'));
-    claudeRequest(aiKey(), body, cfg.endpoint, cfg.timeout_s || 90, 'suggest exercises').then(function (j) {
+    claudeRequest(aiKey(), body, cfg.endpoint, cfg.timeout_s || 120, 'suggest exercises').then(function (j) {
       if (gen !== scanGen || state.ex !== x) return;
       if (j.stop_reason === 'max_tokens') throw new Error('Claude’s answer was cut short. Try again.');
       if (j.stop_reason === 'refusal') throw new Error('Claude didn’t suggest exercises for these results. Add them from the library instead.');
@@ -4169,23 +4177,25 @@
     });
   }
   // the suggested rows into the program: library rows linked, Claude's own unlinked (v22), all marked to check; after the
-  // rows already there. An id not in the library with no name is dropped; each exercise once; Undo puts back exactly what
-  // was there
+  // rows already there. An id not in the library with no name is dropped; Undo puts back exactly what was there. v26: the
+  // program comes by training day, so an exercise may appear in more than one section (a heavier and a lighter day) but
+  // only once within a section and never when it is already in the program; max is the cap per section (day), and the
+  // whole suggestion is capped at max × the plan's days
   function applyExSuggest(out, lt, max) {
-    var x = state.ex, found = [], n = 0, own = 0, seen = {}, dropped = 0, lib = libList();
+    var x = state.ex, found = [], n = 0, own = 0, seen = {}, dropped = 0, lib = libList(), total = max * planDays(tidyPlan(x.plan));
     x.items.forEach(function (r) { if (r.kind !== 'ex') return; if (r.lib) seen[r.lib] = true; var k = E.libKey(r.name); if (k) seen['~' + k] = true; });
     (out && Array.isArray(out.sections) ? out.sections : []).forEach(function (sec) {
       if (!sec || typeof sec !== 'object') return;
-      var rows = [];
+      var rows = [], here = {};
       (Array.isArray(sec.exercises) ? sec.exercises : []).forEach(function (e) {
         if (!e || typeof e !== 'object') return;
         var id = String(e.id || '').trim(), name = exTidy(e.name, 'name'), entry = libGet(id);
         if (entry && entry.deleted) entry = null;
         if (!entry && name) entry = E.libMatch(name, lib);        // Claude's own name that is a library exercise after all
         if (!entry && !name) { if (id) dropped++; return; }
-        var key = entry ? entry.id : '~' + E.libKey(name);
-        if (seen[key] || (entry && seen['~' + E.libKey(entry.name)]) || n >= max) return;
-        seen[key] = true; n++;
+        var key = entry ? entry.id : '~' + E.libKey(name), key2 = entry ? '~' + E.libKey(entry.name) : key;
+        if (seen[key] || seen[key2] || here[key] || here[key2] || rows.length >= max || n >= total) return;
+        here[key] = here[key2] = true; n++;
         var why = clean1(e.why).slice(0, 100);
         var row = { sets: exTidy(e.sets, 'sets'), reps: exTidy(e.reps, 'reps'), load: exTidy(e.load, 'load'), rest: exTidy(e.rest, 'rest'), tempo: exTidy(e.tempo, 'tempo'), side: exTidy(e.side, 'side'),
           notes: exTidy(e.note, 'notes').slice(0, 160) };   // v23: every variable (the guide sets them), the intent cue in the notes
