@@ -1979,7 +1979,7 @@
         if (it.kind === 'section') { if (!blank(it.heading)) rows.push(['s', clean1(it.heading)]); }
         else if (exFilled(it)) rows.push(['e', it.lib || ''].concat(EX_FIELDS.map(function (f) { return clean1(it[f]); })));
       });
-      return JSON.stringify([sortedPairs(x.meta), clean1(x.title), String(x.instructions || '').trim(), rows]);
+      return JSON.stringify([sortedPairs(x.meta), clean1(x.title), String(x.instructions || '').trim(), rows, String(x.rationale || '').trim()]);   // v25: + rationale
     }
     var s = state[t], vals = compactValues(t);
     return JSON.stringify([sortedPairs(s.meta), Object.keys(vals).sort().map(function (k) { return [k, sortedPairs(vals[k])]; }),
@@ -3097,29 +3097,33 @@
   var EX_MAIN = ['sets', 'reps', 'load'];
   var EX_DETAIL = ['rest', 'tempo', 'side', 'notes'];
   var EX_LABEL = { name: 'Exercise', sets: 'Sets', reps: 'Reps', load: 'Load', rest: 'Rest', tempo: 'Tempo', side: 'Side', notes: 'Notes' };
-  var EX_LEN = { name: 120, notes: 300, heading: 80, title: 120, instructions: 1000 };   // characters kept (other boxes: 60)
+  var EX_LEN = { name: 120, notes: 300, heading: 80, title: 120, instructions: 1000, rationale: 900 };   // characters kept (other boxes: 60)
   var EX_WORDS = { name: 1, load: 1, side: 1, notes: 1 };                              // boxes that start with a capital
   // v17: delete is a bin (it shows on every row now, beside More, so it reads as delete rather than close)
   var ICON_TRASH = '<svg viewBox="0 0 24 24" width="19" height="19" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M10 11v6M14 11v6M5.5 7l1 12a2 2 0 0 0 2 1.8h7a2 2 0 0 0 2-1.8l1-12M9 7V4.5h6V7"/></svg>';
   var GRIP = '<svg class="grip-dots" viewBox="0 0 10 16" width="10" height="16" aria-hidden="true" focusable="false" fill="currentColor"><circle cx="2.5" cy="3" r="1.5"/><circle cx="7.5" cy="3" r="1.5"/><circle cx="2.5" cy="8" r="1.5"/><circle cx="7.5" cy="8" r="1.5"/><circle cx="2.5" cy="13" r="1.5"/><circle cx="7.5" cy="13" r="1.5"/></svg>';
 
   // link (v19): the Screening tool whose report this program prints after ('' when it prints on its own)
-  function freshEx() { return { meta: { name: '', date: todayIso(), practitioner: userName() }, title: '', instructions: '', items: [], seq: 1, scanned: {}, cardOpen: true, link: '', plan: freshPlan() }; }
+  // rationale (v25): Claude's "how this program fits together" note for the physiotherapist: editable, saved with the program, never printed
+  function freshEx() { return { meta: { name: '', date: todayIso(), practitioner: userName() }, title: '', instructions: '', rationale: '', items: [], seq: 1, scanned: {}, cardOpen: true, link: '', plan: freshPlan() }; }
   // v23: what Suggest from the report asks before it suggests (the person and the setting); kept with the program and saved with it.
-  // v24: plus a condition (an id from guides/index.json, 'none' for none) and its stage, which pick the evidence guides sent
+  // v24: plus a condition (an id from guides/index.json, 'none' for none) and its stage, which pick the evidence guides sent.
+  // v25: plus the condition's side (Left, Right or Both; '' while not chosen), so Claude can tell which findings the condition explains
   var PLAN = { sessions: ['2', '3', '4'], setting: ['Gym', 'Home', 'Both'], level: ['New', 'Trained'], weeks: ['4', '6', '8'] };
   var PLAN_LABEL = { sessions: 'Sessions a week', setting: 'Where', level: 'Experience (new to training, or trained)', weeks: 'Block (weeks)' };
-  var STAGES_DEFAULT = ['Early', 'Middle', 'Late', 'Ongoing'];
+  var STAGES_DEFAULT = ['Early', 'Middle', 'Late', 'Ongoing'], SIDES_DEFAULT = ['Left', 'Right', 'Both'];
   function stageList() { var g = DATA.guideIndex; return g && Array.isArray(g.stages) && g.stages.length ? g.stages.map(clean1).filter(Boolean) : STAGES_DEFAULT; }
-  function freshPlan() { return { sessions: '3', setting: 'Gym', level: 'Trained', weeks: '6', condition: 'none', stage: '' }; }
+  function sideList() { var g = DATA.guideIndex; return g && Array.isArray(g.sides) && g.sides.length ? g.sides.map(clean1).filter(Boolean) : SIDES_DEFAULT; }
+  function freshPlan() { return { sessions: '3', setting: 'Gym', level: 'Trained', weeks: '6', condition: 'none', stage: '', side: '' }; }
   function tidyPlan(p) {
     var out = freshPlan();
     if (p && typeof p === 'object') {
       Object.keys(PLAN).forEach(function (k) { var v = k === 'level' && p[k] === 'New to training' ? 'New' : p[k]; if (PLAN[k].indexOf(v) >= 0) out[k] = v; });
       if (typeof p.condition === 'string' && /^[a-z0-9-]{1,32}$/.test(p.condition)) out.condition = p.condition;   // v24: checked against the index when used
       if (typeof p.stage === 'string' && stageList().indexOf(p.stage) >= 0) out.stage = p.stage;
+      if (typeof p.side === 'string' && sideList().indexOf(p.side) >= 0) out.side = p.side;   // v25
     }
-    if (out.condition === 'none') out.stage = '';
+    if (out.condition === 'none') { out.stage = ''; out.side = ''; }
     return out;
   }
   function exStr(v) { return typeof v === 'string' ? v : (typeof v === 'number' && isFinite(v) ? String(v) : ''); }
@@ -3130,7 +3134,7 @@
     if (!x.meta || typeof x.meta !== 'object' || Array.isArray(x.meta)) x.meta = { name: '', date: todayIso(), practitioner: '' };
     var dt = x.meta.date;                              // a date cleared by hand stays cleared; anything unreadable becomes today
     x.meta = { name: exStr(x.meta.name), date: dt === '' || (typeof dt === 'string' && E.parseDate(dt, ['Y-m-d'])) ? dt : todayIso(), practitioner: exStr(x.meta.practitioner) };
-    x.title = exStr(x.title); x.instructions = exStr(x.instructions);
+    x.title = exStr(x.title); x.instructions = exStr(x.instructions); x.rationale = exStr(x.rationale).slice(0, EX_LEN.rationale);   // v25
     var seen = {}, top = 0, list = [];
     (Array.isArray(x.items) ? x.items : []).forEach(function (it) {
       if (!it || typeof it !== 'object' || (it.kind !== 'ex' && it.kind !== 'section')) return;
@@ -3152,7 +3156,7 @@
     list.forEach(function (o) { if (!o.id) o.id = 'r' + (x.seq++); });
     x.items = list;
     var sc = x.scanned && typeof x.scanned === 'object' && !Array.isArray(x.scanned) ? x.scanned : {}, keep = {};
-    Object.keys(sc).forEach(function (k) { if (sc[k] === true && (k === 'title' || k === 'instructions' || seen[k])) keep[k] = true; });
+    Object.keys(sc).forEach(function (k) { if (sc[k] === true && (k === 'title' || k === 'instructions' || k === 'rationale' || seen[k])) keep[k] = true; });
     x.scanned = keep;
     x.cardOpen = x.cardOpen !== false;                 // v11: the patient card open unless folded into the strip
     x.link = TOOLS.indexOf(x.link) >= 0 ? x.link : ''; // v19: the report it prints after (drafts from v18: none)
@@ -3227,7 +3231,17 @@
       '<button type="button" class="ghost" id="tplStart" data-action="tpl-start" aria-haspopup="dialog"' + (rows ? ' hidden' : '') + '>Start from template</button>' +
       // v21: Claude picks exercises from the library for the linked report's results
       '<button type="button" class="ghost ex-suggest" id="exSuggest" data-action="ex-suggest"' + (suggestTool() ? '' : ' hidden') + '>' + SPARKLE + '<span data-label>Suggest from the report</span></button></div>' +
+      exRationaleHtml() +
       '<div class="ex-top' + (top ? '' : ' folded') + '" id="exTop">' + exTopHtml(top, rows) + '</div></section>';
+  }
+  // v25: Claude's note on how the program fits together (which findings the condition explains, what leads this block, what the
+  // next block adds and the sign that moves it on). For the physiotherapist: shown while it has text, editable, saved with the
+  // program and the client record, never printed. It appears in the blue "check me" look of a suggestion until it is edited.
+  function exRationaleHtml() {
+    var x = state.ex;
+    if (blank(x.rationale) && !x.scanned.rationale) return '';
+    return '<label class="f ex-rat" for="ex-rationale"><span>How this program fits together <small>(for you, not printed)</small></span>' +
+      '<textarea id="ex-rationale" data-ex="rationale" rows="3" maxlength="' + EX_LEN.rationale + '" autocapitalize="sentences">' + esc(x.rationale) + '</textarea></label>';
   }
   function exTopHtml(open, rows) {
     var x = state.ex;
@@ -3339,9 +3353,18 @@
     var tbl = $('exTable');
     if (!tbl) return;
     tbl.innerHTML = exTableHtml();
+    renderExRationale();                               // v25: the box comes and goes with its text
     fitExWraps();
     applyExMarks();
     refreshEx();
+  }
+  function renderExRationale() {                       // v25: show, update or remove the rationale box without redrawing the card
+    var card = $('exCard'), x = state.ex, html = exRationaleHtml(), cur = card && card.querySelector('.ex-rat');
+    if (!card) return;
+    if (!html) { if (cur) cur.remove(); return; }
+    if (cur) { var ta = cur.querySelector('textarea'); if (ta && ta.value !== x.rationale) ta.value = x.rationale; }
+    else { var top = $('exTop'); if (top) top.insertAdjacentHTML('beforebegin', html); else card.insertAdjacentHTML('beforeend', html); }
+    fitExNotes();
   }
   // A detail column comes and goes as it is first written or last cleared: the other rows show or hide that box. The row
   // being typed in is left alone (nothing moves under the finger); it is tidied at the next redraw.
@@ -3360,13 +3383,15 @@
   function applyExMarks() {                            // the blue "check me" look on rows (and title, instructions) filled by a scan
     var sc = state.ex.scanned;
     els.entry.querySelectorAll('.ex-row[data-id]').forEach(function (row) { row.classList.toggle('scanned', !!sc[row.dataset.id]); });
-    ['title', 'instructions'].forEach(function (k) { var el = $('ex-' + k); if (el) el.classList.toggle('scanned', !!sc[k]); });
+    ['title', 'instructions', 'rationale'].forEach(function (k) { var el = $('ex-' + k); if (el) el.classList.toggle('scanned', !!sc[k]); });
   }
-  function fitExNotes() {                              // grow the instructions box to show all of it
-    var ta = $('ex-instructions');
-    if (!ta) return;
-    ta.style.height = 'auto';
-    ta.style.height = Math.max(76, ta.scrollHeight + 2) + 'px';
+  function fitExNotes() {                              // grow the instructions box (and the rationale box, v25) to show all of it
+    ['ex-instructions', 'ex-rationale'].forEach(function (id) {
+      var ta = $(id);
+      if (!ta) return;
+      ta.style.height = 'auto';
+      ta.style.height = Math.max(76, ta.scrollHeight + 2) + 'px';
+    });
   }
   function focusEx(id) {
     var el = $(id);
@@ -3432,7 +3457,7 @@
     if (el.dataset.ex) {                               // the title or the general instructions
       x[el.dataset.ex] = el.value;
       if (x.scanned[el.dataset.ex]) { delete x.scanned[el.dataset.ex]; el.classList.remove('scanned'); }
-      if (el.id === 'ex-instructions') fitExNotes();
+      if (el.id === 'ex-instructions' || el.id === 'ex-rationale') fitExNotes();
       refreshEx();
       return;
     }
@@ -3748,7 +3773,7 @@
         title: title, instructions: instructions,
         groups: groups.filter(function (g) { return g.rows.length; })
       }),
-      program: { title: title, instructions: instructions, items: items, plan: tidyPlan(x.plan) }   // v23: the plan goes with the saved program
+      program: { title: title, instructions: instructions, items: items, plan: tidyPlan(x.plan), rationale: String(x.rationale || '').trim().slice(0, EX_LEN.rationale) }   // v23: the plan goes with the saved program; v25: the rationale too
     };
   }
 
@@ -3801,7 +3826,7 @@
     var s = String(v == null ? '' : v);
     if (s.normalize) s = s.normalize('NFC');
     s = s.replace(/[\uD800-\uDFFF]/g, '').replace(/[\uFE0F\u200B-\u200D\u2060\uFEFF]/g, '');
-    s = f === 'instructions' ? s.replace(/\r\n?/g, '\n').replace(/[ \t\u00A0]+/g, ' ').replace(/ *\n */g, '\n').replace(/\n{3,}/g, '\n\n').trim()
+    s = f === 'instructions' || f === 'rationale' ? s.replace(/\r\n?/g, '\n').replace(/[ \t\u00A0]+/g, ' ').replace(/ *\n */g, '\n').replace(/\n{3,}/g, '\n\n').trim()
       : s.replace(/\s+/g, ' ').trim();
     if (/^(?:[-–—]+|n\/?a)$/i.test(s)) return '';
     var max = EX_LEN[f] || 60;
@@ -3841,11 +3866,11 @@
   // the program as it is now (for an Undo), and putting it back unless Clear all replaced the program since
   function exSnap() {
     var x = state.ex;
-    return { title: x.title, instructions: x.instructions, items: JSON.parse(JSON.stringify(x.items)), scanned: Object.assign({}, x.scanned), seq: x.seq };
+    return { title: x.title, instructions: x.instructions, rationale: x.rationale, items: JSON.parse(JSON.stringify(x.items)), scanned: Object.assign({}, x.scanned), seq: x.seq };
   }
   function exRestore(u, prog) {
     if (state.ex !== prog) return false;
-    prog.title = u.title; prog.instructions = u.instructions; prog.items = u.items; prog.scanned = u.scanned;
+    prog.title = u.title; prog.instructions = u.instructions; prog.rationale = exStr(u.rationale); prog.items = u.items; prog.scanned = u.scanned;
     prog.seq = Math.max(prog.seq, u.seq);              // ids are never reused
     if (state.tool === 'ex' && state.exPage === 'builder') render(); else saveDraft();
     return true;
@@ -3859,7 +3884,7 @@
   function undoExScan() {
     var u = scanInfo && scanInfo.tool === 'ex' && scanInfo.undo, x = state.ex, ai = !!(scanInfo && scanInfo.ai);
     if (!u) return;
-    x.title = u.title; x.instructions = u.instructions; x.items = u.items; x.scanned = u.scanned;
+    x.title = u.title; x.instructions = u.instructions; x.rationale = exStr(u.rationale); x.items = u.items; x.scanned = u.scanned;
     x.seq = Math.max(x.seq, u.seq);                    // ids are never reused
     scanInfo = null;
     render();
@@ -3878,17 +3903,23 @@
   // library one tap away in More. Each row has sets and reps and a one-line "why" under it (shown in the app, never
   // printed), in the blue "check me" look of a scan, with Undo. A name of Claude's that is a library exercise after all is
   // linked to it. v24: Hamstring and ACL reports suggest too, with the evidence guides for the condition and the report's phase.
+  // v25 (Matthew: "the AI needs to consider how one might affect the other"): with a condition, Claude reads the report as a whole,
+  // sorts the findings into those the condition explains and those that are separate, names the sections Rehab / Performance /
+  // Keep up, says what leads the block, and writes a rationale for the physiotherapist that stays with the program (never printed).
   var SUGGEST_TOOLS = ['screen', 'str', 'ham', 'acl'];
   var EX_SUGGEST_DEFAULT = {
-    effort: 'medium', max_tokens: 4000, timeout_s: 90, max_exercises: 8,
+    effort: 'medium', max_tokens: 5000, timeout_s: 90, max_exercises: 8,
     system: [
       'You suggest an exercise program for a sports physiotherapist at BASE Health Noosa, a clinic in Queensland, Australia, from the results of a testing report. Your suggestions fill a draft that the physiotherapist checks, edits and then prints as a handout for the person tested. The physiotherapist makes every clinical decision; you are saving them the first draft.',
       'Prefer the clinic’s library listed in the request: when it has a suitable exercise, give its id exactly as written there (and leave name empty). When the library has nothing suitable for a priority, or a clearly better exercise exists, give an exercise of your own instead: leave id empty and give its name (a clear, full name in sentence case, with the equipment or variation in the name) and one short note, under 100 characters, telling the person how to do it, which prints on their handout. Never use an id that isn’t in the list.',
       'Follow the clinic’s programming guide in the request for everything it covers: which exercise family fits each finding, one exercise per training quality (never two with the same effect, such as a box jump and a squat jump), how many exercises, the order of the session, the training variables by intent, the weekly structure for the sessions given, the setting, the experience level and the block length. Where the guide is silent, use standard strength and conditioning practice.',
       'Evidence guides may follow the clinic guide in the request, one per topic (training variables, rehabilitation principles, and the condition named). They are drafts the clinic is reviewing. Use them for the condition and stage given: take exercises and doses from the sections and stage-table rows that match that stage, never from a later stage; apply their pain and load rules in the notes and the instructions line; where an evidence guide and the clinic programming guide differ, the clinic guide wins.',
       'If the results or the stage hit a red line in a guide (for example a stage the guide says needs a medical review first), say so in notes and keep the program conservative rather than programming through it. Return-to-sport criteria may be quoted as training targets in why; never as a clearance.',
+      'Read the whole report before choosing anything. When a condition is given (with its side and stage, or a rehab report’s injured side and phase), sort the flagged results into three groups: those the condition plausibly explains (same side or region, a quality the condition is known to lower at this stage, as the rehab-and-performance guide’s table says); deficits independent of it (the other side, another region, or a quality the condition doesn’t touch); and strengths worth keeping. A deficit the condition explains is treated inside the rehab section through the stage’s own rows, never chased with a separate performance exercise. An independent deficit gets its own work now, within the stage’s pain and load rules for the affected tissue. Where the side isn’t given, say so in the rationale and treat a one-sided deficit as unresolved rather than guessing.',
+      'Decide what leads this block and say so: in the early and middle stages the condition leads and the performance section stays small and away from the injured tissue’s high-strain loads; in the late stage the two merge, with the condition’s energy-storage, running and change-of-direction work doubling as the performance section; ongoing, performance leads with a maintenance dose for the condition. Power rests on strength: for a weak athlete strength leads and ballistic work stays light; for a strong athlete with a low DSI or RSI, ballistic and reactive work leads.',
       'Pick 4 to 8 exercises in all (fewer when there are few findings), aimed at the main priorities: results marked Off target (Behind on a rehab report) first, then Close, then at most one exercise that keeps up a clear strength if there is room. Don’t repeat an exercise already in the program. When two library exercises fit equally well, prefer one marked checked by a clinician.',
-      'Group them into 1 to 4 short sections in session order, each heading naming the intent of the block, for example "Power", "Strength" or "Hamstrings and hips"; one section with an empty heading is fine when they don’t split.',
+      'Group them into 1 to 4 short sections in session order. With a condition, name the sections for their purpose: "Rehab: <condition>" for the condition’s own loading, "Performance: <what it targets>" for the independent deficits, and "Keep up" for a strength kept with one or two heavy exercises; without a condition, each heading names the intent of the block, for example "Power", "Strength" or "Hamstrings and hips"; one section with an empty heading is fine when they don’t split. Where the first and second halves of the block differ (double to single leg, isometric to loaded, a load step), say so in the exercise’s note ("weeks 1–3 …; from week 4 …") and keep the instructions line consistent with it.',
+      'rationale: 3 to 6 plain sentences for the physiotherapist (never printed on the handout): which section leads this block and why; which findings you treated as the condition (named, with the number and side) and which as separate; what was left out or kept light because of the stage; what the next block adds or swaps and the sign or test result that opens it (a 24-hour pain level, a symmetry, a test number, a time floor); and what to re-test and when. Without a condition, two or three sentences on the priorities and the next block.',
       'For each exercise give every variable: sets and reps as plain numbers or ranges ("3", "8–10", or "30 s" for a hold); load as a short guide the person can act on ("Body weight", "Heavy, 2 reps in reserve", "A weight you could lift 8 times"); rest ("2 min", "60 s"); tempo only where it matters ("3 s down", "3-0-3", or empty); side ("Each side", "Left", "Right", or empty). Put the intent cue in note (under 100 characters), for example "Every rep as fast as you can on the way up"; for an exercise of your own the note also says how to do it.',
       'instructions: one line of general instructions for the handout from the plan, for example "3 sessions a week for 6 weeks, at least a day between sessions", or an empty string.',
       'why: one short line, under 80 characters, naming the finding the exercise is for, with its number and target, for example "Nordic L/R imbalance 12.9%, target ≤ 9" or "Right calf 22 reps, left 27". Plain Australian English, no jargon.',
@@ -3947,13 +3978,17 @@
     var s = plan && plan.stage, g = DATA.guideIndex, help = g && g.stage_help && typeof g.stage_help[s] === 'string' ? clean1(g.stage_help[s]) : '';
     return s ? 'Stage (set by the physiotherapist): ' + s.toLowerCase() + (help ? ' (' + help + ')' : '') + '.' : '';
   }
+  function sideFor(lt, plan) {                         // v25: the condition's side for the request: the report's injured side, or the plan's ('' when not chosen)
+    var s = lt === 'ham' || lt === 'acl' ? clean1(state[lt].meta.injured) : (plan && plan.side) || '';
+    return !s ? '' : (s === 'Both' ? 'both sides' : s.toLowerCase() + ' side');
+  }
   function guideBundle(lt, plan, cfg) {                // { ids, titles, text, chars } of the evidence guides for this request
     var g = DATA.guideIndex, ids = [], out = { ids: [], titles: [], shorts: [], text: '', chars: 0 };
     if (!g) return out;
     var cond = conditionFor(lt, plan);
     [].concat(Array.isArray(g.always) ? g.always : []).forEach(function (id) { if (ids.indexOf(id) < 0) ids.push(id); });
     if (cond) [].concat(Array.isArray(g.rehab) ? g.rehab : [], cond.guides).forEach(function (id) { if (ids.indexOf(id) < 0) ids.push(id); });
-    var cap = guideCap(cfg), total = cfg && cfg.guides_max_chars ? cfg.guides_max_chars : 120000, parts = [];
+    var cap = guideCap(cfg), total = cfg && cfg.guides_max_chars ? cfg.guides_max_chars : 140000, parts = [];   // v25: 140000 (five guides with a condition)
     ids.forEach(function (id) {
       var body = bodyOf(DATA.guides[id], cap), meta = g.guides && g.guides[id];
       if (!body) return;
@@ -3974,8 +4009,8 @@
     var plan = tidyPlan(state.ex.plan);
     var L = ['Suggest the exercise program for this report, choosing from the clinic’s library below (at most ' + max + ' exercises), following the clinic’s programming guide at the end for selection, order and the training variables.', '', interpPayload(lt, c)];
     L.push('', 'The program: ' + planLines(plan));   // v23
-    var cond = conditionFor(lt, plan), stage = stageFor(lt, plan);   // v24
-    if (cond) L.push('Condition (set by the physiotherapist): ' + cond.label + (cond.detail ? ' (' + cond.detail + ')' : '') + '.' + (stage ? ' ' + stage : ''));
+    var cond = conditionFor(lt, plan), stage = stageFor(lt, plan), side = sideFor(lt, plan);   // v24; v25: the side
+    if (cond) L.push('Condition (set by the physiotherapist): ' + cond.label + (cond.detail ? ' (' + cond.detail + ')' : '') + ', ' + (side || 'side not given') + '.' + (stage ? ' ' + stage : ''));
     var it = state[lt].interp, who = person(lt);
     if (!blank(it.text)) L.push('', 'The physiotherapist’s interpretation of these results (their emphasis): ' + withoutName(clean1(it.text), state[lt].meta.name, who));
     var have = state.ex.items.filter(function (r) { return r.kind === 'ex' && !blank(r.name); }).map(function (r) { return clean1(r.name); });
@@ -4004,9 +4039,10 @@
       properties: {
         title: str, instructions: str,
         sections: { type: 'array', items: { type: 'object', properties: { heading: str, exercises: { type: 'array', items: ex } }, required: ['heading', 'exercises'], additionalProperties: false } },
+        rationale: str,                                // v25: how the program fits together, for the physiotherapist
         notes: { type: 'array', items: str }
       },
-      required: ['title', 'instructions', 'sections', 'notes'],
+      required: ['title', 'instructions', 'sections', 'rationale', 'notes'],
       additionalProperties: false
     };
   }
@@ -4051,16 +4087,19 @@
         PLAN[k].map(function (o) { return '<button type="button" data-plan="' + k + '" data-value="' + esc(o) + '" aria-pressed="' + (plan[k] === o) + '">' + esc(o) + '</button>'; }).join('') + '</div></div>';
     });
     var cond = conditionFor(lt, plan), conds = conditionList();
-    if (cond && cond.fixed) {                           // a rehab report: its condition and phase, shown, not chosen
-      var ph = clean1(state[lt].phase);
-      rows.push('<div class="f cond"><span>Condition and phase, from this report</span><p class="plan-fixed" id="planFixed">' + esc(cond.label) + (ph ? ' · ' + esc(ph) : '') + '</p></div>');
+    if (cond && cond.fixed) {                           // a rehab report: its condition, side and phase, shown, not chosen
+      var ph = clean1(state[lt].phase), inj = clean1(state[lt].meta.injured);   // v25: the injured side too
+      rows.push('<div class="f cond"><span>Condition' + (inj ? ', side' : '') + ' and phase, from this report</span><p class="plan-fixed" id="planFixed">' + esc(cond.label) + (inj ? ' · ' + esc(inj) : '') + (ph ? ' · ' + esc(ph) : '') + '</p></div>');
     } else if (conds.length) {
       rows.push('<div class="f cond"><label for="planCondition">Condition (optional: adds its evidence guide)</label><select id="planCondition" data-plan-select="condition">' +
         conds.map(function (c) { return '<option value="' + esc(c.id) + '"' + (c.id === plan.condition ? ' selected' : '') + '>' + esc(c.label) + '</option>'; }).join('') + '</select></div>');
       if (cond) {
-        var st = stageList();
+        var st = stageList(), sd = sideList();
         rows.push('<div class="f"><span id="plan-stage-l">Stage (early, middle, late, or ongoing maintenance)</span><div class="seg stage" role="group" aria-labelledby="plan-stage-l">' +
           st.map(function (o) { return '<button type="button" data-plan="stage" data-value="' + esc(o) + '" aria-pressed="' + (plan.stage === o) + '">' + esc(o) + '</button>'; }).join('') + '</div></div>');
+        // v25: the side, so Claude can tell which findings the condition explains (a result on that side) and which are separate
+        rows.push('<div class="f"><span id="plan-side-l">Side (which findings the condition can explain)</span><div class="seg side" role="group" aria-labelledby="plan-side-l">' +
+          sd.map(function (o) { return '<button type="button" data-plan="side" data-value="' + esc(o) + '" aria-pressed="' + (plan.side === o) + '">' + esc(o) + '</button>'; }).join('') + '</div></div>');
       }
     }
     els.suggestPlan.innerHTML = rows.join('');
@@ -4099,7 +4138,7 @@
     scanInfo = { tool: 'ex', kind: 'busy', ai: true, text: 'Choosing exercises from the ' + TOOL_NAMES[lt] + ' report… this can take up to a minute.' };
     renderScanBar();
     var body = {
-      model: cfg.model, max_tokens: cfg.max_tokens || 4000, system: [].concat(cfg.system || []).join('\n'),
+      model: cfg.model, max_tokens: cfg.max_tokens || 5000, system: [].concat(cfg.system || []).join('\n'),
       messages: [{ role: 'user', content: exSuggestRequest(lt, c, max, cfg) }],
       output_config: { format: { type: 'json_schema', schema: exSuggestSchema() } }
     };
@@ -4169,9 +4208,10 @@
       x.scanned[it.id] = true;
       x.items.push(it);
     });
-    var title = exTidy(out.title, 'title'), instr = exTidy(out.instructions, 'instructions');
+    var title = exTidy(out.title, 'title'), instr = exTidy(out.instructions, 'instructions'), rat = exTidy(out.rationale, 'rationale');
     if (title && blank(x.title)) { x.title = title; x.scanned.title = true; }
     if (instr && blank(x.instructions)) { x.instructions = instr; x.scanned.instructions = true; }   // v23: e.g. "3 sessions a week for 6 weeks"
+    if (rat) { x.rationale = rat; x.scanned.rationale = true; }   // v25: the new reasoning replaces the old (Undo brings it back)
     scanInfo = { tool: 'ex', kind: 'done', ai: true, from: lt, n: n, own: own, added: added, unclear: notes, undo: before };
   }
 
@@ -4802,6 +4842,7 @@
     else {
       if (t.title) x.title = t.title;
       x.instructions = t.instructions || '';
+      x.rationale = '';                                // v25: a template replaces the program, so Claude's reasoning about the old one goes
       x.items = rows;
       x.scanned = {};
       if (scanInfo && scanInfo.tool === 'ex') scanInfo = null;   // a scan's Undo no longer applies
@@ -5120,6 +5161,7 @@
     var had = exHasContent(), before = exSnap(), p = last.program;
     x.title = exTidy(exStr(p.title), 'title');
     x.instructions = exTidy(exStr(p.instructions), 'instructions');
+    x.rationale = exTidy(exStr(p.rationale), 'rationale');   // v25
     x.items = progItems(p.items).map(function (it) { return it.kind === 'section' ? newExSection(it.heading) : newExRow(it); });
     if (p.plan) x.plan = tidyPlan(p.plan);             // v23: the client's last plan (sessions a week, setting, experience, block)
     x.scanned = {};

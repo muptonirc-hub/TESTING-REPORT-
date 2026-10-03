@@ -138,7 +138,21 @@ The handout's general instructions should say the sessions per week and the bloc
 
 ---
 
-## 8. Red lines
+## 8. One program for a condition and the performance findings (v25)
+
+When a condition is given with the request (chosen in the Suggest dialog with its side and stage, or fixed by a Hamstring or ACL report with its injured side and phase), the report is read as a whole before any exercise is chosen. The evidence guide "Rehab and performance in one program" carries the detail; BASE's rules are:
+
+1. **Sort the flagged findings first.** Explained by the condition: same side or region, and a quality that condition is known to lower at this stage (quadriceps and jump symmetry after ACL reconstruction; calf strength, hop reactive strength and RFD with Achilles tendinopathy; eccentric knee-flexor strength after a hamstring strain; knee-extensor strength with patellar tendinopathy or patellofemoral pain; adductor strength with groin pain; balance and eversion strength after an ankle sprain). Separate: the other side, another region, or a quality the condition does not touch. Keep: a clear strength the sport needs.
+2. **One section each, named for its purpose**: "Rehab: <condition>" (the condition's loading, from the stage's rows), "Performance: <what it targets>" (the separate deficits, within the stage's pain and load rules for the affected tissue), and "Keep up" when a strength is kept with one or two heavy exercises. A deficit the condition explains is not given a second exercise in the performance section.
+3. **Say what leads.** Early and middle stages: rehab leads; the performance section stays small, trains the other side and the untouched qualities, and avoids the injured tissue's high-strain loads (plyometrics, sprints, cutting). Late: the two merge; the condition's energy-storage, running and change-of-direction work doubles as the performance block. Ongoing: performance leads with a maintenance dose for the condition. Strength before power for a weak athlete; ballistic and reactive work for a strong athlete with a low DSI or RSI.
+4. **Session order stays as section 3**: fast first, heavy next, the condition's eccentric and isometric work after the strength lifts unless it is the main priority, capacity last.
+5. **Progression inside the block goes on the exercise** ("weeks 1–3 double leg, from week 4 single leg"), and the instructions line agrees with it.
+6. **A rationale for the physiotherapist** comes with every suggestion (kept with the program, never printed): what leads and why, which findings were treated as the condition and which as separate, what was held back because of the stage, what the next block adds and the sign that opens it (a 24-hour pain level, a symmetry, a test number, a time floor), and what to re-test. The physiotherapist edits or clears it.
+7. **Never infer** a condition, a side or a stage from the numbers; without a condition there is no rehab section. Where the side is not given, a one-sided deficit is left unresolved and the rationale says so.
+
+---
+
+## 9. Red lines
 
 - Never a diagnosis, an injury prediction or a return-to-sport decision: the physiotherapist owns those.
 - No maximal plyometrics, drop jumps, heavy eccentrics or maximal isometrics for someone new to training, or where the report's notes mention pain; start with the easier version of the family.
