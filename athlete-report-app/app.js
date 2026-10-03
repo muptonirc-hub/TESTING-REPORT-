@@ -46,7 +46,10 @@
     legacyDialog: $('legacyDialog'), legacyText: $('legacyText'), legacyLater: $('legacyLater'), legacyUpload: $('legacyUpload'), legacyNever: $('legacyNever'),
     // v15: the exercise library's editor, + From library, the video player and the template dialogs
     libDialog: $('libDialog'), libPickDialog: $('libPickDialog'), videoDialog: $('videoDialog'),
-    tplSaveDialog: $('tplSaveDialog'), tplPickDialog: $('tplPickDialog'), tplRenameDialog: $('tplRenameDialog')
+    tplSaveDialog: $('tplSaveDialog'), tplPickDialog: $('tplPickDialog'), tplRenameDialog: $('tplRenameDialog'),
+    // v30: the home screen, the logo that leads to it, its in-progress question and its client chooser
+    homeSec: $('home'), brandHome: $('brandHome'), homeAsk: $('homeAsk'), homeAskTitle: $('homeAskTitle'), homeAskText: $('homeAskText'), homeAskActions: $('homeAskActions'),
+    homeClientDialog: $('homeClientDialog'), homeClientTitle: $('homeClientTitle'), homeClientDetail: $('homeClientDetail'), homeClientList: $('homeClientList'), homeClientCancel: $('homeClientCancel')
   };
 
   // ------------------------------------------------------------------ small helpers
@@ -810,9 +813,14 @@
           '<span class="ti-text"><b>' + esc(ex ? EX_PAGE_TITLE[k] : HEAD[k][0]) + '</b><small>' + esc(ex ? exPageBlurb(k) : TOOL_BLURB[k]) + '</small></span></button>';
       }).join('') + '</div></div>';
   }
+  // v30: the page in use is drawn even while Home shows (hidden underneath), so every refresh keeps working; Home redraws too
   function render() {
-    var t = state.tool, section = t === 'ex' ? 'ex' : 'screening';
-    document.querySelectorAll('.tools button').forEach(function (b) { b.setAttribute('aria-selected', String(b.dataset.section === section)); });
+    renderPage();
+    if (homeView) renderHome();
+  }
+  function renderPage() {
+    var t = state.tool;
+    syncTabs();
     followReport();                                    // v19: a linked program shows the report's name and date
     if (t === 'ex') { renderExPage(); return; }
     els.entry.innerHTML = '<div class="pagehead">' + pickHtml(t) + '<p>' + esc(HEAD[t][1]) + '</p></div>' + athleteCard() + testsBarHtml(t) +
@@ -1646,7 +1654,7 @@
   // ------------------------------------------------------------------ example data (clearly labelled)
   // v18: from the ⋯ menu, and only on an empty page (until v17 the summary offered it after a client was loaded, where it
   // renamed them Example Athlete and replaced their previous results)
-  function demoAllowed() { return TOOLS.indexOf(state.tool) >= 0 && !clientContent(state.tool); }
+  function demoAllowed() { return !homeView && TOOLS.indexOf(state.tool) >= 0 && !clientContent(state.tool); }   // v30: not on Home
   function fillExample() {
     if (!demoAllowed()) return;
     var t = state.tool, s = state[t];
@@ -2110,9 +2118,8 @@
       try { localStorage.setItem(STORE, draftJson()); } catch (e) { /* storage unavailable */ }
       closePick(false);
       render();
-      window.scrollTo(0, 0);
+      showHome(true);                                  // v30: the home screen (until v29, the Screening page)
       keepAwake();                                     // nothing entered now: the screen may sleep again
-      focusQuiet(pickBtn());
       toast(homeMessage(from, st, !gone[from.tool]), { label: 'Undo', run: function () { undoHome(snap, wasLoaded); } });
     });
   }
@@ -2134,11 +2141,327 @@
     clearTimeout(saveTimer);
     try { localStorage.setItem(STORE, draftJson()); } catch (e) { /* storage unavailable */ }
     closePick(false);
+    leaveHome();                                       // v30: back on the page it was
     render();
     window.scrollTo(0, 0);
     keepAwake();
     focusQuiet(pickBtn());
     toast('Back as it was');
+  }
+
+  // ------------------------------------------------------------------ v30: the home screen
+  // The app opens on Home: a greeting, a client search, a card for anything in progress and a tile for every part of the
+  // app (the four tests; Photo to handout, Build a program, the library and the templates). Return home and the logo come
+  // back to it. The page in use stays drawn underneath (html.home-on hides it), so everything that refreshes it keeps
+  // working, and the Screening and Exercises tabs open their sections where they were left. A tile whose page holds
+  // entries asks first: carry on with them, or start afresh (Undo). #continue in the address opens where the app left off
+  // instead (the test suites and bookmarks).
+  var homeView = location.hash !== '#continue', homeBuilt = false, homeAskFor = null, homeClientFor = null;
+  function homeSvg(paths) { return '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' + paths + '</svg>'; }
+  var HOME_ICON = {
+    screen: homeSvg('<path d="M3 12h3.5l2.5-6.5 4 13 2.5-6.5H21"/>'),                                                     // a trace: the jump, strength and speed tests
+    str: homeSvg('<path d="M6.5 6.5v11M17.5 6.5v11M3.5 9.5v5M20.5 9.5v5M6.5 12h11"/>'),                                  // a dumbbell
+    ham: homeSvg('<circle cx="15" cy="4.2" r="1.9"/><path d="M13.6 7.6 10.8 13l3.6 2.4-1.6 5.6"/><path d="M10.8 13 7 15.2 4.5 14"/><path d="M13.6 7.6 17 9.6l2.4-1.8"/><path d="M13.6 7.6 10 8.4 8.4 11"/>'),   // a sprinter: back to running
+    acl: homeSvg('<path d="M9.5 3v5.8a2.6 2.6 0 0 0 5.2 0V3"/><path d="M9.5 21v-4.8a2.6 2.6 0 0 1 5.2 0V21"/><circle cx="18" cy="12.2" r="1.7"/><path d="M11 10.8l2.4 2.6"/>'),   // a knee: the bone ends, the kneecap and the ligament
+    photo: homeSvg('<path d="M4 8h3l2-3h6l2 3h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="3.5"/>'),
+    builder: homeSvg('<rect x="5" y="4.5" width="14" height="16.5" rx="2"/><path d="M9 3h6v3H9zM8.5 11h7M8.5 15h4.5"/>'),
+    library: homeSvg('<path d="M3 5.5c3-1 6-1 9 1 3-2 6-2 9-1v13c-3-1-6-1-9 1-3-2-6-2-9-1z"/><path d="M12 6.5v13"/>'),
+    templates: homeSvg('<rect x="8" y="7" width="12" height="14" rx="2"/><path d="M5 17V5.5A2.5 2.5 0 0 1 7.5 3H16"/>'),
+    search: '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg>',
+    go: '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>'
+  };
+  var HOME_LINE = {
+    screen: 'ForceDecks, NordBord, ForceFrame, DynaMo and SmartSpeed against the norms.',
+    str: 'Each leg’s load, force or reps: asymmetry and capacity.',
+    ham: 'Injured-limb results against the targets for the rehab phase.',
+    acl: 'Injured-limb and symmetry results against ACLR norms for the phase.',
+    photo: 'Photograph a handwritten program and get a neat, printable handout.',
+    builder: 'Pick from the library, type exercises or start from a template.',
+    library: 'The clinic’s exercises: doses, handout cues and video links.'
+  };
+  function homeLine(k) { return k === 'templates' ? (CLOUD ? 'Saved programs to start from, shared by the clinic.' : 'Saved programs to start from, kept on this device.') : HOME_LINE[k]; }
+  function syncTabs() {
+    var section = homeView ? 'home' : state && state.tool === 'ex' ? 'ex' : 'screening';
+    document.querySelectorAll('.tools button').forEach(function (b) { b.setAttribute('aria-selected', String(b.dataset.section === section)); });
+  }
+  // what a tile would find: entries of a client's (the practitioner's own name and the date don't count); a program that
+  // goes with a report counts once it has exercises or a title of its own
+  function homeBusy(t) { return t === 'ex' ? exHasContent() || (!state.ex.link && clientContent('ex')) : clientContent(t); }
+  function homeInProgress() {
+    var order = [state.tool].concat(TOOLS, ['ex']);
+    return order.filter(function (t, i) { return order.indexOf(t) === i && homeBusy(t); });
+  }
+  function homeHello() {
+    var h = new Date().getHours(), nm = clean1(userName()), first = nm.split(' ')[0];
+    if (/^(dr|mr|mrs|ms|miss|prof)\.?$/i.test(first)) first = nm;   // 'Dr Smith', not 'Dr'
+    return 'Good ' + (h < 12 ? 'morning' : h < 17 ? 'afternoon' : 'evening') + (first ? ', ' + first : '');
+  }
+  function homeDate() {
+    try { return new Date().toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long' }); } catch (e) { return ''; }
+  }
+  function buildHome() {
+    els.homeSec.innerHTML =
+      '<div class="home-top"><div class="home-hello"><h1 id="homeHello" tabindex="-1"></h1><p id="homeDate"></p></div>' +
+      '<div class="home-find" role="search"><label class="client-search" for="homeSearch">' + HOME_ICON.search + '<span class="vh">Find a client by name</span>' +
+      '<input id="homeSearch" type="search" placeholder="Find a client" autocomplete="off" autocapitalize="words" autocorrect="off" spellcheck="false" enterkeyhint="search" aria-controls="homeSugg"></label>' +
+      '<div class="suggest home-sugg" id="homeSugg" hidden></div></div></div>' +
+      '<section class="home-cont" id="homeCont" aria-labelledby="homeContH" hidden></section>' +
+      '<section class="home-group" aria-labelledby="homeTestH"><h2 id="homeTestH">Testing</h2><div class="home-tiles" id="homeTests"></div></section>' +
+      '<section class="home-group" aria-labelledby="homeExH"><h2 id="homeExH">Exercises</h2><div class="home-tiles" id="homeEx"></div></section>';
+    homeBuilt = true;
+  }
+  function homeTile(title, line, icon, busy) {
+    return '<span class="tile-ic">' + icon + '</span><span class="tile-text"><b>' + esc(title) + '</b><small>' + esc(line) + '</small>' +
+      (busy ? '<span class="tile-badge">' + esc(busy) + '</span>' : '') + '</span>';
+  }
+  function renderHome() {
+    if (!state) return;
+    if (!homeBuilt) buildHome();
+    var a = document.activeElement, holder = a && a.closest && els.homeSec.contains(a) ? a.closest('[data-home]') : null, keep = holder ? holder.getAttribute('data-home') : null;   // focus kept across a redraw
+    $('homeHello').textContent = homeHello();
+    $('homeDate').textContent = homeDate();
+    var cont = homeInProgress(), cs = $('homeCont');
+    cs.hidden = !cont.length;
+    cs.innerHTML = !cont.length ? '' : '<h2 id="homeContH">Continue where you left off</h2><div class="cont-list">' + cont.map(function (t) {
+      return '<button type="button" class="cont-card" data-home="cont:' + t + '"><span class="tile-ic">' + HOME_ICON[t === 'ex' ? 'builder' : t] + '</span>' +
+        '<span class="cont-text"><b><span class="vh">Continue: </span>' + esc(t === 'ex' ? 'Exercise program' : HEAD[t][0]) + '</b><small>' + esc(contentLine(t)) + '</small></span>' +
+        '<span class="cont-go">' + HOME_ICON.go + '</span></button>';
+    }).join('') + '</div>';
+    $('homeTests').innerHTML = TOOLS.map(function (t) {
+      return '<button type="button" class="tile" data-home="tool:' + t + '">' + homeTile(HEAD[t][0], homeLine(t), HOME_ICON[t], homeBusy(t) ? 'In progress' : '') + '</button>';
+    }).join('');
+    var exBusy = homeBusy('ex');
+    // Photo to handout: with nothing in progress the tile is the photo picker itself (its file input laid over it, so the
+    // tap lands on the input, as Scan exercise page does); with a program in progress it asks first
+    $('homeEx').innerHTML = (exBusy
+      ? '<button type="button" class="tile tile-photo" data-home="photo">' + homeTile('Photo to handout', homeLine('photo'), HOME_ICON.photo, '') + '</button>'
+      : '<label class="tile tile-photo file-btn" data-home="photo">' + homeTile('Photo to handout', homeLine('photo'), HOME_ICON.photo, '') +
+        '<input type="file" accept="image/*" multiple data-scan-mode="fresh" aria-label="Photo to handout: take or choose photos of a handwritten exercise program, several pages at once"></label>') +
+      '<button type="button" class="tile" data-home="ex:builder">' + homeTile('Build a program', homeLine('builder'), HOME_ICON.builder, exBusy ? 'In progress' : '') + '</button>' +
+      '<button type="button" class="tile" data-home="ex:library">' + homeTile('Exercise library', homeLine('library'), HOME_ICON.library, '') + '</button>' +
+      '<button type="button" class="tile" data-home="ex:templates">' + homeTile('Program templates', homeLine('templates'), HOME_ICON.templates, '') + '</button>';
+    if (keep) {
+      var back = els.homeSec.querySelector('[data-home="' + keep + '"]');
+      if (back) focusQuiet(back.tagName === 'LABEL' ? back.querySelector('input') : back);
+    }
+    if ($('homeSearch') && !$('homeSugg').hidden) homeSuggest();   // a client saved elsewhere meanwhile
+  }
+  function showHome(focus) {
+    closePick(false);
+    hideSuggest();
+    homeView = true;
+    document.documentElement.classList.add('home-on');
+    renderHome();
+    syncTabs();
+    window.scrollTo(0, 0);
+    if (focus) focusQuiet($('homeHello'));
+  }
+  function leaveHome() {
+    if (!homeView) return;
+    homeView = false;
+    document.documentElement.classList.remove('home-on');
+    var box = $('homeSugg'), find = $('homeSearch');
+    if (box) { box.hidden = true; box.innerHTML = ''; }
+    if (find) find.value = '';                         // a name searched for has been dealt with
+    syncTabs();
+  }
+  // a page opened from Home (a tile, a Continue card, a tab), as it was left
+  function openTool(t, page) {
+    closePick(false);
+    leaveHome();
+    if (t === 'ex' && EX_PAGES.indexOf(page) >= 0) state.exPage = page;
+    state.tool = t;
+    if (TOOLS.indexOf(t) >= 0) state.screenTool = t;
+    saveDraft();
+    render();
+    window.scrollTo(0, 0);
+    if (t === 'ex') exPageOpened();
+    focusQuiet(pickBtn());
+    keepAwake();
+  }
+  function homeOpen(t, page) { if (homeBusy(t)) askHalfDone({ tool: t, page: page }); else openTool(t, page); }
+  // a page made ready for someone new (the practitioner's name stays); Undo in the message puts it back
+  function homeStartNew(t, page) {
+    var undo = clearForClient(t);
+    openTool(t, page);
+    toast('New ' + (t === 'ex' ? 'program' : TOOL_NAMES[t]) + ' started', { label: 'Undo', run: undo });
+  }
+  // o: { tool, page } (a tile), { tool: 'ex', photo: true } (Photo to handout) or { tool, client: { key, name } }
+  function askHalfDone(o) {
+    var t = o.tool, cur = clean1(state[t].meta.name), line = contentLine(t), acts = [], text;
+    function btn(cls, act, label) { return '<button type="button" class="' + cls + '" data-ask="' + act + '">' + esc(label) + '</button>'; }
+    function pick(cls, mode, label, aria) {
+      return '<label class="' + cls + ' file-btn"><span>' + esc(label) + '</span><input type="file" accept="image/*" multiple data-scan-mode="' + mode + '" aria-label="' + esc(aria) + '"></label>';
+    }
+    els.homeAskTitle.textContent = (t === 'ex' ? 'Exercise program' : TOOL_NAMES[t]) + ' in progress';
+    if (o.photo) {
+      text = line + '. Add the photo’s exercises to it, or start a new program?';
+      acts.push(pick('primary', 'add', 'Add to it', 'Add to it: take or choose photos of the exercise page'));
+      acts.push(pick('ghost', 'new', 'Start a new program', 'Start a new program: take or choose photos of the exercise page'));
+    } else if (o.client) {
+      text = line + '. Start a new one for ' + o.client.name + ', or carry on with ' + (cur ? cur + '’s' : 'this one') + '?';
+      acts.push(btn('primary', 'new', 'Start new for ' + o.client.name));
+      acts.push(btn('ghost', 'continue', cur ? 'Continue ' + cur + '’s' : 'Continue it'));
+    } else {
+      text = line + '. Carry on with it, or start a new one? Starting new clears this page (Undo straight after).';
+      acts.push(btn('primary', 'continue', 'Continue it'));
+      acts.push(btn('ghost', 'new', 'Start new'));
+    }
+    acts.push(btn('quiet', 'cancel', 'Cancel'));
+    els.homeAskText.textContent = text;
+    els.homeAskActions.innerHTML = acts.join('');
+    homeAskFor = o;
+    openModal(els.homeAsk, els.homeAskActions.querySelector('.primary input, button.primary'));
+  }
+  function onHomeAskClick(e) {
+    var b = e.target.closest('button[data-ask]');
+    if (!b) return;
+    var o = homeAskFor, a = b.dataset.ask;
+    if (a === 'cancel' || !o) { closeModal(); return; }
+    closeModal(false);
+    homeAskFor = null;
+    if (a === 'continue') openTool(o.tool, o.tool === 'ex' ? 'builder' : null);
+    else if (o.client) homeClientOpen(o.tool, o.client, true);
+    else homeStartNew(o.tool, o.page);
+  }
+  // photos picked from the Photo to handout tile, or from Add to it / Start a new program in its question
+  function onHomeScanPick(input) {
+    var files = Array.prototype.slice.call(input.files || []), mode = input.dataset.scanMode;
+    input.value = '';
+    if (!files.length) return;
+    if (openModalEl === els.homeAsk) closeModal(false);
+    homeAskFor = null;
+    var undo = mode === 'new' && homeBusy('ex') ? clearForClient('ex') : null;
+    openTool('ex', 'builder');
+    if (undo) toast('New program started', { label: 'Undo', run: undo });
+    startScan(files, { append: mode === 'add' });
+  }
+  function onHomeClick(e) {
+    var sg = e.target.closest('#homeSugg button');
+    if (sg) {
+      var typed = clean1($('homeSearch').value);
+      $('homeSugg').hidden = true;
+      if (sg.dataset.homeClient) openHomeClient(sg.dataset.homeClient, '');
+      else openHomeClient('', typed);
+      return;
+    }
+    var el = e.target.closest('[data-home]');
+    if (!el || el.tagName === 'LABEL') return;           // the photo tile opens its picker by itself
+    var k = el.dataset.home, part = k.split(':');
+    if (part[0] === 'cont') openTool(part[1], part[1] === 'ex' ? 'builder' : null);
+    else if (part[0] === 'tool') homeOpen(part[1], null);
+    else if (k === 'ex:builder') homeOpen('ex', 'builder');
+    else if (part[0] === 'ex') openTool('ex', part[1]);
+    else if (k === 'photo') askHalfDone({ tool: 'ex', photo: true });
+  }
+  // the client search: names in the clinic's records (as the name boxes suggest them), else a new client by that name
+  function homeSuggest() {
+    var inp = $('homeSearch'), box = $('homeSugg');
+    if (!inp || !box) return;
+    var typed = clean1(inp.value), k = E.nameKey(typed);
+    if (!k) { box.hidden = true; box.innerHTML = ''; return; }
+    var keys = clientKeys().filter(function (key) { return key.indexOf(k) >= 0; }).slice(0, 6);
+    var html = keys.map(function (key) {
+      var cl = clients.clients[key], n = cl.sessions.length, last = '';
+      cl.sessions.forEach(function (x) { if (x.date > last) last = x.date; });
+      return '<button type="button" data-home-client="' + esc(key) + '"><b>' + esc(cl.name) + '</b><span>' + n + (n === 1 ? ' session' : ' sessions') + (last ? ' · last ' + esc(E.displayIso(last)) : '') + '</span></button>';
+    }).join('');
+    if (!clients.clients[k] && typed.length >= 2) html += '<button type="button" class="hs-new" data-home-new="1"><b>New client: ' + esc(typed) + '</b><span>no record yet</span></button>';
+    box.innerHTML = html;
+    box.hidden = !html;
+  }
+  function onHomeSearchKey(e) {
+    var box = $('homeSugg'), items = box ? Array.prototype.slice.call(box.querySelectorAll('button')) : [];
+    if (e.key === 'Enter') { e.preventDefault(); if (items[0]) items[0].click(); }
+    else if (e.key === 'Escape') { if (box && !box.hidden) { e.preventDefault(); box.hidden = true; } }
+    else if (e.key === 'ArrowDown' && items.length) { e.preventDefault(); items[0].focus(); }
+  }
+  function onHomeSuggKey(e) {
+    var box = $('homeSugg'), items = Array.prototype.slice.call(box.querySelectorAll('button')), i = items.indexOf(document.activeElement);
+    if (i < 0) return;
+    if (e.key === 'ArrowDown') { e.preventDefault(); (items[i + 1] || items[i]).focus(); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); if (i) items[i - 1].focus(); else $('homeSearch').focus(); }
+    else if (e.key === 'Escape') { e.preventDefault(); box.hidden = true; $('homeSearch').focus(); }
+  }
+  // a client chosen on Home: each test, with when they last did it, and their exercise program
+  function openHomeClient(key, name) {
+    var cl = key ? clients.clients[key] : null;
+    if (key && !cl) return;
+    if (!cl && !clean1(name)) return;
+    homeClientFor = { key: cl ? key : '', name: cl ? cl.name : clean1(name) };
+    var last = {};
+    if (cl) cl.sessions.forEach(function (x) { if (!last[x.tool] || x.date > last[x.tool]) last[x.tool] = x.date; });
+    els.homeClientTitle.textContent = homeClientFor.name;
+    els.homeClientDetail.textContent = cl ? 'Choose a test (their results from last time come with it) or their exercise program.' : 'New client, no record yet. Choose a test, or write their exercise program.';
+    els.homeClientList.innerHTML = TOOLS.concat(['ex']).map(function (t) {
+      var sub = t === 'ex' ? (last.ex ? 'Last program ' + E.displayIso(last.ex) : cl ? 'No programs yet' : '')
+        : last[t] ? 'Last tested ' + E.displayIso(last[t]) : cl ? 'Not done yet' : '';
+      return '<button type="button" class="hc-opt" data-hc="' + t + '"><span class="tile-ic">' + HOME_ICON[t === 'ex' ? 'builder' : t] + '</span>' +
+        '<span class="hc-text"><b>' + esc(t === 'ex' ? 'Exercise program' : HEAD[t][0]) + '</b>' + (sub ? '<small>' + esc(sub) + '</small>' : '') + '</span></button>';
+    }).join('');
+    openModal(els.homeClientDialog, els.homeClientList.querySelector('.hc-opt'));
+  }
+  function onHomeClientClick(e) {
+    var b = e.target.closest('button[data-hc]'), c = homeClientFor;
+    if (!b || !c) return;
+    closeModal(false);
+    homeClientGo(b.dataset.hc, c);
+  }
+  function homeClientGo(t, c) {
+    var want = c.key || E.nameKey(c.name), cur = E.nameKey(state[t].meta.name);
+    if (homeBusy(t)) {
+      if (cur && cur === want) { openTool(t, t === 'ex' ? 'builder' : null); return; }   // their own page in progress: carry on with it
+      askHalfDone({ tool: t, client: c });
+      return;
+    }
+    homeClientOpen(t, c, false);
+  }
+  // the page for that client: a record's details and results from last time (or, for the program, their last saved one,
+  // as Choose client does), or a new client's name; clear: Start new for them (the page held someone else's entries)
+  function homeClientOpen(t, c, clear) {
+    var was = clean1(state[t].meta.name), undo = clear ? clearForClient(t) : null, want = c.key || E.nameKey(c.name);
+    if (t === 'ex' && state.ex.link && E.nameKey(state.ex.meta.name) !== want) state.ex.link = '';   // v19: no longer that report's program
+    closePick(false);
+    leaveHome();
+    if (t === 'ex') state.exPage = 'builder';
+    state.tool = t;
+    if (TOOLS.indexOf(t) >= 0) state.screenTool = t;
+    if (c.key && clients.clients[c.key]) {
+      if (t === 'ex') loadProgramFor(c.key, true, undo, was); else loadHistory(t, c.key, true, undo, was);   // (each draws the page)
+    } else {
+      state[t].meta.name = c.name;
+      state[t].cardOpen = true;
+      render();
+      if (undo) toast('Cleared ' + (was ? was + '’s' : 'the last') + ' entries for ' + c.name, { label: 'Undo', run: undo });
+    }
+    saveDraft();
+    window.scrollTo(0, 0);
+    if (t === 'ex') exPageOpened();
+    focusQuiet(pickBtn());
+    keepAwake();
+  }
+  function wireHome() {
+    els.homeSec.addEventListener('click', onHomeClick);
+    els.homeSec.addEventListener('change', function (e) { if (e.target.matches && e.target.matches('input[data-scan-mode]')) onHomeScanPick(e.target); });
+    els.homeSec.addEventListener('input', function (e) { if (e.target.id === 'homeSearch') homeSuggest(); });
+    els.homeSec.addEventListener('keydown', function (e) {
+      if (e.target.id === 'homeSearch') onHomeSearchKey(e);
+      else if (e.target.closest && e.target.closest('#homeSugg')) onHomeSuggKey(e);
+    });
+    els.homeSec.addEventListener('focusin', function (e) { if (e.target.id === 'homeSearch' && clean1(e.target.value)) homeSuggest(); });
+    els.homeSec.addEventListener('focusout', function () {
+      setTimeout(function () { var box = $('homeSugg'); if (box && !els.homeSec.querySelector('.home-find').contains(document.activeElement)) box.hidden = true; }, 200);
+    });
+    // tapping a suggestion must not blur the search box before the tap lands
+    els.homeSec.addEventListener('pointerdown', function (e) { if (e.target.closest('#homeSugg')) e.preventDefault(); });
+    els.homeAsk.addEventListener('click', onHomeAskClick);
+    els.homeAsk.addEventListener('change', function (e) { if (e.target.matches && e.target.matches('input[data-scan-mode]')) onHomeScanPick(e.target); });
+    els.homeClientList.addEventListener('click', onHomeClientClick);
+    els.homeClientCancel.addEventListener('click', function () { closeModal(); });
+    els.brandHome.addEventListener('click', function () {
+      if (document.documentElement.classList.contains('signed-out') || !state) return;
+      if (homeView) window.scrollTo(0, 0); else showHome(true);
+    });
   }
 
   // ------------------------------------------------------------------ top bar
@@ -2154,6 +2477,8 @@
   // v15: the Exercises tab works the same way: from Screening it returns to the Exercises page last in use; a second
   // tap, already there, scrolls to the top and opens its page picker
   function onSectionTab(section) {
+    if (section === 'home') { if (homeView) window.scrollTo(0, 0); else showHome(true); return; }   // v30
+    if (homeView) { openTool(section === 'ex' ? 'ex' : state.screenTool, section === 'ex' ? state.exPage : null); return; }   // v30: where it was left
     var here = section === 'ex' ? state.tool === 'ex' : state.tool !== 'ex';
     if (!here) {
       closePick(false);
@@ -2267,7 +2592,7 @@
     return { results: n, any: n > 0 || details || !!s.importLog, name: String(s.meta.name || '').trim() };
   }
   function setBackgroundInert(on) {
-    ['.appbar', '.workspace', '#dock', '#signin', '#cloudBar'].forEach(function (sel) {
+    ['.appbar', '.workspace', '#dock', '#signin', '#cloudBar', '#home'].forEach(function (sel) {   // v30: and Home
       var el = document.querySelector(sel);
       if (!el) return;
       if (on) el.setAttribute('inert', ''); else el.removeAttribute('inert');
@@ -2869,8 +3194,9 @@
       return p.then(function () { return prepareImage(f, maxEdge).then(function (im) { out.push(im); }); });
     }, Promise.resolve()).then(function () { return out; });
   }
-  function startScan(files) {
-    var t = state.tool, exm = t === 'ex';                 // exm: the Exercises tab's own prompt, schema and apply step
+  // opts (v30): { append: true } adds a scanned exercise page after the program's rows (Photo to handout › Add to it on Home)
+  function startScan(files, opts) {
+    var t = state.tool, exm = t === 'ex', append = exm && !!(opts && opts.append);   // exm: the Exercises tab's own prompt, schema and apply step
     if (!files.length || scanBusy || (exm && suggestBusy)) return;
     var cfg = exm ? exScanCfg() : scanCfg();
     function fail(msg) { scanInfo = { tool: t, kind: 'error', text: msg }; renderScanBar(); }
@@ -2878,7 +3204,7 @@
     var photos = files.filter(function (f) { return !f.type || f.type.indexOf('image/') === 0; });
     if (!photos.length) return fail(exm ? 'That file isn’t a photo. Choose a photo of the exercise page.' : 'That file isn’t a photo. Choose a photo of your notes.');
     if (!aiKey()) {
-      openAiSettings(function () { if (state.tool === t) startScan(files); }, exm
+      openAiSettings(function () { if (state.tool === t) startScan(files, opts); }, exm
         ? 'To read photos of a handwritten exercise page, the app needs a Claude API key. ' + ONCE_NOTE()
         : 'To read photos of your notes or VALD screenshots, the app needs a Claude API key. ' + ONCE_NOTE());
       return;
@@ -2912,7 +3238,7 @@
       if (j.stop_reason === 'refusal') throw new Error('Claude couldn’t read these notes. Try a clearer photo.');
       var out;
       try { out = JSON.parse(replyText(j)); } catch (e) { throw new Error('Claude’s answer couldn’t be read. Try again.'); }
-      if (exm) applyExScan(out, nPhotos); else applyScan(t, out, list);
+      if (exm) applyExScan(out, nPhotos, append); else applyScan(t, out, list);
       if (extra) scanInfo.unclear.unshift('Only the first ' + max + ' photos were read (' + extra + (extra === 1 ? ' more was' : ' more were') + ' left out). Scan the rest separately.');
     }).catch(function (err) {
       if (gen !== scanGen || err === null) return;
@@ -3080,7 +3406,7 @@
         (info.own ? ' More › Save to library keeps an exercise of Claude’s for next time.' : '') + costNote(info) + '</span>')
       : t === 'ex' ? (info.kind === 'empty'
       ? '<span class="scan-msg">No exercises were found on the ' + (info.photos > 1 ? 'photos' : 'photo') + '. Check it’s a photo of the exercise page, or try a clearer photo. Nothing was changed.</span>'
-      : '<span class="scan-msg"><b>Filled ' + info.n + (info.n === 1 ? ' exercise' : ' exercises') + ' from your notes.</b> Check them against the page before creating the handout.' +
+      : '<span class="scan-msg"><b>' + (info.added ? 'Added ' : 'Filled ') + info.n + (info.n === 1 ? ' exercise' : ' exercises') + ' from your notes' + (info.added ? ', after the ones already there' : '') + '.</b> Check them against the page before creating the handout.' +
         (info.matched ? ' ' + info.matched + ' matched your library.' : '') + '</span>')
       : info.kind === 'empty'
       ? '<span class="scan-msg">Nothing on the photo matched the ' + esc(TOOL_NAMES[t]) + ' tests' + (extra.length ? ' (only the ' + extra.join(' and ') + ')' : '') + '. Check you’re on the right tab, or try a clearer photo.</span>'
@@ -3843,7 +4169,7 @@
     return s.length > max ? s.slice(0, max).trim() : s;
   }
   // replace the table with the scanned one (the title and instructions only when found); Undo puts back exactly what was there
-  function applyExScan(out, photos) {
+  function applyExScan(out, photos, append) {           // append (v30): after the rows already there, keeping their title and notes
     var x = state.ex, found = [], n = 0;
     (out && Array.isArray(out.sections) ? out.sections : []).forEach(function (sec) {
       if (!sec || typeof sec !== 'object') return;
@@ -3861,17 +4187,25 @@
     if (!n) { scanInfo = { tool: 'ex', kind: 'empty', n: 0, photos: photos, unclear: unclear, undo: null }; return; }
     var before = exSnap();
     var marks = {}, lib = libList(), matched = 0;
-    x.items = found.map(function (f) {
+    var rows = found.map(function (f) {
       var it = f.heading ? newExSection(f.heading) : newExRow(f.row);
       if (!f.heading) { var e = E.libMatch(it.name, lib); if (e) { it.lib = e.id; matched++; } }   // v15: linked; the values stay as read
       marks[it.id] = true;
       return it;
     });
-    var title = exTidy(out.title, 'title'), notes = exTidy(out.notes, 'instructions');
-    if (title) { x.title = title; marks.title = true; } else if (x.scanned.title) marks.title = true;
-    if (notes) { x.instructions = notes; marks.instructions = true; } else if (x.scanned.instructions) marks.instructions = true;
+    var title = exTidy(out.title, 'title'), notes = exTidy(out.notes, 'instructions'), added = append && x.items.length > 0;
+    if (added) {                                       // v30: the rows already there stay (and stay highlighted if not yet checked)
+      Object.keys(x.scanned || {}).forEach(function (k) { if (x.scanned[k]) marks[k] = true; });
+      x.items = x.items.concat(rows);
+      if (title && blank(x.title)) { x.title = title; marks.title = true; }
+      if (notes && blank(x.instructions)) { x.instructions = notes; marks.instructions = true; }
+    } else {
+      x.items = rows;
+      if (title) { x.title = title; marks.title = true; } else if (x.scanned.title) marks.title = true;
+      if (notes) { x.instructions = notes; marks.instructions = true; } else if (x.scanned.instructions) marks.instructions = true;
+    }
     x.scanned = marks;
-    scanInfo = { tool: 'ex', kind: 'done', n: n, photos: photos, unclear: unclear, undo: before, matched: matched };
+    scanInfo = { tool: 'ex', kind: 'done', n: n, photos: photos, unclear: unclear, undo: before, matched: matched, added: added };
   }
   // the program as it is now (for an Undo), and putting it back unless Clear all replaced the program since
   function exSnap() {
@@ -5481,7 +5815,7 @@
     els.clientsSummary.textContent = !keys.length ? 'No saved clients yet. A record starts when you create a report with a name filled in.'
       : pick ? loads
         : keys.length + (keys.length === 1 ? ' client, ' : ' clients, ') + total + (total === 1 ? ' session' : ' sessions') + (CLOUD ? ', in the clinic store. ' : ', saved on this device. ') +
-          (clientsEditing ? 'Tap Delete to remove a client.' : 'Tap a name to load it here.');
+          (clientsEditing ? 'Tap Delete to remove a client.' : homeView ? 'Tap a name to choose a test or their program.' : 'Tap a name to load it here.');
     els.clientsSearchWrap.hidden = !keys.length;
     var shown = q ? keys.filter(function (k) { return k.indexOf(q) >= 0; }) : keys;
     if (!keys.length) { els.clientsList.innerHTML = ''; return; }
@@ -5528,6 +5862,7 @@
   var delTimer = null;
   function onClientsClick(e) {
     var pk = e.target.closest('button[data-action="pick-client"]');
+    if (pk && homeView && clientsMode === 'manage') { closeModal(false); openHomeClient(pk.dataset.key, ''); return; }   // v30: what to do for them
     if (pk) { pickFromDialog(pk.dataset.key); return; }
     var b = e.target.closest('button[data-action="delete-client"]');
     if (!b) return;
@@ -5699,6 +6034,7 @@
     closeModal();
     renderMenuAccount();
     if (fillPractitioner(was)) render();
+    else if (homeView) renderHome();                   // v30: the greeting uses the name
     toast(nm === was ? 'Name unchanged' : 'Your name is now ' + nm);
   }
   function askSignOut() {
@@ -5933,7 +6269,7 @@
       els.testsAll.addEventListener('click', function () { setAllTests(true); });
       els.testsNone.addEventListener('click', function () { setAllTests(false); });
       els.testsDone.addEventListener('click', function () { closeModal(); });
-      [els.clearDialog, els.aiDialog, els.clientsDialog, els.testsDialog, els.homeDialog].forEach(function (d) {
+      [els.clearDialog, els.aiDialog, els.clientsDialog, els.testsDialog, els.homeDialog, els.homeAsk, els.homeClientDialog].forEach(function (d) {   // v30: + the two Home dialogs
         d.addEventListener('click', function (e) { if (e.target === d) closeModal(); });
       });
       // tapping a suggested client must not blur the name box before the tap lands
@@ -5986,9 +6322,13 @@
       window.addEventListener('scroll', function () {
         if (!stuckFrame) stuckFrame = requestAnimationFrame(function () { stuckFrame = 0; checkStuck(); });
       }, { passive: true });
+      wireHome();                                      // v30
+      if (!homeView) document.documentElement.classList.remove('home-on');   // #continue: where the app left off
       render();
+      if (homeView) syncTabs();
       if (CLOUD) initCloud();                          // v13: the sign-in card while signed out, else the first sync
     }).catch(function (err) {
+      document.documentElement.classList.remove('home-on');   // v30: the message shows in the workspace
       els.entry.innerHTML = '<section class="card error-card"><div class="card-head"><h2>Norms not found</h2></div>' +
         '<p>The app couldn’t load its norms files (' + esc(err.message) + '). Check that norms.json, strength_norms.json, hamstring_norms.json and acl_norms.json sit next to index.html, then reload. ' +
         'If you are offline, open the app once while online so it can save a copy.</p></section>';
