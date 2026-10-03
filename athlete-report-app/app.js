@@ -3042,7 +3042,7 @@
     else if (row && el.dataset && el.dataset.field) delete marks[row.dataset.metric + '|' + el.dataset.field];
   }
   function costNote(info) {                            // v28: what the suggestion cost, from the answer's usage counts
-    return info.cents ? ' This one cost about ' + info.cents + (info.cents === 1 ? ' cent.' : ' cents.') : '';
+    return info.cents ? ' This one cost about ' + info.cents + (info.cents === 1 ? ' cent' : ' cents') + (info.reused ? ' (the guides and library were reused from the last hour, at a tenth of the price).' : '.') : '';
   }
   function renderScanBar() {
     var bar = $('scanBar'), btn = $('scanBtn'), t = state.tool;
@@ -3918,12 +3918,12 @@
   // Keep up, says what leads the block, and writes a rationale for the physiotherapist that stays with the program (never printed).
   var SUGGEST_TOOLS = ['screen', 'str', 'ham', 'acl'];
   var EX_SUGGEST_DEFAULT = {
-    effort: 'medium', max_tokens: 16000, timeout_s: 240, max_per_day: 5,   // v26: the cap is per training day (days = the plan's sessions a week); v28: room for a three-day program (a 6000-token cap cut the answer short)
+    effort: 'high', max_tokens: 32000, timeout_s: 480, max_per_day: 5, cache: '1h',   // v26: the cap is per training day; v28: room for a three-day program; v29: high effort (the JSON answer leaves Claude only its hidden thinking to reason in, which medium effort often skips), room for that thinking, and the reference documents cached for an hour
     system: [
       'You suggest an exercise program for a sports physiotherapist at BASE Health Noosa, a clinic in Queensland, Australia, from the results of a testing report. Your suggestions fill a draft that the physiotherapist checks, edits and then prints as a handout for the person tested. The physiotherapist makes every clinical decision; you are saving them the first draft.',
       'Prefer the clinic’s library listed in the request: when it has a suitable exercise, give its id exactly as written there (and leave name empty). When the library has nothing suitable for a priority, or a clearly better exercise exists, give an exercise of your own instead: leave id empty and give its name (a clear, full name in sentence case, with the equipment or variation in the name) and one short note, under 100 characters, telling the person how to do it, which prints on their handout. Never use an id that isn’t in the list.',
       'Follow the clinic’s programming guide in the request for everything it covers: which exercise family fits each finding, one exercise per training quality (never two with the same effect, such as a box jump and a squat jump), how many exercises, the order of the session, the training variables by intent, the weekly structure for the sessions given, the setting, the experience level and the block length. Where the guide is silent, use standard strength and conditioning practice.',
-      'Evidence guides may follow the clinic guide in the request, one per topic (training variables, reading the performance tests, designing the block, rehabilitation principles, rehab and performance together, and the condition named). They are drafts the clinic is reviewing. Use them for the condition and stage given: take exercises and doses from the sections and stage-table rows that match that stage, never from a later stage; apply their pain and load rules in the notes and the instructions line; where an evidence guide and the clinic programming guide differ, the clinic guide wins.',
+      'Evidence guides come with the clinic guide in the documents at the start of the request, one per topic (training variables, reading the performance tests, designing the block, rehabilitation principles, rehab and performance together, and the condition named). They are drafts the clinic is reviewing. Use them for the condition and stage given: take exercises and doses from the sections and stage-table rows that match that stage, never from a later stage; apply their pain and load rules in the notes and the instructions line; where an evidence guide and the clinic programming guide differ, the clinic guide wins.',
       'If the results or the stage hit a red line in a guide (for example a stage the guide says needs a medical review first), say so in notes and keep the program conservative rather than programming through it. Return-to-sport criteria may be quoted as training targets in why; never as a clearance.',
       'Read the whole report before choosing anything. When a condition is given (with its side and stage, or a rehab report’s injured side and phase), sort the flagged results into three groups: those the condition plausibly explains (same side or region, a quality the condition is known to lower at this stage, as the rehab-and-performance guide’s table says); deficits independent of it (the other side, another region, or a quality the condition doesn’t touch); and strengths worth keeping. A deficit the condition explains is treated inside the rehab section through the stage’s own rows, never chased with a separate performance exercise. An independent deficit gets its own work now, within the stage’s pain and load rules for the affected tissue. Where the side isn’t given, say so in the rationale and treat a one-sided deficit as unresolved rather than guessing.',
       'Decide what leads this block and say so: in the early and middle stages the condition leads and the performance section stays small and away from the injured tissue’s high-strain loads; in the late stage the two merge, with the condition’s energy-storage, running and change-of-direction work doubling as the performance section; ongoing, performance leads with a maintenance dose for the condition. Power output rests on strength: when maximal strength is low, strength leads and ballistic work stays light; when maximal strength is good and power output or reactive strength is low, ballistic and reactive work leads.',
@@ -3938,7 +3938,8 @@
       'why: one short line, under 80 characters, naming the quality and the finding behind it, with its number and target, for example "Eccentric hamstring strength: Nordic L/R 12.9%, target ≤ 9" or "Calf capacity: right 22 reps, left 27". Plain Australian English, no jargon.',
       'title: a short title naming the block’s focus as a quality, for example "Block 1: lower-body power output (strength kept)" or "Achilles loading, weeks 1–6", or an empty string.',
       'notes: anything the physiotherapist should know, one sentence each: why an exercise of your own was chosen over the library, or a finding that needs their judgement. Leave notes empty when there is nothing to say.',
-      'Use only the information given. Don’t diagnose, predict injury or give medical advice, and never say anything about being cleared to return to sport. Refer to the person as the athlete or the patient, never by a name.'
+      'Use only the information given. Don’t diagnose, predict injury or give medical advice, and never say anything about being cleared to return to sport. Refer to the person as the athlete or the patient, never by a name.',
+      'Think the problem through before you answer.'
     ]
   };
   var suggestBusy = false;                             // one suggestion at a time (and never alongside a scan)
@@ -4003,22 +4004,22 @@
     var s = lt === 'ham' || lt === 'acl' ? clean1(state[lt].meta.injured) : (plan && plan.side) || '';
     return !s ? '' : (s === 'Both' ? 'both sides' : s.toLowerCase() + ' side');
   }
-  function guideBundle(lt, plan, cfg) {                // { ids, titles, text, chars } of the evidence guides for this request
-    var g = DATA.guideIndex, ids = [], out = { ids: [], titles: [], shorts: [], text: '', chars: 0 };
+  function guideBundle(lt, plan, cfg) {                // { ids, titles, shorts, parts, chars } of the evidence guides for this request
+    var g = DATA.guideIndex, ids = [], out = { ids: [], titles: [], shorts: [], parts: [], chars: 0 };
     if (!g) return out;
-    var cond = conditionFor(lt, plan);
-    [].concat(Array.isArray(g.always) ? g.always : []).forEach(function (id) { if (ids.indexOf(id) < 0) ids.push(id); });
+    var cond = conditionFor(lt, plan), always = [].concat(Array.isArray(g.always) ? g.always : []);
+    always.forEach(function (id) { if (ids.indexOf(id) < 0) ids.push(id); });
     if (cond) [].concat(Array.isArray(g.rehab) ? g.rehab : [], cond.guides).forEach(function (id) { if (ids.indexOf(id) < 0) ids.push(id); });
-    var cap = guideCap(cfg), total = cfg && cfg.guides_max_chars ? cfg.guides_max_chars : 140000, parts = [];   // v25: 140000 (five guides with a condition)
+    var cap = guideCap(cfg), left = cfg && cfg.guides_max_chars ? cfg.guides_max_chars : 140000;   // v25: 140000 (five guides with a condition)
     ids.forEach(function (id) {
       var body = bodyOf(DATA.guides[id], cap), meta = g.guides && g.guides[id];
-      if (!body) return;
+      if (!body || left <= 0) return;
+      body = body.slice(0, left); left -= body.length;
       var title = clean1(meta && meta.title) || id;
       out.ids.push(id); out.titles.push(title); out.shorts.push(clean1(meta && meta.short) || id);
-      parts.push('### Guide: ' + title + '\n\n' + body);
+      out.parts.push({ id: id, title: title, body: body, general: always.indexOf(id) >= 0 });   // v29: general = the same on every request (cached together)
+      out.chars += body.length;
     });
-    out.text = parts.join('\n\n').slice(0, total);
-    out.chars = out.text.length;
     return out;
   }
   function guidesMissing(lt, plan) {                   // ids the index names for this request that didn't load
@@ -4026,9 +4027,26 @@
     var cond = conditionFor(lt, plan), ids = [].concat(Array.isArray(g.always) ? g.always : [], cond ? [].concat(Array.isArray(g.rehab) ? g.rehab : [], cond.guides) : []);
     return ids.filter(function (id, i) { return ids.indexOf(id) === i && !DATA.guides[id]; });
   }
-  function exSuggestRequest(lt, c, max, cfg) {
-    var plan = tidyPlan(state.ex.plan);
-    var L = ['Suggest the exercise program for this report, choosing from the clinic’s library below (at most ' + max + ' exercises a day), following the clinic’s programming guide at the end for selection, order and the training variables.', '', interpPayload(lt, c)];
+  // v29: the request in three parts, the long reference material first (Anthropic's advice for long documents: documents at
+  // the top, the question at the end) and in the same order every time, so Claude can cache it: [0] the clinic guide, the
+  // general evidence guides and the library (the same for every report), [1] the condition's guides (the same for every
+  // report with that condition; absent without one), [2] this report, the plan, the notes and the instruction
+  function exSuggestParts(lt, c, max, cfg) {
+    var plan = tidyPlan(state.ex.plan), n = 0, ev = guideBundle(lt, plan, cfg), g = guideText(cfg);
+    function doc(source, body) { n++; return '<document index="' + n + '">\n<source>' + source + '</source>\n<document_content>\n' + body + '\n</document_content>\n</document>'; }
+    var shared = [], cond = [];
+    if (g) shared.push(doc('Clinic programming guide (follow it; it takes precedence over general knowledge)', g));
+    ev.parts.filter(function (p) { return p.general; }).forEach(function (p) { shared.push(doc('Evidence guide: ' + p.title, p.body)); });
+    shared.push(doc('Library (id | name | body areas | type | equipment | checked by a clinician)', libList().slice(0, 300).map(libLine).join('\n')));
+    ev.parts.filter(function (p) { return !p.general; }).forEach(function (p) { cond.push(doc('Evidence guide: ' + p.title, p.body)); });
+    var head = 'Reference documents for exercise programs at BASE Health Noosa: the clinic’s programming guide, evidence guides (drafts the clinic is reviewing; where they and the clinic programming guide differ, the clinic guide wins) and the clinic’s exercise library.';
+    return [head + '\n\n<documents>\n' + shared.join('\n') + '\n</documents>',
+      cond.length ? 'Evidence guides for the condition in this request (use them for the condition and stage given):\n\n<documents>\n' + cond.join('\n') + '\n</documents>' : '',
+      exSuggestTail(lt, c, max, cfg, plan)];
+  }
+  function exSuggestRequest(lt, c, max, cfg) { return exSuggestParts(lt, c, max, cfg).filter(Boolean).join('\n\n'); }   // the whole text (estimates, tests)
+  function exSuggestTail(lt, c, max, cfg, plan) {
+    var L = ['The report and the program to fill:', '', '<report>', interpPayload(lt, c), '</report>'];
     L.push('', 'The program: ' + planLines(plan), layoutLine(plan));   // v23; v26: the layout by day
     var cond = conditionFor(lt, plan), stage = stageFor(lt, plan), side = sideFor(lt, plan);   // v24; v25: the side
     if (cond) L.push('Condition (set by the physiotherapist): ' + cond.label + (cond.detail ? ' (' + cond.detail + ')' : '') + ', ' + (side || 'side not given') + '.' + (stage ? ' ' + stage : ''));
@@ -4037,27 +4055,35 @@
     if (!blank(plan.brief)) L.push('', 'From the physiotherapist (their instructions for this program; follow them): ' + withoutName(clean1(plan.brief), state[lt].meta.name, who));   // v27
     var have = state.ex.items.filter(function (r) { return r.kind === 'ex' && !blank(r.name); }).map(function (r) { return clean1(r.name); });
     if (have.length) L.push('', 'Already in the program (don’t repeat these): ' + have.join('; '));
-    L.push('', 'Library (id | name | body areas | type | equipment | checked by a clinician):');
-    libList().slice(0, 300).forEach(function (e) { L.push(libLine(e)); });
-    var g = guideText(cfg);
-    if (g) L.push('', 'Clinic programming guide (follow it; it takes precedence over general knowledge):', '', g);
-    var ev = guideBundle(lt, plan, cfg);
-    if (ev.text) L.push('', 'Evidence guides (drafts the clinic is reviewing; use them for the condition and stage given; where they and the clinic programming guide differ, the clinic guide wins):', '', ev.text);
+    L.push('', 'Now suggest the exercise program for this report, choosing from the clinic’s library in the documents above (at most ' + max + ' exercises a day), following the clinic’s programming guide for selection, order and the training variables, and the evidence guides for the condition and stage given.');
     return L.join('\n');
   }
   // v24: what a suggestion will cost, from the text about to be sent (about 4 characters a token) at the rates in
   // interpretation.json › exercise_suggest › cost (cents per 1,000 input tokens, and cents for the answer)
-  function suggestCents(cfg, chars) {
+  function cacheTtl(cfg) { var t = cfg && cfg.cache; return t === '5m' || t === 'off' ? t : '1h'; }   // v29: interpretation.json › exercise_suggest › cache
+  function costRates(cfg) {                            // v28–v29: US cents for the model, from interpretation.json › exercise_suggest › cost
     var cost = cfg && cfg.cost && typeof cfg.cost === 'object' ? cfg.cost : {};
-    var inRate = isFinite(cost.per_1k_input_cents) ? +cost.per_1k_input_cents : 0.2, outCents = isFinite(cost.output_cents) ? +cost.output_cents : 6;   // v28: Sonnet 5.5 rates
-    return Math.max(1, Math.round(chars / 4 / 1000 * inRate + outCents));
+    function n(k, d) { return isFinite(cost[k]) && cost[k] !== null && cost[k] !== '' ? +cost[k] : d; }
+    return { input: n('per_1k_input_cents', 0.2), output: n('per_1k_output_cents', 1.0), answer: n('output_cents', 10),
+      read: n('cache_read_x', 0.1), write1h: n('cache_write_1h_x', 2), write5m: n('cache_write_5m_x', 1.25), chars: Math.max(1, n('chars_per_token', 3)) };
+  }
+  // the estimate for a suggestion that writes the cache (the first in the hour): the shared part at the write price, the rest
+  // at the input price, plus a typical answer; about 3 characters to a token (Sonnet 5.5's tokenizer: about 30% more tokens than the earlier models' 4)
+  function suggestCents(cfg, sharedChars, restChars) {
+    var r = costRates(cfg), ttl = cacheTtl(cfg), wx = ttl === 'off' ? 1 : (ttl === '5m' ? r.write5m : r.write1h);
+    return Math.max(1, Math.round(sharedChars / r.chars / 1000 * r.input * wx + (restChars || 0) / r.chars / 1000 * r.input + r.answer));
   }
   // v28: what a suggestion did cost, from the answer's usage counts at the same rates (cents per 1,000 input and output tokens)
+  // v29: with caching, input is three counts: input_tokens (after the last cache point), cache_creation_input_tokens (written,
+  // split by lifetime in cache_creation) and cache_read_input_tokens (reused, at a tenth)
   function usageCents(cfg, usage) {
     if (!usage || typeof usage !== 'object' || !isFinite(usage.input_tokens) || !isFinite(usage.output_tokens)) return 0;
-    var cost = cfg && cfg.cost && typeof cfg.cost === 'object' ? cfg.cost : {};
-    var inRate = isFinite(cost.per_1k_input_cents) ? +cost.per_1k_input_cents : 0.2, outRate = isFinite(cost.per_1k_output_cents) ? +cost.per_1k_output_cents : 1.0;
-    return Math.max(1, Math.round(usage.input_tokens / 1000 * inRate + usage.output_tokens / 1000 * outRate));
+    var r = costRates(cfg), num = function (v) { return isFinite(v) && v !== null ? +v : 0; };
+    var cc = usage.cache_creation && typeof usage.cache_creation === 'object' ? usage.cache_creation : null;
+    var w1 = cc ? num(cc.ephemeral_1h_input_tokens) : 0, w5 = cc ? num(cc.ephemeral_5m_input_tokens) : 0, wAll = num(usage.cache_creation_input_tokens);
+    if (!cc && wAll) { if (cacheTtl(cfg) === '5m') w5 = wAll; else w1 = wAll; }
+    var input = num(usage.input_tokens) + num(usage.cache_read_input_tokens) * r.read + w1 * r.write1h + w5 * r.write5m;
+    return Math.max(1, Math.round(input / 1000 * r.input + num(usage.output_tokens) / 1000 * r.output));
   }
   function exSuggestSchema() {
     var str = { type: 'string' };
@@ -4104,9 +4130,9 @@
     var missing = guidesMissing(lt, plan);
     if (missing.length) what += ' (' + missing.join(', ') + ' not loaded: reopen the app online to fetch ' + (missing.length > 1 ? 'them' : 'it') + ')';
     else if (!DATA.guideIndex) what += ' (evidence guides not loaded: reopen the app online to fetch them)';
-    var chars = 0;
-    try { var c = computeFor(lt); chars = exSuggestRequest(lt, c, perDay(cfg), cfg).length + [].concat(cfg.system || []).join('\n').length; } catch (e) { chars = 40000; }
-    return what + '. About ' + suggestCents(cfg, chars) + ' cents.';
+    var shared = 40000, rest = 0, ttl = cacheTtl(cfg);
+    try { var c = computeFor(lt), P = exSuggestParts(lt, c, perDay(cfg), cfg); shared = [].concat(cfg.system || []).join('\n').length + P[0].length + P[1].length; rest = P[2].length; } catch (e) { /* the default */ }
+    return what + '. About ' + suggestCents(cfg, shared, rest) + ' cents' + (ttl === 'off' ? '' : ', less if you suggest again within ' + (ttl === '5m' ? 'five minutes' : 'the hour')) + '.';   // v29: the cache
   }
   function renderPlanDialog(lt) {
     var plan = state.ex.plan = tidyPlan(state.ex.plan);
@@ -4181,23 +4207,30 @@
     if (blocker(c, lt)) return;
     var gen = scanGen, max = perDay(cfg);           // v26: per day
     suggestBusy = true;
-    scanInfo = { tool: 'ex', kind: 'busy', ai: true, text: 'Choosing exercises from the ' + TOOL_NAMES[lt] + ' report… this can take a minute or two.' };
+    scanInfo = { tool: 'ex', kind: 'busy', ai: true, text: 'Choosing exercises from the ' + TOOL_NAMES[lt] + ' report… this can take two or three minutes.' };
     renderScanBar();
+    var ttl = cacheTtl(cfg), mark = ttl === 'off' ? null : (ttl === '1h' ? { type: 'ephemeral', ttl: '1h' } : { type: 'ephemeral' });
+    var blocks = exSuggestParts(lt, c, max, cfg).map(function (t, i) {   // v29: the documents (cached), then this report
+      if (!t) return null;
+      var b = { type: 'text', text: t };
+      if (mark && i < 2) b.cache_control = mark;
+      return b;
+    }).filter(Boolean);
     var body = {
-      model: cfg.model, max_tokens: cfg.max_tokens || 16000, system: [].concat(cfg.system || []).join('\n'),
-      messages: [{ role: 'user', content: exSuggestRequest(lt, c, max, cfg) }],
+      model: cfg.model, max_tokens: cfg.max_tokens || 32000, system: [].concat(cfg.system || []).join('\n'),
+      messages: [{ role: 'user', content: blocks }],
       output_config: { format: { type: 'json_schema', schema: exSuggestSchema() } }
     };
     if (cfg.effort) body.output_config.effort = cfg.effort;
     focusQuiet($('exSuggest'));
-    claudeRequest(aiKey(), body, cfg.endpoint, cfg.timeout_s || 240, 'suggest exercises').then(function (j) {
+    claudeRequest(aiKey(), body, cfg.endpoint, cfg.timeout_s || 480, 'suggest exercises').then(function (j) {
       if (gen !== scanGen || state.ex !== x) return;
       if (j.stop_reason === 'max_tokens') throw new Error('Claude’s answer was cut short. Try again.');
       if (j.stop_reason === 'refusal') throw new Error('Claude didn’t suggest exercises for these results. Add them from the library instead.');
       var out;
       try { out = JSON.parse(replyText(j)); } catch (e) { throw new Error('Claude’s answer couldn’t be read. Try again.'); }
       applyExSuggest(out, lt, max);
-      if (scanInfo && scanInfo.tool === 'ex' && scanInfo.ai) scanInfo.cents = usageCents(cfg, j.usage);   // v28: the bar says what it cost
+      if (scanInfo && scanInfo.tool === 'ex' && scanInfo.ai) { scanInfo.cents = usageCents(cfg, j.usage); scanInfo.reused = !!(j.usage && +j.usage.cache_read_input_tokens > 0); }   // v28: the bar says what it cost; v29: and whether the guides came from the cache
     }).catch(function (err) {
       if (gen !== scanGen || state.ex !== x) return;
       scanInfo = { tool: 'ex', kind: 'error', ai: true, text: err && err.message ? err.message : 'Something went wrong suggesting exercises. Try again.' };
