@@ -32,14 +32,14 @@
   "exercise_suggest": {
     "about": "Settings for \"Suggest from the report\" in the program builder (v21; v22 lets Claude add an exercise of its own where the library has nothing suitable; v23 follows the clinic’s programming guide, programming_guide.md, and fills every training variable; v24 adds the evidence guides in guides/ and Suggest on Hamstring and ACL reports; v25 asks Claude to read the report as a whole when a condition is given and to write a rationale that is kept with the program; v26 gives each block one focus (an injury that explains the results first, else the biggest deficit), defers the rest by name, and lays the program out by training day, Day 1 / Day 2 / Day 3 from the plan’s sessions a week, 3 to 5 exercises a day; v27 adds the physiotherapist’s notes for Claude from the Suggest dialog, sent as \"From the physiotherapist\" and followed ahead of the guides’ defaults, never over the red lines): Claude picks exercises for a report’s results. The wording below can be edited on GitHub; the app picks it up the next time it opens online. The model, key and endpoint are the ones above. max_per_day caps the exercises per day (default 5; the whole suggestion is capped at that times the days). guide_max_chars caps how much of each guide is sent (default 36000) and guides_max_chars the evidence guides together (default 140000); cost sets the rates behind the dialog’s \"About n cents\" line.",
     "effort": "medium",
-    "max_tokens": 6000,
-    "timeout_s": 120,
+    "max_tokens": 16000,
+    "timeout_s": 240,
     "max_per_day": 5,
     "guide_max_chars": 36000,
     "guides_max_chars": 140000,
     "cost": {
       "per_1k_input_cents": 0.3,
-      "output_cents": 2
+      "output_cents": 8
     },
     "system": [
       "You suggest an exercise program for a sports physiotherapist at BASE Health Noosa, a clinic in Queensland, Australia, from the results of a testing report. Your suggestions fill a draft that the physiotherapist checks, edits and then prints as a handout for the person tested. The physiotherapist makes every clinical decision; you are saving them the first draft.",
