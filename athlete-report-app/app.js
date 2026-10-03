@@ -3097,7 +3097,7 @@
   var EX_MAIN = ['sets', 'reps', 'load'];
   var EX_DETAIL = ['rest', 'tempo', 'side', 'notes'];
   var EX_LABEL = { name: 'Exercise', sets: 'Sets', reps: 'Reps', load: 'Load', rest: 'Rest', tempo: 'Tempo', side: 'Side', notes: 'Notes' };
-  var EX_LEN = { name: 120, notes: 300, heading: 80, title: 120, instructions: 1000, rationale: 900 };   // characters kept (other boxes: 60)
+  var EX_LEN = { name: 120, notes: 300, heading: 80, title: 120, instructions: 1000, rationale: 900, brief: 600 };   // characters kept (other boxes: 60); v27: brief = the notes for Claude
   var EX_WORDS = { name: 1, load: 1, side: 1, notes: 1 };                              // boxes that start with a capital
   // v17: delete is a bin (it shows on every row now, beside More, so it reads as delete rather than close)
   var ICON_TRASH = '<svg viewBox="0 0 24 24" width="19" height="19" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M10 11v6M14 11v6M5.5 7l1 12a2 2 0 0 0 2 1.8h7a2 2 0 0 0 2-1.8l1-12M9 7V4.5h6V7"/></svg>';
@@ -3109,12 +3109,13 @@
   // v23: what Suggest from the report asks before it suggests (the person and the setting); kept with the program and saved with it.
   // v24: plus a condition (an id from guides/index.json, 'none' for none) and its stage, which pick the evidence guides sent.
   // v25: plus the condition's side (Left, Right or Both; '' while not chosen), so Claude can tell which findings the condition explains
+  // v27: plus the physiotherapist's notes for Claude (brief): free text sent with the request, kept with the plan, never printed
   var PLAN = { sessions: ['2', '3', '4'], setting: ['Gym', 'Home', 'Both'], level: ['New', 'Trained'], weeks: ['4', '6', '8'] };
   var PLAN_LABEL = { sessions: 'Sessions a week', setting: 'Where', level: 'Experience (new to training, or trained)', weeks: 'Block (weeks)' };
   var STAGES_DEFAULT = ['Early', 'Middle', 'Late', 'Ongoing'], SIDES_DEFAULT = ['Left', 'Right', 'Both'];
   function stageList() { var g = DATA.guideIndex; return g && Array.isArray(g.stages) && g.stages.length ? g.stages.map(clean1).filter(Boolean) : STAGES_DEFAULT; }
   function sideList() { var g = DATA.guideIndex; return g && Array.isArray(g.sides) && g.sides.length ? g.sides.map(clean1).filter(Boolean) : SIDES_DEFAULT; }
-  function freshPlan() { return { sessions: '3', setting: 'Gym', level: 'Trained', weeks: '6', condition: 'none', stage: '', side: '' }; }
+  function freshPlan() { return { sessions: '3', setting: 'Gym', level: 'Trained', weeks: '6', condition: 'none', stage: '', side: '', brief: '' }; }
   function tidyPlan(p) {
     var out = freshPlan();
     if (p && typeof p === 'object') {
@@ -3122,6 +3123,7 @@
       if (typeof p.condition === 'string' && /^[a-z0-9-]{1,32}$/.test(p.condition)) out.condition = p.condition;   // v24: checked against the index when used
       if (typeof p.stage === 'string' && stageList().indexOf(p.stage) >= 0) out.stage = p.stage;
       if (typeof p.side === 'string' && sideList().indexOf(p.side) >= 0) out.side = p.side;   // v25
+      if (typeof p.brief === 'string') out.brief = p.brief.replace(/\r\n?/g, '\n').replace(/[ \t]+\n/g, '\n').trim().slice(0, EX_LEN.brief);   // v27
     }
     if (out.condition === 'none') { out.stage = ''; out.side = ''; }
     return out;
@@ -3919,6 +3921,7 @@
       'Decide what leads this block and say so: in the early and middle stages the condition leads and the performance section stays small and away from the injured tissue’s high-strain loads; in the late stage the two merge, with the condition’s energy-storage, running and change-of-direction work doubling as the performance section; ongoing, performance leads with a maintenance dose for the condition. Power rests on strength: for a weak athlete strength leads and ballistic work stays light; for a strong athlete with a low DSI or RSI, ballistic and reactive work leads.',
       'One focus per block, not a little of everything. Choose it in this order and name it in the title: a condition or injury that explains the flagged results leads; otherwise the largest deficit in the quality the sport needs most, reading results marked Off target (Behind on a rehab report) first, then Close, with strength before power when absolute strength is low and ballistic or reactive work when strength is adequate but DSI, RSI or jump are low; at most one secondary quality; one heavy exercise keeps up a clear strength if there is room. The focus gets the first slot on its days and the most sets. Every other flagged result is deferred to a later block and named in the rationale, not programmed now. Don’t repeat an exercise already in the program. When two library exercises fit equally well, prefer one marked checked by a clinician.',
       'Lay the program out by training day, as the request’s layout line says: one section per day, 3 to 5 exercises each, heading "Day 1: <what the day is for>" and so on (for example "Day 1: Power and main strength", "Day 2: Rehab: Achilles loading, plus strength", "Day 3: Capacity and control"). Follow the clinic guide’s weekly structure for that number of days: the focus on the freshest days and on at least two days, heavy and high-strain work on the same tissue 48 hours or more apart, the main lifts spread across the week. The same exercise may appear on two days with different loads (a heavier and a lighter day); never two exercises for the same quality on one day. Someone new to training may get the same two or three full-body sessions repeated. Where the first and second halves of the block differ (double to single leg, isometric to loaded, a load step), say so in the exercise’s note ("weeks 1–3 …; from week 4 …") and keep the instructions line consistent with it.',
+      'Notes from the physiotherapist in the request ("From the physiotherapist") are instructions for this program: follow them for the focus, the exercises chosen, the equipment, the days and anything to avoid, ahead of the guides’ defaults. Where a note conflicts with a red line, the stage’s pain and load rules or the clinic guide, keep the program safe, say so in notes and follow the rest of the note. Say in the rationale how the notes shaped the program.',
       'rationale: 3 to 6 plain sentences for the physiotherapist (never printed on the handout), starting "Focus: … Secondary: … Deferred: …": what this block is for and why it leads; which findings you treated as the condition (named, with the number and side) and which as separate; which findings were deferred and to which block; what was left out or kept light because of the stage; what the next block adds or swaps and the sign or test result that opens it (a 24-hour pain level, a symmetry, a test number, a time floor); and what to re-test and when.',
       'For each exercise give every variable: sets and reps as plain numbers or ranges ("3", "8–10", or "30 s" for a hold); load as a short guide the person can act on ("Body weight", "Heavy, 2 reps in reserve", "A weight you could lift 8 times"); rest ("2 min", "60 s"); tempo only where it matters ("3 s down", "3-0-3", or empty); side ("Each side", "Left", "Right", or empty). Put the intent cue in note (under 100 characters), for example "Every rep as fast as you can on the way up"; for an exercise of your own the note also says how to do it.',
       'instructions: one line of general instructions for the handout from the plan, for example "3 sessions a week for 6 weeks, at least a day between sessions", or an empty string.',
@@ -4021,6 +4024,7 @@
     if (cond) L.push('Condition (set by the physiotherapist): ' + cond.label + (cond.detail ? ' (' + cond.detail + ')' : '') + ', ' + (side || 'side not given') + '.' + (stage ? ' ' + stage : ''));
     var it = state[lt].interp, who = person(lt);
     if (!blank(it.text)) L.push('', 'The physiotherapist’s interpretation of these results (their emphasis): ' + withoutName(clean1(it.text), state[lt].meta.name, who));
+    if (!blank(plan.brief)) L.push('', 'From the physiotherapist (their instructions for this program; follow them): ' + withoutName(clean1(plan.brief), state[lt].meta.name, who));   // v27
     var have = state.ex.items.filter(function (r) { return r.kind === 'ex' && !blank(r.name); }).map(function (r) { return clean1(r.name); });
     if (have.length) L.push('', 'Already in the program (don’t repeat these): ' + have.join('; '));
     L.push('', 'Library (id | name | body areas | type | equipment | checked by a clinician):');
@@ -4077,7 +4081,7 @@
   // report; the report's own condition and phase on a rehab report) and the stage row (while a condition is chosen)
   function suggestLeadText(lt) {
     var plan = tidyPlan(state.ex.plan), cfg = exSuggestCfg(), cond = conditionFor(lt, plan), ev = guideBundle(lt, plan, cfg);
-    var what = 'Claude gets the ' + TOOL_NAMES[lt] + ' results (no name or date), your interpretation, the exercises already here, the library, the clinic’s programming guide' +
+    var what = 'Claude gets the ' + TOOL_NAMES[lt] + ' results (no name or date), your interpretation' + (blank(plan.brief) ? '' : ', your notes') + ', the exercises already here, the library, the clinic’s programming guide' +
       (DATA.guide ? '' : ' (not loaded: reopen the app online to fetch it)');
     if (ev.ids.length) what += ' and the evidence guide' + (ev.ids.length > 1 ? 's' : '') + ' (' + ev.shorts.join(', ') + ')';
     var missing = guidesMissing(lt, plan);
@@ -4110,6 +4114,8 @@
           sd.map(function (o) { return '<button type="button" data-plan="side" data-value="' + esc(o) + '" aria-pressed="' + (plan.side === o) + '">' + esc(o) + '</button>'; }).join('') + '</div></div>');
       }
     }
+    // v27: the physiotherapist's notes for Claude (Matthew: "a section where we can add notes or give instructions to help with a better response")
+    rows.push('<div class="f brief"><label for="planBrief">Notes for Claude (optional)</label><textarea id="planBrief" data-plan-text="brief" rows="3" maxlength="' + EX_LEN.brief + '" autocapitalize="sentences" aria-describedby="planBriefHint" placeholder="The sport and position, the equipment, anything to avoid, what you want this block to do. No names or dates.">' + esc(plan.brief) + '</textarea><small id="planBriefHint">Sent to Claude with the results, kept with this program, never printed.</small></div>');
     els.suggestPlan.innerHTML = rows.join('');
     els.suggestPlan.dataset.tool = lt;
   }
@@ -4121,10 +4127,25 @@
     b.parentNode.querySelectorAll('button').forEach(function (x) { x.setAttribute('aria-pressed', String(x.dataset.value === b.dataset.value)); });
     saveDraft();
   }
-  function onPlanChange(e) {                           // v24: the condition menu
+  function onPlanInput(e) {                            // v27: the notes for Claude, kept with the plan as typed
+    var t = e.target.closest('textarea[data-plan-text]');
+    if (!t) return;
+    state.ex.plan[t.dataset.planText] = t.value.slice(0, EX_LEN.brief);
+    saveDraft();
+  }
+  function onPlanChange(e) {                           // v24: the condition menu; v27: the notes (on leaving the box, the lead says they go and recounts the cost)
+    var lt = els.suggestPlan.dataset.tool;
+    var t = e.target.closest('textarea[data-plan-text]');
+    if (t) {                                         // leaving the box: the notes tidied (trimmed, capped), the lead says they go and recounts the cost
+      var tidy = state.ex.plan = tidyPlan(state.ex.plan);
+      if (t.value !== tidy.brief) t.value = tidy.brief;
+      saveDraft();
+      if (lt) els.suggestLead.textContent = suggestLeadText(lt);
+      return;
+    }
     var s = e.target.closest('select[data-plan-select]');
     if (!s) return;
-    var plan = state.ex.plan, lt = els.suggestPlan.dataset.tool;
+    var plan = state.ex.plan;
     plan.condition = s.value;
     if (plan.condition !== 'none' && stageList().indexOf(plan.stage) < 0) plan.stage = stageList()[0];
     if (plan.condition === 'none') plan.stage = '';
@@ -5883,7 +5904,8 @@
       els.back.addEventListener('click', closeReport);
       els.sheetExBtn.addEventListener('click', addProgramFromReport);   // v20
       els.suggestPlan.addEventListener('click', onPlanClick);            // v23: the Suggest from the report dialog
-      els.suggestPlan.addEventListener('change', onPlanChange);          // v24: its condition menu
+      els.suggestPlan.addEventListener('change', onPlanChange);          // v24: its condition menu; v27: the notes box
+      els.suggestPlan.addEventListener('input', onPlanInput);            // v27: the notes for Claude
       els.suggestCancel.addEventListener('click', function () { closeModal(); });
       els.suggestGo.addEventListener('click', runExSuggest);
       // v20: the version running, at the foot of the ⋯ menu (from app.js's own ?v= in index.html)

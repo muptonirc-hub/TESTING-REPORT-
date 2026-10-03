@@ -147,7 +147,7 @@ A block is not a little of everything. Each block has one focus, chosen in this 
 3. **At most one secondary quality**, and one heavy exercise that keeps up a clear strength if there is room.
 4. **Everything else is deferred**, by name, to a later block, in the order strength (or rehab loading) → power and speed → sport-specific; the rationale lists what was deferred and what re-test opens the next block.
 
-The focus decides what comes first in the session, what gets the most sets and what is progressed; it does not ban the other qualities. The evidence guide "Designing the block" carries the detail: the single-focus block is best supported for power, speed-strength and jump, and for sequencing strength before power; for maximal strength and size, undulating and mixed sessions do as well.
+The focus decides what comes first in the session, what gets the most sets and what is progressed; it does not ban the other qualities. The physiotherapist's notes in the Suggest dialog (v27: the sport, the equipment, what to avoid, what the block is for) are followed ahead of these defaults, within section 10's red lines, and the rationale says how. The evidence guide "Designing the block" carries the detail: the single-focus block is best supported for power, speed-strength and jump, and for sequencing strength before power; for maximal strength and size, undulating and mixed sessions do as well.
 
 ---
 

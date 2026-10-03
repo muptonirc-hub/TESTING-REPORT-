@@ -294,6 +294,8 @@ html.signed-out .workspace, html.signed-out .dock, html.signed-out .tools, html.
 .plan-fields .seg.stage button { flex: 1 1 22%; min-height: 38px; }
 @media (max-width: 399px) { .plan-fields .seg.stage button { flex-basis: 45%; } }   /* a phone: two rows of two (room for larger system fonts) */
 .plan-fields .seg.side button { min-height: 38px; }   /* v25: the condition's side (three buttons) */
+.plan-fields .f.brief textarea { min-height: 72px; font-size: 15.5px; line-height: 1.4; }   /* v27: the notes for Claude */
+.plan-fields .f.brief small { font-size: 12.5px; color: var(--muted); }
 .tests-links { display: flex; gap: 2px; margin: 8px 0 0 -8px; }
 .tests-links .quiet { min-height: 36px; font-size: 14.5px; }
 .tests-list { list-style: none; margin: 4px 0 0; padding: 0; border: 1px solid var(--line); border-radius: 12px; background: var(--field); max-height: 52vh; overflow-y: auto; }
@@ -1577,13 +1579,13 @@ html.row-dragging, html.row-dragging * { cursor: grabbing !important; user-selec
 
 <div class="toast" id="toast" role="status" hidden></div>
 
-<script src="engine.js?v=26" defer></script>
-<script src="report-fonts.js?v=26" defer></script>
-<script src="jspdf.umd.min.js?v=26" defer></script>
-<script src="qrcode.js?v=26" defer></script>
-<script src="report.js?v=26" defer></script>
-<script src="cloud-config.js?v=26" defer></script>
-<script src="cloud.js?v=26" defer></script>
-<script src="app.js?v=26" defer></script>
+<script src="engine.js?v=27" defer></script>
+<script src="report-fonts.js?v=27" defer></script>
+<script src="jspdf.umd.min.js?v=27" defer></script>
+<script src="qrcode.js?v=27" defer></script>
+<script src="report.js?v=27" defer></script>
+<script src="cloud-config.js?v=27" defer></script>
+<script src="cloud.js?v=27" defer></script>
+<script src="app.js?v=27" defer></script>
 </body>
 </html>
