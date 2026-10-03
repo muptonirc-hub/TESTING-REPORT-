@@ -416,12 +416,12 @@
     "source": "★★☆ Evidence-based band · target ~1.0 (O'Brien 2019); flag <0.80 (Tyler 2001) or >1.30 (VALD youth academy). Ratio monitors balance — adductor strength is the primary predictor (2024 meta-analysis)."
    },
    "DSI (CMJ ÷ IMTP)": {
-    "dir": "Band",
-    "green": 0.6,
-    "gmax": 0.8,
-    "amber": 0.5,
-    "amax": 0.9,
-    "source": "★★★ Lit: Suchomel 2020 / Comfort 2018 · 0.60–0.80 balanced (applies to all populations)"
+    "dir": "Guide",
+    "low": 0.6,
+    "high": 0.8,
+    "labels": ["Ballistic emphasis", "Mixed emphasis", "Strength emphasis"],
+    "short": ["ballistic", "mixed", "strength"],
+    "source": "★★★ Lit: Suchomel 2020 / Comfort 2018 · not rated (no target): below 0.60 ballistic emphasis, 0.60–0.80 mixed, above 0.80 maximal strength emphasis, read with the IMTP and CMJ values (applies to all populations)"
    },
    "Abductor Peak Force": {
     "dir": "Higher",
@@ -610,12 +610,12 @@
     "source": "★★☆ Evidence-based band · target ~1.0 (O'Brien 2019); flag <0.80 (Tyler 2001) or >1.30 (VALD youth academy). Ratio monitors balance — adductor strength is the primary predictor (2024 meta-analysis)."
    },
    "DSI (CMJ ÷ IMTP)": {
-    "dir": "Band",
-    "green": 0.6,
-    "gmax": 0.8,
-    "amber": 0.5,
-    "amax": 0.9,
-    "source": "★★★ Lit: Suchomel 2020 / Comfort 2018 · 0.60–0.80 balanced (applies to all populations)"
+    "dir": "Guide",
+    "low": 0.6,
+    "high": 0.8,
+    "labels": ["Ballistic emphasis", "Mixed emphasis", "Strength emphasis"],
+    "short": ["ballistic", "mixed", "strength"],
+    "source": "★★★ Lit: Suchomel 2020 / Comfort 2018 · not rated (no target): below 0.60 ballistic emphasis, 0.60–0.80 mixed, above 0.80 maximal strength emphasis, read with the IMTP and CMJ values (applies to all populations)"
    },
    "Abductor Peak Force": {
     "dir": "Higher",
@@ -796,12 +796,12 @@
     "source": "★★☆ Evidence-based band · target ~1.0 (O'Brien 2019); flag <0.80 (Tyler 2001) or >1.30 (VALD youth academy). Ratio monitors balance — adductor strength is the primary predictor (2024 meta-analysis)."
    },
    "DSI (CMJ ÷ IMTP)": {
-    "dir": "Band",
-    "green": 0.6,
-    "gmax": 0.8,
-    "amber": 0.5,
-    "amax": 0.9,
-    "source": "★★★ Lit: Suchomel 2020 / Comfort 2018 · 0.60–0.80 balanced (applies to all populations)"
+    "dir": "Guide",
+    "low": 0.6,
+    "high": 0.8,
+    "labels": ["Ballistic emphasis", "Mixed emphasis", "Strength emphasis"],
+    "short": ["ballistic", "mixed", "strength"],
+    "source": "★★★ Lit: Suchomel 2020 / Comfort 2018 · not rated (no target): below 0.60 ballistic emphasis, 0.60–0.80 mixed, above 0.80 maximal strength emphasis, read with the IMTP and CMJ values (applies to all populations)"
    },
    "Quad ISO @ 60° — Left": {
     "dir": "Higher",
@@ -958,12 +958,12 @@
     "source": "★★☆ Evidence-based band · target ~1.0 (O'Brien 2019); flag <0.80 (Tyler 2001) or >1.30 (VALD youth academy). Ratio monitors balance — adductor strength is the primary predictor (2024 meta-analysis)."
    },
    "DSI (CMJ ÷ IMTP)": {
-    "dir": "Band",
-    "green": 0.6,
-    "gmax": 0.8,
-    "amber": 0.5,
-    "amax": 0.9,
-    "source": "★★★ Lit: Suchomel 2020 / Comfort 2018 · 0.60–0.80 balanced (applies to all populations)"
+    "dir": "Guide",
+    "low": 0.6,
+    "high": 0.8,
+    "labels": ["Ballistic emphasis", "Mixed emphasis", "Strength emphasis"],
+    "short": ["ballistic", "mixed", "strength"],
+    "source": "★★★ Lit: Suchomel 2020 / Comfort 2018 · not rated (no target): below 0.60 ballistic emphasis, 0.60–0.80 mixed, above 0.80 maximal strength emphasis, read with the IMTP and CMJ values (applies to all populations)"
    },
    "Quad ISO @ 60° — Left": {
     "dir": "Higher",
@@ -1136,12 +1136,12 @@
     "source": "★★☆ Evidence-based band · target ~1.0 (O'Brien 2019); flag <0.80 (Tyler 2001) or >1.30 (VALD youth academy). Ratio monitors balance — adductor strength is the primary predictor (2024 meta-analysis)."
    },
    "DSI (CMJ ÷ IMTP)": {
-    "dir": "Band",
-    "green": 0.6,
-    "gmax": 0.8,
-    "amber": 0.5,
-    "amax": 0.9,
-    "source": "★★★ Lit: Suchomel 2020 / Comfort 2018 · 0.60–0.80 balanced (applies to all populations)"
+    "dir": "Guide",
+    "low": 0.6,
+    "high": 0.8,
+    "labels": ["Ballistic emphasis", "Mixed emphasis", "Strength emphasis"],
+    "short": ["ballistic", "mixed", "strength"],
+    "source": "★★★ Lit: Suchomel 2020 / Comfort 2018 · not rated (no target): below 0.60 ballistic emphasis, 0.60–0.80 mixed, above 0.80 maximal strength emphasis, read with the IMTP and CMJ values (applies to all populations)"
    },
    "Quad ISO @ 60° — Left": {
     "dir": "Higher",
@@ -1314,12 +1314,12 @@
     "source": "★★☆ Evidence-based band · target ~1.0 (O'Brien 2019); flag <0.80 (Tyler 2001) or >1.30 (VALD youth academy). Ratio monitors balance — adductor strength is the primary predictor (2024 meta-analysis)."
    },
    "DSI (CMJ ÷ IMTP)": {
-    "dir": "Band",
-    "green": 0.6,
-    "gmax": 0.8,
-    "amber": 0.5,
-    "amax": 0.9,
-    "source": "★★★ Lit: Suchomel 2020 / Comfort 2018 · 0.60–0.80 balanced (applies to all populations)"
+    "dir": "Guide",
+    "low": 0.6,
+    "high": 0.8,
+    "labels": ["Ballistic emphasis", "Mixed emphasis", "Strength emphasis"],
+    "short": ["ballistic", "mixed", "strength"],
+    "source": "★★★ Lit: Suchomel 2020 / Comfort 2018 · not rated (no target): below 0.60 ballistic emphasis, 0.60–0.80 mixed, above 0.80 maximal strength emphasis, read with the IMTP and CMJ values (applies to all populations)"
    },
    "Quad ISO @ 60° — Left": {
     "dir": "Higher",

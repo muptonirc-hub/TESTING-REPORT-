@@ -86,7 +86,7 @@
       "how": "Adductor ÷ abductor peak force from the same ForceFrame session."
     },
     "DSI (CMJ ÷ IMTP)": {
-      "what": "Jump force compared with maximum strength, which helps show whether strength or explosiveness needs more work.",
+      "what": "Jump force compared with maximum strength: not good or bad, it guides whether training leans to strength or speed.",
       "how": "Worked out by the app: CMJ peak force ÷ IMTP peak force."
     },
     "Isometric Peak Force": {

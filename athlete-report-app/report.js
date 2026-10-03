@@ -27,10 +27,10 @@
   var C = {
     BLUE: '#448EEE', BLUEINK: '#2760C8', DARK: '#202020', BLACK: '#111418', INK: '#22262B',
     MUTE: '#6B7280', LINE: '#E4E7EA', GBAND: '#1A2951', G: '#2E7D32', A: '#DD8800', R: '#C62828',
-    WHITE: '#FFFFFF', NA: '#999999'
+    WHITE: '#FFFFFF', NA: '#999999', GUIDE: '#4E6E97', GUIDEZONE: '#C9D5E6'
   };
-  var COL = { Green: C.G, Amber: C.A, Red: C.R };
-  var TEXT_COL = { Green: C.G, Amber: '#A35F00', Red: C.R, 'n/a': C.MUTE };   // status-coloured words on white (amber darkened to read)
+  var COL = { Green: C.G, Amber: C.A, Red: C.R, Guide: C.GUIDE };   // v28: Guide = the DSI, never rated (a neutral blue-grey)
+  var TEXT_COL = { Green: C.G, Amber: '#A35F00', Red: C.R, 'n/a': C.MUTE, Guide: C.GUIDE };   // status-coloured words on white (amber darkened to read)
 
   // ------------------------------------------------------------------ fonts & text measuring
   var ASC = 1854 / 2048, DESC = 434 / 2048, LH_NORMAL = (1854 + 434 + 67) / 2048;
@@ -265,7 +265,8 @@
     Green: [[[-0.34, 0.02], [-0.1, 0.27], [0.36, -0.27]]],
     Amber: [[[0, -0.37], [0, 0.1]]],
     Red: [[[-0.26, -0.26], [0.26, 0.26]], [[0.26, -0.26], [-0.26, 0.26]]],
-    'n/a': [[[-0.27, 0], [0.27, 0]]]
+    'n/a': [[[-0.27, 0], [0.27, 0]]],
+    Guide: [[[-0.34, 0], [0.34, 0]], [[-0.17, -0.17], [-0.34, 0], [-0.17, 0.17]], [[0.17, -0.17], [0.34, 0], [0.17, 0.17]]]   // v28: a two-way arrow
   };
   function strokeShape(pts, hw) {                 // outline of a polyline, half width hw, mitred joins, flat ends
     var n = pts.length, nrm = [], left = [], right = [], i;
@@ -611,12 +612,13 @@
     var m = E.meter(result, norm);
     if (!m) return false;
     var at = 0;
-    m.segments.forEach(function (s) {
+    m.segments.forEach(function (s, i) {
       var x0 = x + w * at / 100, x1 = x + w * Math.min(100, at + s.width) / 100;
       at += s.width;
       if (x1 - x0 < 0.001 || x0 >= x + w) return;
       var clipped = clipX(pill, x0, x1);
-      if (clipped.length > 2) doc.poly(clipped, { fill: COL[s.color] });
+      if (clipped.length > 2) doc.poly(clipped, { fill: s.color === 'Guide' ? C.GUIDEZONE : COL[s.color] });
+      if (s.color === 'Guide' && i) doc.rect(x0 - px(0.6), y, px(1.2), h, { fill: C.WHITE });   // v28: the band edges (0.60, 0.80), no colours
     });
     var mx = x + w * m.marker / 100, cy = y + h / 2;
     var p = prev ? E.meterAt(m, prev.value) : null;
@@ -699,9 +701,9 @@
         doc.text(E.fmt(r.result), x2 + c2 / 2, baseline(mid - lineH(13) / 2, 13), { style: 'bold', size: fs(13), color: C.BLACK, align: 'center' });
         var x3 = x2 + c2 + gap, mTop = mid - (px(11) + lineH(8)) / 2;
         meterBar(doc, x3, mTop, c3, r.result, r.norm, r.prev != null ? { value: r.prev, kind: r.change_kind } : null);
-        doc.text(tgtPrefix + ' ' + r.target, x3, baseline(mTop + px(11), 8), { style: 'regular', size: fs(8), color: C.MUTE });
+        doc.text((r.status === 'Guide' ? 'Not rated · ' : tgtPrefix + ' ') + r.target, x3, baseline(mTop + px(11), 8), { style: 'regular', size: fs(8), color: C.MUTE });   // v28: the DSI's bands, no target
         var x4r = ML + CW - pad, sTop = mid - L.h4 / 2;
-        if (r.status) chip(doc, W[r.status] || r.status, x4r, sTop + (lineH(9) + px(2)) / 2, COL[r.status] || C.NA, { right: true, icon: r.status });
+        if (r.status) chip(doc, r.status === 'Guide' && r.guide ? r.guide : (W[r.status] || r.status), x4r, sTop + (lineH(9) + px(2)) / 2, COL[r.status] || C.NA, { right: true, icon: r.status });
         var kcol = r.change_kind === 'gain' ? C.G : (r.change_kind === 'drop' ? C.R : C.MUTE);
         L.chg.forEach(function (l, i) {
           doc.text(l, x4r, baseline(sTop + lineH(9) + px(4) + i * lineH(8.5), 8.5), { style: 'bold', size: fs(8.5), color: kcol, align: 'right' });

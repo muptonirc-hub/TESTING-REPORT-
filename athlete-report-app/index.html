@@ -44,6 +44,7 @@
   --green-ink: #1E5B22; --amber-ink: #7A4600; --red-ink: #9A1B1B; --na-ink: #4E5860;
   --scan: #6E56CF; --scan-soft: #EEEAFB; --scan-line: #A99AE8; --scan-ink: #4B3BA3;   /* filled from scanned notes (violet, so it isn't mistaken for the brand blue) */
   --zone-red: #E1E6EA; --zone-amber: #F3E2B8; --zone-green: #BFE0C4;                 /* meter zones: position, not status */
+  --zone-guide: #CBD8EA; --guide-soft: #E4EDFA; --guide-ink: #2A4F86;                  /* v28: a measure that guides training (the DSI): never green, amber or red */
   --on-accent: #FFFFFF;     /* text on --accent (4.6:1) */
   --seg-on: #FFFFFF;
   --tab-on-fg: #202020;     /* the chosen tab's label */
@@ -65,6 +66,7 @@
     --green-ink: #9ADBA0; --amber-ink: #F6C878; --red-ink: #F4A5A5; --na-ink: #B7C2C8;
     --scan: #9B8CF0; --scan-soft: #241F3F; --scan-line: #6A5AC8; --scan-ink: #C9C0F8;
     --zone-red: #2A343B; --zone-amber: #4A3A1A; --zone-green: #1F4A2A;
+    --zone-guide: #2B3D55; --guide-soft: #1D2A3D; --guide-ink: #A9C6F2;
     --on-accent: #0B1B33;
     --seg-on: #34444F;
     --tab-on-fg: #FFFFFF;
@@ -82,6 +84,7 @@
   --green-ink: #9ADBA0; --amber-ink: #F6C878; --red-ink: #F4A5A5; --na-ink: #B7C2C8;
   --scan: #9B8CF0; --scan-soft: #241F3F; --scan-line: #6A5AC8; --scan-ink: #C9C0F8;
   --zone-red: #2A343B; --zone-amber: #4A3A1A; --zone-green: #1F4A2A;
+  --zone-guide: #2B3D55; --guide-soft: #1D2A3D; --guide-ink: #A9C6F2;
   --on-accent: #0B1B33;
   --seg-on: #34444F;
   --tab-on-fg: #FFFFFF;
@@ -430,6 +433,7 @@ html.signed-out .workspace, html.signed-out .dock, html.signed-out .tools, html.
 .chip.Amber { background: var(--amber-soft); color: var(--amber-ink); }
 .chip.Red { background: var(--red-soft); color: var(--red-ink); }
 .chip.na { background: var(--na-soft); color: var(--na-ink); }
+.chip.Guide { background: var(--guide-soft); color: var(--guide-ink); }   /* v28: the DSI's training emphasis */
 .chip.value { background: var(--field); color: var(--fg); border: 1px solid var(--line); }
 .m-wait { font-size: 12.5px; color: var(--muted); text-align: right; }
 .vh { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
@@ -1579,13 +1583,13 @@ html.row-dragging, html.row-dragging * { cursor: grabbing !important; user-selec
 
 <div class="toast" id="toast" role="status" hidden></div>
 
-<script src="engine.js?v=27" defer></script>
-<script src="report-fonts.js?v=27" defer></script>
-<script src="jspdf.umd.min.js?v=27" defer></script>
-<script src="qrcode.js?v=27" defer></script>
-<script src="report.js?v=27" defer></script>
-<script src="cloud-config.js?v=27" defer></script>
-<script src="cloud.js?v=27" defer></script>
-<script src="app.js?v=27" defer></script>
+<script src="engine.js?v=28" defer></script>
+<script src="report-fonts.js?v=28" defer></script>
+<script src="jspdf.umd.min.js?v=28" defer></script>
+<script src="qrcode.js?v=28" defer></script>
+<script src="report.js?v=28" defer></script>
+<script src="cloud-config.js?v=28" defer></script>
+<script src="cloud.js?v=28" defer></script>
+<script src="app.js?v=28" defer></script>
 </body>
 </html>

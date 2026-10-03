@@ -88,7 +88,8 @@
     Green: '<path d="M2.5 6.4l2.3 2.3 4.7-5.1"/>',
     Amber: '<path d="M6 2.3v4.5"/><circle cx="6" cy="9.4" r=".5"/>',
     Red: '<path d="M3.2 3.2l5.6 5.6M8.8 3.2l-5.6 5.6"/>',
-    'n/a': '<path d="M3.2 6h5.6"/>'
+    'n/a': '<path d="M3.2 6h5.6"/>',
+    Guide: '<path d="M2.4 6h7.2M4.2 4.2L2.4 6l1.8 1.8M7.8 4.2L9.6 6 7.8 7.8"/>'   // v28: a two-way arrow (an emphasis, not a rating)
   };
   function statusIcon(status) {
     var p = STATUS_ICON[status];
@@ -99,7 +100,7 @@
   function person(t) { return t === 'screen' ? 'athlete' : 'patient'; }
   function Person(t) { return t === 'screen' ? 'Athlete' : 'Patient'; }
   function statusWord(status, t) { return E.statusWord(status, wordKind(t || state.tool)); }
-  function chip(status, text) {
+  function chip(status, text) {                        // v28: a 'Guide' chip (the DSI) names the training emphasis, in a neutral look
     var cls = status === 'n/a' ? 'na' : status;
     return '<span class="chip ' + cls + '">' + statusIcon(status) + esc(text || statusWord(status)) + '</span>';
   }
@@ -834,8 +835,8 @@
   function meterHtml(result, norm, prev, kind) {
     var m = E.meter(result, norm);
     if (!m) return '';
-    var colour = { Green: 'var(--zone-green)', Amber: 'var(--zone-amber)', Red: 'var(--zone-red)' };
-    var html = '<span class="mm-bar">' + m.segments.map(function (sg) { return '<span style="width:' + sg.width.toFixed(2) + '%;background:' + colour[sg.color] + '"></span>'; }).join('') + '</span>';
+    var colour = { Green: 'var(--zone-green)', Amber: 'var(--zone-amber)', Red: 'var(--zone-red)', Guide: 'var(--zone-guide)' };   // v28: Guide (the DSI), neutral
+    var html = '<span class="mm-bar">' + m.segments.map(function (sg, i) { return '<span style="width:' + sg.width.toFixed(2) + '%;background:' + colour[sg.color] + (sg.color === 'Guide' && i ? ';box-shadow:inset 2px 0 0 var(--surface)' : '') + '"></span>'; }).join('') + '</span>';
     var p = prev == null ? null : E.meterAt(m, prev);
     if (p !== null) {
       var a = Math.min(p, m.marker), b = Math.max(p, m.marker), left = p <= m.marker;
@@ -946,7 +947,7 @@
         var target = el.querySelector('.m-target'), calc = el.querySelector('.m-calc'), meter = el.querySelector('.m-meter');
         // v18: the target when there is one, else nothing (no 'choose sex for targets' / 'no norm' on every row: the
         // details card asks for sex or the phase once, and a result's 'No target' pill says the rest)
-        target.textContent = norm && (t !== 'screen' || c.pop.population) ? (t === 'screen' ? 'target ' : 'phase target ') + E.targetStr(norm) : '';
+        target.textContent = norm && (t !== 'screen' || c.pop.population) ? (norm.dir === 'Guide' ? 'not rated · guides training: ' : t === 'screen' ? 'target ' : 'phase target ') + E.targetStr(norm) : '';   // v28: the DSI's bands
         calc.textContent = '';
         var v = state[t].values[m.name] || {};
         var typed = m.calc === 'LSI' ? (!blank(v.left) || !blank(v.right)) : !blank(v.result);
@@ -971,7 +972,7 @@
         if (row) {
           entered++;
           el.dataset.status = row.status || '';
-          out.innerHTML = chip(row.status) + (row.change ? '<span class="m-change ' + row.change_kind + '">' + changeHtml(row.change, row.change_kind) + '</span>' : '');
+          out.innerHTML = chip(row.status, row.status === 'Guide' ? row.guide : '') + (row.change ? '<span class="m-change ' + row.change_kind + '">' + changeHtml(row.change, row.change_kind) + '</span>' : '');
           meter.innerHTML = meterHtml(row.result, row.norm, row.prev, row.change_kind);
           if (!meter.innerHTML) el.dataset.status = '';
         } else {
@@ -2386,6 +2387,10 @@
   }
   function rowLine(r, targetWord, t) {
     var v = E.fmt(r.result) + (r.unit ? ' ' + r.unit : '') + (r.side ? ' (' + (r.side === 'L' ? 'left' : 'right') + ' side higher)' : '');
+    if (r.status === 'Guide') {                        // v28: never rated (no target, not good or bad): it sets the training emphasis
+      var gch = changeWords(r);
+      return '- ' + [r.name + ': ' + v, 'not rated (no target; neither good nor bad): it sets the training emphasis, here ' + (r.guide || 'not known').toLowerCase() + ' (' + r.target + ')'].concat(gch ? [gch] : []).join(' | ');
+    }
     var scored = r.target && r.target !== 'n/a';
     var parts = [r.name + ': ' + v, scored ? targetWord + ' ' + r.target : 'no ' + targetWord + ' available'];
     if (scored) parts.push(r.status ? STATUS_WORD(r.status, t) : 'not scored');
@@ -2424,7 +2429,7 @@
       L.push('Compared against: ' + clean1(c.pop.label) + '.');
       var who = joinBits([clean1(m.sex), blank(m.age) ? '' : clean1(m.age) + ' years', blank(m.mass) ? '' : clean1(m.mass) + ' kg', blank(m.sport) ? '' : 'sport: ' + clean1(m.sport)]);
       if (who) L.push('Athlete: ' + who + '.');
-      L.push('Status key: On target = meets the target; Close = close to the target; Off target = well short of the target.');
+      L.push('Status key: On target = meets the target; Close = close to the target; Off target = well short of the target. The DSI is not rated: it says which training emphasis the force profile points to.');   // v28
       L.push(totals);
       L.push('Results (metric: result | target | status | change since the previous test, if given):');
       L = L.concat(groupLines(c.groups, 'target', t));
@@ -3036,6 +3041,9 @@
     else if (row && el.classList.contains('side')) delete marks[row.dataset.metric + '|side'];
     else if (row && el.dataset && el.dataset.field) delete marks[row.dataset.metric + '|' + el.dataset.field];
   }
+  function costNote(info) {                            // v28: what the suggestion cost, from the answer's usage counts
+    return info.cents ? ' This one cost about ' + info.cents + (info.cents === 1 ? ' cent.' : ' cents.') : '';
+  }
   function renderScanBar() {
     var bar = $('scanBar'), btn = $('scanBtn'), t = state.tool;
     if (btn) {
@@ -3066,10 +3074,10 @@
     if (info.kind === 'error') { bar.innerHTML = '<span class="scan-msg">' + esc(info.text) + '</span>' + close; return; }
     var extra = [info.date ? 'test date' : '', info.mass ? 'body mass' : ''].filter(Boolean);
     var html = '<span class="scan-ico">' + ico + '</span>' + (info.ai ? (info.kind === 'empty'
-      ? '<span class="scan-msg">Claude didn’t find exercises in the library for the ' + esc(TOOL_NAMES[info.from]) + ' results. Nothing was changed.</span>'
+      ? '<span class="scan-msg">Claude didn’t find exercises in the library for the ' + esc(TOOL_NAMES[info.from]) + ' results. Nothing was changed.' + costNote(info) + '</span>'
       : '<span class="scan-msg"><b>Claude suggested ' + info.n + (info.n === 1 ? ' exercise' : ' exercises') + ' from the ' + esc(TOOL_NAMES[info.from]) + ' report' + (info.added ? ', after the ones already there' : '') +
         (info.own ? (info.own === info.n ? (info.n === 1 ? ', not in the library' : ', none in the library') : ', ' + info.own + ' not in the library') : '') + '.</b> Check each one, and its sets and reps, before creating the handout.' +
-        (info.own ? ' More › Save to library keeps an exercise of Claude’s for next time.' : '') + '</span>')
+        (info.own ? ' More › Save to library keeps an exercise of Claude’s for next time.' : '') + costNote(info) + '</span>')
       : t === 'ex' ? (info.kind === 'empty'
       ? '<span class="scan-msg">No exercises were found on the ' + (info.photos > 1 ? 'photos' : 'photo') + '. Check it’s a photo of the exercise page, or try a clearer photo. Nothing was changed.</span>'
       : '<span class="scan-msg"><b>Filled ' + info.n + (info.n === 1 ? ' exercise' : ' exercises') + ' from your notes.</b> Check them against the page before creating the handout.' +
@@ -3910,7 +3918,7 @@
   // Keep up, says what leads the block, and writes a rationale for the physiotherapist that stays with the program (never printed).
   var SUGGEST_TOOLS = ['screen', 'str', 'ham', 'acl'];
   var EX_SUGGEST_DEFAULT = {
-    effort: 'medium', max_tokens: 6000, timeout_s: 120, max_per_day: 5,   // v26: the cap is per training day (days = the plan's sessions a week)
+    effort: 'medium', max_tokens: 16000, timeout_s: 240, max_per_day: 5,   // v26: the cap is per training day (days = the plan's sessions a week); v28: room for a three-day program (a 6000-token cap cut the answer short)
     system: [
       'You suggest an exercise program for a sports physiotherapist at BASE Health Noosa, a clinic in Queensland, Australia, from the results of a testing report. Your suggestions fill a draft that the physiotherapist checks, edits and then prints as a handout for the person tested. The physiotherapist makes every clinical decision; you are saving them the first draft.',
       'Prefer the clinic’s library listed in the request: when it has a suitable exercise, give its id exactly as written there (and leave name empty). When the library has nothing suitable for a priority, or a clearly better exercise exists, give an exercise of your own instead: leave id empty and give its name (a clear, full name in sentence case, with the equipment or variation in the name) and one short note, under 100 characters, telling the person how to do it, which prints on their handout. Never use an id that isn’t in the list.',
@@ -3918,15 +3926,17 @@
       'Evidence guides may follow the clinic guide in the request, one per topic (training variables, reading the performance tests, designing the block, rehabilitation principles, rehab and performance together, and the condition named). They are drafts the clinic is reviewing. Use them for the condition and stage given: take exercises and doses from the sections and stage-table rows that match that stage, never from a later stage; apply their pain and load rules in the notes and the instructions line; where an evidence guide and the clinic programming guide differ, the clinic guide wins.',
       'If the results or the stage hit a red line in a guide (for example a stage the guide says needs a medical review first), say so in notes and keep the program conservative rather than programming through it. Return-to-sport criteria may be quoted as training targets in why; never as a clearance.',
       'Read the whole report before choosing anything. When a condition is given (with its side and stage, or a rehab report’s injured side and phase), sort the flagged results into three groups: those the condition plausibly explains (same side or region, a quality the condition is known to lower at this stage, as the rehab-and-performance guide’s table says); deficits independent of it (the other side, another region, or a quality the condition doesn’t touch); and strengths worth keeping. A deficit the condition explains is treated inside the rehab section through the stage’s own rows, never chased with a separate performance exercise. An independent deficit gets its own work now, within the stage’s pain and load rules for the affected tissue. Where the side isn’t given, say so in the rationale and treat a one-sided deficit as unresolved rather than guessing.',
-      'Decide what leads this block and say so: in the early and middle stages the condition leads and the performance section stays small and away from the injured tissue’s high-strain loads; in the late stage the two merge, with the condition’s energy-storage, running and change-of-direction work doubling as the performance section; ongoing, performance leads with a maintenance dose for the condition. Power rests on strength: for a weak athlete strength leads and ballistic work stays light; for a strong athlete with a low DSI or RSI, ballistic and reactive work leads.',
-      'One focus per block, not a little of everything. Choose it in this order and name it in the title: a condition or injury that explains the flagged results leads; otherwise the largest deficit in the quality the sport needs most, reading results marked Off target (Behind on a rehab report) first, then Close, with strength before power when absolute strength is low and ballistic or reactive work when strength is adequate but DSI, RSI or jump are low; at most one secondary quality; one heavy exercise keeps up a clear strength if there is room. The focus gets the first slot on its days and the most sets. Every other flagged result is deferred to a later block and named in the rationale, not programmed now. Don’t repeat an exercise already in the program. When two library exercises fit equally well, prefer one marked checked by a clinician.',
-      'Lay the program out by training day, as the request’s layout line says: one section per day, 3 to 5 exercises each, heading "Day 1: <what the day is for>" and so on (for example "Day 1: Power and main strength", "Day 2: Rehab: Achilles loading, plus strength", "Day 3: Capacity and control"). Follow the clinic guide’s weekly structure for that number of days: the focus on the freshest days and on at least two days, heavy and high-strain work on the same tissue 48 hours or more apart, the main lifts spread across the week. The same exercise may appear on two days with different loads (a heavier and a lighter day); never two exercises for the same quality on one day. Someone new to training may get the same two or three full-body sessions repeated. Where the first and second halves of the block differ (double to single leg, isometric to loaded, a load step), say so in the exercise’s note ("weeks 1–3 …; from week 4 …") and keep the instructions line consistent with it.',
+      'Decide what leads this block and say so: in the early and middle stages the condition leads and the performance section stays small and away from the injured tissue’s high-strain loads; in the late stage the two merge, with the condition’s energy-storage, running and change-of-direction work doubling as the performance section; ongoing, performance leads with a maintenance dose for the condition. Power output rests on strength: when maximal strength is low, strength leads and ballistic work stays light; when maximal strength is good and power output or reactive strength is low, ballistic and reactive work leads.',
+      'One focus per block, not a little of everything. Choose it in this order and name it in the title: a condition or injury that explains the flagged results leads; otherwise the largest deficit in the quality the sport needs most (power output, maximal strength, reactive strength, eccentric hamstring strength, adductor strength, acceleration, capacity), reading results marked Off target (Behind on a rehab report) first, then Close, with maximal strength before power output when maximal strength is low and ballistic or reactive work when maximal strength is good but power output or reactive strength is low; at most one secondary quality; one heavy exercise keeps up a clear strength if there is room. The focus gets the first slot on its days and the most sets. Every other flagged result is deferred to a later block and named in the rationale, not programmed now. Don’t repeat an exercise already in the program. When two library exercises fit equally well, prefer one marked checked by a clinician.',
+      'The DSI is never a deficit, a priority or a focus: it has no target and is neither good nor bad. Read with the IMTP and CMJ values, it sets the emphasis and the training variables of the power and strength work: below about 0.60, lean towards ballistic and plyometric work (light loads moved fast with maximal intent, low reps, full rest) with one heavy lift kept; 0.60 to 0.80, keep both; above about 0.80, lean towards heavy maximal strength work (about 85% of 1RM, low reps, long rest) with one ballistic exercise kept. Say in the rationale how the DSI shaped the variables.',
+      'Write about the physical quality being trained, never the test score as the aim: power output, not jump height; maximal strength, not the IMTP number; reactive strength, not the RSI; eccentric hamstring strength, not the Nordic number; acceleration, not the 10 m time. Use this wording in the title, the day headings, the why lines and the rationale; the test result is the evidence and the re-test ("to increase lower-body power output (CMJ peak power 42 W/kg, target ≥ 48)", not "to improve jump height").',
+      'Lay the program out by training day, as the request’s layout line says: one section per day, 3 to 5 exercises each, heading "Day 1: <what the day is for>" and so on (for example "Day 1: Power output and maximal strength", "Day 2: Rehab: Achilles loading, plus strength", "Day 3: Capacity and control"). Follow the clinic guide’s weekly structure for that number of days: the focus on the freshest days and on at least two days, heavy and high-strain work on the same tissue 48 hours or more apart, the main lifts spread across the week. The same exercise may appear on two days with different loads (a heavier and a lighter day); never two exercises for the same quality on one day. Someone new to training may get the same two or three full-body sessions repeated. Where the first and second halves of the block differ (double to single leg, isometric to loaded, a load step), say so in the exercise’s note ("weeks 1–3 …; from week 4 …") and keep the instructions line consistent with it.',
       'Notes from the physiotherapist in the request ("From the physiotherapist") are instructions for this program: follow them for the focus, the exercises chosen, the equipment, the days and anything to avoid, ahead of the guides’ defaults. Where a note conflicts with a red line, the stage’s pain and load rules or the clinic guide, keep the program safe, say so in notes and follow the rest of the note. Say in the rationale how the notes shaped the program.',
       'rationale: 3 to 6 plain sentences for the physiotherapist (never printed on the handout), starting "Focus: … Secondary: … Deferred: …": what this block is for and why it leads; which findings you treated as the condition (named, with the number and side) and which as separate; which findings were deferred and to which block; what was left out or kept light because of the stage; what the next block adds or swaps and the sign or test result that opens it (a 24-hour pain level, a symmetry, a test number, a time floor); and what to re-test and when.',
       'For each exercise give every variable: sets and reps as plain numbers or ranges ("3", "8–10", or "30 s" for a hold); load as a short guide the person can act on ("Body weight", "Heavy, 2 reps in reserve", "A weight you could lift 8 times"); rest ("2 min", "60 s"); tempo only where it matters ("3 s down", "3-0-3", or empty); side ("Each side", "Left", "Right", or empty). Put the intent cue in note (under 100 characters), for example "Every rep as fast as you can on the way up"; for an exercise of your own the note also says how to do it.',
       'instructions: one line of general instructions for the handout from the plan, for example "3 sessions a week for 6 weeks, at least a day between sessions", or an empty string.',
-      'why: one short line, under 80 characters, naming the finding the exercise is for, with its number and target, for example "Nordic L/R imbalance 12.9%, target ≤ 9" or "Right calf 22 reps, left 27". Plain Australian English, no jargon.',
-      'title: a short title naming the block’s focus, for example "Block 1: jump power (strength kept)" or "Achilles loading, weeks 1–6", or an empty string.',
+      'why: one short line, under 80 characters, naming the quality and the finding behind it, with its number and target, for example "Eccentric hamstring strength: Nordic L/R 12.9%, target ≤ 9" or "Calf capacity: right 22 reps, left 27". Plain Australian English, no jargon.',
+      'title: a short title naming the block’s focus as a quality, for example "Block 1: lower-body power output (strength kept)" or "Achilles loading, weeks 1–6", or an empty string.',
       'notes: anything the physiotherapist should know, one sentence each: why an exercise of your own was chosen over the library, or a finding that needs their judgement. Leave notes empty when there is nothing to say.',
       'Use only the information given. Don’t diagnose, predict injury or give medical advice, and never say anything about being cleared to return to sport. Refer to the person as the athlete or the patient, never by a name.'
     ]
@@ -4039,8 +4049,15 @@
   // interpretation.json › exercise_suggest › cost (cents per 1,000 input tokens, and cents for the answer)
   function suggestCents(cfg, chars) {
     var cost = cfg && cfg.cost && typeof cfg.cost === 'object' ? cfg.cost : {};
-    var inRate = isFinite(cost.per_1k_input_cents) ? +cost.per_1k_input_cents : 0.3, outCents = isFinite(cost.output_cents) ? +cost.output_cents : 2;
+    var inRate = isFinite(cost.per_1k_input_cents) ? +cost.per_1k_input_cents : 0.2, outCents = isFinite(cost.output_cents) ? +cost.output_cents : 6;   // v28: Sonnet 5.5 rates
     return Math.max(1, Math.round(chars / 4 / 1000 * inRate + outCents));
+  }
+  // v28: what a suggestion did cost, from the answer's usage counts at the same rates (cents per 1,000 input and output tokens)
+  function usageCents(cfg, usage) {
+    if (!usage || typeof usage !== 'object' || !isFinite(usage.input_tokens) || !isFinite(usage.output_tokens)) return 0;
+    var cost = cfg && cfg.cost && typeof cfg.cost === 'object' ? cfg.cost : {};
+    var inRate = isFinite(cost.per_1k_input_cents) ? +cost.per_1k_input_cents : 0.2, outRate = isFinite(cost.per_1k_output_cents) ? +cost.per_1k_output_cents : 1.0;
+    return Math.max(1, Math.round(usage.input_tokens / 1000 * inRate + usage.output_tokens / 1000 * outRate));
   }
   function exSuggestSchema() {
     var str = { type: 'string' };
@@ -4164,22 +4181,23 @@
     if (blocker(c, lt)) return;
     var gen = scanGen, max = perDay(cfg);           // v26: per day
     suggestBusy = true;
-    scanInfo = { tool: 'ex', kind: 'busy', ai: true, text: 'Choosing exercises from the ' + TOOL_NAMES[lt] + ' report… this can take up to a minute.' };
+    scanInfo = { tool: 'ex', kind: 'busy', ai: true, text: 'Choosing exercises from the ' + TOOL_NAMES[lt] + ' report… this can take a minute or two.' };
     renderScanBar();
     var body = {
-      model: cfg.model, max_tokens: cfg.max_tokens || 6000, system: [].concat(cfg.system || []).join('\n'),
+      model: cfg.model, max_tokens: cfg.max_tokens || 16000, system: [].concat(cfg.system || []).join('\n'),
       messages: [{ role: 'user', content: exSuggestRequest(lt, c, max, cfg) }],
       output_config: { format: { type: 'json_schema', schema: exSuggestSchema() } }
     };
     if (cfg.effort) body.output_config.effort = cfg.effort;
     focusQuiet($('exSuggest'));
-    claudeRequest(aiKey(), body, cfg.endpoint, cfg.timeout_s || 120, 'suggest exercises').then(function (j) {
+    claudeRequest(aiKey(), body, cfg.endpoint, cfg.timeout_s || 240, 'suggest exercises').then(function (j) {
       if (gen !== scanGen || state.ex !== x) return;
       if (j.stop_reason === 'max_tokens') throw new Error('Claude’s answer was cut short. Try again.');
       if (j.stop_reason === 'refusal') throw new Error('Claude didn’t suggest exercises for these results. Add them from the library instead.');
       var out;
       try { out = JSON.parse(replyText(j)); } catch (e) { throw new Error('Claude’s answer couldn’t be read. Try again.'); }
       applyExSuggest(out, lt, max);
+      if (scanInfo && scanInfo.tool === 'ex' && scanInfo.ai) scanInfo.cents = usageCents(cfg, j.usage);   // v28: the bar says what it cost
     }).catch(function (err) {
       if (gen !== scanGen || state.ex !== x) return;
       scanInfo = { tool: 'ex', kind: 'error', ai: true, text: err && err.message ? err.message : 'Something went wrong suggesting exercises. Try again.' };

@@ -80,9 +80,11 @@
   // Statuses stay Green / Amber / Red inside the app and in saved records; what people read says what each
   // one means. Screening and LL Strength compare with a target, the rehab tabs with the typical case at the phase
   // (v11: the rehab tabs share On target and Close; their rule, up to 1 SD behind, is in the status key).
+  // v28: 'Guide' = a measure that is never rated (the DSI: Matthew, "it should never be seen as good or bad it simply helps
+  // with what to prescribe"); its chip names the training emphasis instead (guideLabel)
   var STATUS_WORDS = {
-    target: { Green: 'On target', Amber: 'Close', Red: 'Off target', 'n/a': 'No target' },
-    rehab: { Green: 'On target', Amber: 'Close', Red: 'Behind', 'n/a': 'No target' }
+    target: { Green: 'On target', Amber: 'Close', Red: 'Off target', 'n/a': 'No target', Guide: 'Guides training' },
+    rehab: { Green: 'On target', Amber: 'Close', Red: 'Behind', 'n/a': 'No target', Guide: 'Guides training' }
   };
   var TALLY_WORDS = { target: ['On target', 'Close', 'Off target'], rehab: ['On target', 'Close', 'Behind'] };
   function statusWord(status, kind) {
@@ -111,7 +113,23 @@
       if (a !== null && am !== null && a <= r && r <= am) return 'Amber';
       return 'Red';
     }
+    if (d === 'Guide') return 'Guide';                 // v28: not rated (no colour, no count, never a priority)
     return 'n/a';
+  }
+  // v28: a 'Guide' norm ({ dir: 'Guide', low, high, labels: [below low, between, above high] }) names the training
+  // emphasis a result points to; the DSI's: ballistic below 0.60, both between, maximal strength above 0.80
+  var GUIDE_LABELS = ['Ballistic emphasis', 'Mixed emphasis', 'Strength emphasis'], GUIDE_SHORT = ['ballistic', 'mixed', 'strength'];
+  function guideLabels(norm, key, dflt) {
+    var L = norm && Array.isArray(norm[key || 'labels']) && norm[key || 'labels'].length === 3 ? norm[key || 'labels'] : (dflt || GUIDE_LABELS);
+    return L.map(function (x, i) { return typeof x === 'string' && x.trim() ? x.trim() : (dflt || GUIDE_LABELS)[i]; });
+  }
+  function guideNum(v) { var x = num(v); return x === null ? '' : x.toFixed(2); }
+  function guideLabel(result, norm) {
+    var r = num(result);
+    if (r === null || isEmptyObj(norm) || norm.dir !== 'Guide') return '';
+    var lo = num(norm.low), hi = num(norm.high), L = guideLabels(norm);
+    if (lo === null || hi === null) return '';
+    return r < lo ? L[0] : (r > hi ? L[2] : L[1]);
   }
 
   function targetStr(norm) {
@@ -120,6 +138,10 @@
     if (d === 'Higher') return '≥ ' + pyStr(norm.green);
     if (d === 'Lower') return '≤ ' + pyStr(norm.green);
     if (d === 'Band') return pyStr(norm.green) + ' – ' + pyStr(norm.gmax);
+    if (d === 'Guide') {                               // v28: the emphasis bands, no target ("below 0.60 ballistic · 0.60–0.80 mixed · above 0.80 strength")
+      var S = guideLabels(norm, 'short', GUIDE_SHORT), lo = guideNum(norm.low), hi = guideNum(norm.high);
+      return 'below ' + lo + ' ' + S[0] + ' · ' + lo + '–' + hi + ' ' + S[1] + ' · above ' + hi + ' ' + S[2];
+    }
     return 'n/a';
   }
 
@@ -192,7 +214,7 @@
         var norm = !isEmptyObj(bn) ? bn : (popnorms[name] === undefined ? null : popnorms[name]);
         var ch = change(result, prevForChange, m.dir, m.thr);
         rows.push({
-          name: name, unit: m.unit, result: result, status: status(result, norm),
+          name: name, unit: m.unit, result: result, status: status(result, norm), guide: guideLabel(result, norm),   // v28: guide
           target: targetStr(norm), source: (norm && norm.source) || '', norm: norm,
           change: ch[0], change_kind: ch[1], side: inp.side || '',
           prev: num(prevForChange)                   // the previous result in the scored unit (for the meter)
@@ -237,7 +259,7 @@
         var norm = pnorms[name] === undefined ? null : pnorms[name];
         var ch = change(result, inp.previous, m.dir, m.thr);
         rows.push({
-          name: name, unit: m.unit, result: result, status: status(result, norm),
+          name: name, unit: m.unit, result: result, status: status(result, norm), guide: guideLabel(result, norm),   // v28: guide
           target: targetStr(norm), source: (norm && norm.source) || '', norm: norm,
           side: '', change: ch[0], change_kind: ch[1], prev: num(inp.previous)
         });
@@ -453,6 +475,11 @@
         hi = Math.max(r, a) * 1.12; lo = Math.max(0, Math.min(r, g) * 0.8);
         pts = [['Green', lo, g], ['Amber', g, a], ['Red', a, hi]];
       }
+    } else if (d === 'Guide') {                       // v28: three neutral zones (ballistic / both / strength), no colours
+      var gl = num(n.low), gh = num(n.high);
+      if (gl === null || gh === null) return null;
+      lo = Math.min(r, gl) * 0.8; hi = Math.max(r, gh) * 1.15;
+      pts = [['Guide', lo, gl], ['Guide', gl, gh], ['Guide', gh, hi]];
     } else if (gm !== null && am !== null) {
       lo = Math.min(r, a) * 0.9; hi = Math.max(r, am) * 1.1;
       pts = [['Red', lo, a], ['Amber', a, g], ['Green', g, gm], ['Amber', gm, am], ['Red', am, hi]];
@@ -964,7 +991,7 @@
 
   return {
     num: num, parseInput: parseInput, pyFixed: pyFixed, pySigned: pySigned, pyRound: pyRound, fmt: fmt,
-    status: status, targetStr: targetStr, change: change, changeLabel: changeLabel,
+    status: status, targetStr: targetStr, guideLabel: guideLabel, change: change, changeLabel: changeLabel,
     buildRows: buildRows, buildRehabRows: buildRehabRows, flatten: flatten, counts: counts, priorities: priorities,
     lsi: lsi, ageToBand: ageToBand, resolvePopulation: resolvePopulation, sportPopulations: sportPopulations,
     isAsym: isAsym, GEN_M: GEN_M, GEN_F: GEN_F,
