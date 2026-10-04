@@ -398,6 +398,14 @@ html:not(.home-on) .home, html.signed-out .home { display: none !important; }
 .plan-fields .seg.side button { min-height: 38px; }   /* v25: the condition's side (three buttons) */
 .plan-fields .f.brief textarea { min-height: 72px; font-size: 15.5px; line-height: 1.4; }   /* v27: the notes for Claude */
 .plan-fields .f.brief small { font-size: 12.5px; color: var(--muted); }
+/* v33: the form before Claude reads an exercise page: "Every day" gets the room it needs; the three buttons share a row,
+   and on a phone Read the page goes across the top with Skip and Cancel under it */
+.plan-fields .seg.ask-days button[data-value="Every day"] { flex: 2.6; }
+@media (max-width: 359px) { .plan-fields .seg.ask-days button[data-value="Every day"] { flex: 3.4; } }   /* the narrowest phones, larger fonts too */
+#photoAsk .f small { font-size: 12.5px; color: var(--muted); }
+#photoAsk .modal-actions { flex-wrap: wrap; }
+#photoAsk .modal-actions button { flex: 1 1 auto; }
+@media (max-width: 519px) { #photoAsk .modal-actions .primary { order: -1; flex-basis: 100%; } }
 .tests-links { display: flex; gap: 2px; margin: 8px 0 0 -8px; }
 .tests-links .quiet { min-height: 36px; font-size: 14.5px; }
 .tests-list { list-style: none; margin: 4px 0 0; padding: 0; border: 1px solid var(--line); border-radius: 12px; background: var(--field); max-height: 52vh; overflow-y: auto; }
@@ -1559,6 +1567,20 @@ html.row-dragging, html.row-dragging * { cursor: grabbing !important; user-selec
   </div>
 </div>
 
+<!-- v33: Photo to handout asks first: how often, the injury, the block and anything else (all optional), then Claude reads the page -->
+<div class="modal" id="photoAsk" role="dialog" aria-modal="true" aria-labelledby="photoAskTitle" aria-describedby="photoAskLead" hidden>
+  <div class="modal-card plan-card">
+    <h2 id="photoAskTitle">Before Claude reads the page</h2>
+    <p id="photoAskLead">Every exercise and number stays as you wrote it. Your answers (all optional) write the rest of the handout: a title if the page has none, how often, Why this plan, the block and the next review. A few cents a scan.</p>
+    <div class="plan-fields" id="photoAskFields"></div>
+    <div class="modal-actions">
+      <button class="ghost" id="photoAskCancel" type="button">Cancel</button>
+      <button class="ghost" id="photoAskSkip" type="button">Skip</button>
+      <button class="primary" id="photoAskGo" type="button">Read the page</button>
+    </div>
+  </div>
+</div>
+
 <!-- v13, cloud mode: the practitioner's name on this device (⋯ › Change your name…) -->
 <div class="modal" id="nameDialog" role="dialog" aria-modal="true" aria-labelledby="nameTitle" aria-describedby="nameLead" hidden>
   <div class="modal-card">
@@ -1736,13 +1758,13 @@ html.row-dragging, html.row-dragging * { cursor: grabbing !important; user-selec
 
 <div class="toast" id="toast" role="status" hidden></div>
 
-<script src="engine.js?v=32" defer></script>
-<script src="report-fonts.js?v=32" defer></script>
-<script src="jspdf.umd.min.js?v=32" defer></script>
-<script src="qrcode.js?v=32" defer></script>
-<script src="report.js?v=32" defer></script>
-<script src="cloud-config.js?v=32" defer></script>
-<script src="cloud.js?v=32" defer></script>
-<script src="app.js?v=32" defer></script>
+<script src="engine.js?v=33" defer></script>
+<script src="report-fonts.js?v=33" defer></script>
+<script src="jspdf.umd.min.js?v=33" defer></script>
+<script src="qrcode.js?v=33" defer></script>
+<script src="report.js?v=33" defer></script>
+<script src="cloud-config.js?v=33" defer></script>
+<script src="cloud.js?v=33" defer></script>
+<script src="app.js?v=33" defer></script>
 </body>
 </html>

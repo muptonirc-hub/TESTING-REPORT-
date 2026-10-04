@@ -38,6 +38,7 @@
     demoItem: $('demoItem'), demoSep: $('demoSep'),
     testsDialog: $('testsDialog'), testsLead: $('testsLead'), testsList: $('testsList'), testsAll: $('testsAll'), testsNone: $('testsNone'), testsDone: $('testsDone'),
     suggestDialog: $('suggestDialog'), suggestLead: $('suggestLead'), suggestPlan: $('suggestPlan'), suggestCancel: $('suggestCancel'), suggestGo: $('suggestGo'),   // v23
+    photoAsk: $('photoAsk'), photoAskTitle: $('photoAskTitle'), photoAskFields: $('photoAskFields'), photoAskCancel: $('photoAskCancel'), photoAskSkip: $('photoAskSkip'), photoAskGo: $('photoAskGo'),   // v33
     // v13: the clinic store's sign-in card, status bar and dialogs
     cloudBar: $('cloudBar'), signin: $('signin'), signinForm: $('signinForm'), signinEmail: $('signinEmail'), signinPassword: $('signinPassword'), signinShow: $('signinShow'),
     signinName: $('signinName'), signinBtn: $('signinBtn'), signinErr: $('signinErr'), accountTpl: $('accountTpl'),
@@ -1511,7 +1512,11 @@
     if (el.dataset.choice === 'pop') { state.screen.pop = el.value; refresh(); }
     else if (el.dataset.choice === 'phase') { state[t].phase = el.value || null; refresh(); }
     else if (el.id === 'valdFiles') importVald(el.files);
-    else if (el.id === 'scanFiles') { var picked = Array.prototype.slice.call(el.files || []); el.value = ''; startScan(picked); }
+    else if (el.id === 'scanFiles') {
+      var picked = Array.prototype.slice.call(el.files || []);
+      el.value = '';
+      if (state.tool === 'ex') exPhotoScan(picked); else startScan(picked);   // v33: the exercise page asks first
+    }
     else if (el.dataset.coach) { coachOpen[t] = true; state[t].coach[el.dataset.coach] = el.value; saveDraft(); }
     keepAwake();
   }
@@ -2325,17 +2330,22 @@
     else if (o.client) homeClientOpen(o.tool, o.client, true);
     else homeStartNew(o.tool, o.page);
   }
-  // photos picked from the Photo to handout tile, or from Add to it / Start a new program in its question
+  // photos picked from the Photo to handout tile, or from Add to it / Start a new program in its question. v33: a new
+  // program asks first (on Home, so Cancel changes nothing); Add to it keeps the program's cover and goes straight on
   function onHomeScanPick(input) {
     var files = Array.prototype.slice.call(input.files || []), mode = input.dataset.scanMode;
     input.value = '';
     if (!files.length) return;
     if (openModalEl === els.homeAsk) closeModal(false);
     homeAskFor = null;
-    var undo = mode === 'new' && homeBusy('ex') ? clearForClient('ex') : null;
-    openTool('ex', 'builder');
-    if (undo) toast('New program started', { label: 'Undo', run: undo });
-    startScan(files, { append: mode === 'add' });
+    if (mode === 'add') { openTool('ex', 'builder'); startScan(files, { append: true }); return; }
+    openPhotoAsk(files, function (a) {
+      var undo = mode === 'new' && homeBusy('ex') ? clearForClient('ex') : null;
+      openTool('ex', 'builder');
+      if (undo) toast('New program started', { label: 'Undo', run: undo });
+      if (a) { state.ex.ask = a; saveDraft(); }
+      startScan(files, { ask: a });
+    }, freshAsk());
   }
   function onHomeClick(e) {
     var sg = e.target.closest('#homeSugg button');
@@ -3196,8 +3206,10 @@
     }, Promise.resolve()).then(function () { return out; });
   }
   // opts (v30): { append: true } adds a scanned exercise page after the program's rows (Photo to handout › Add to it on Home)
+  // v33: { ask: answers } the clinician's answers from the form after the photos (Exercises only; none when adding pages)
   function startScan(files, opts) {
     var t = state.tool, exm = t === 'ex', append = exm && !!(opts && opts.append);   // exm: the Exercises tab's own prompt, schema and apply step
+    var ask = exm && !append && opts && askGiven(opts.ask) ? tidyAsk(opts.ask) : null;
     if (!files.length || scanBusy || (exm && suggestBusy)) return;
     var cfg = exm ? exScanCfg() : scanCfg();
     function fail(msg) { scanInfo = { tool: t, kind: 'error', text: msg }; renderScanBar(); }
@@ -3225,7 +3237,7 @@
         content.push({ type: 'image', source: { type: 'base64', media_type: im.media_type, data: im.data } });
       });
       // Exercises: only the photos and a fixed request go to Claude, never anything from the patient card or the program
-      content.push({ type: 'text', text: exm ? exScanRequest(images.length) : scanPrompt(t, list) });
+      content.push({ type: 'text', text: exm ? exScanRequest(images.length, ask) : scanPrompt(t, list) });   // v33: with the answers
       var body = {
         model: cfg.model, max_tokens: cfg.max_tokens || 8000, system: [].concat(cfg.system || []).join('\n'),
         messages: [{ role: 'user', content: content }],
@@ -3239,7 +3251,7 @@
       if (j.stop_reason === 'refusal') throw new Error('Claude couldn’t read these notes. Try a clearer photo.');
       var out;
       try { out = JSON.parse(replyText(j)); } catch (e) { throw new Error('Claude’s answer couldn’t be read. Try again.'); }
-      if (exm) applyExScan(out, nPhotos, append); else applyScan(t, out, list);
+      if (exm) applyExScan(out, nPhotos, append, ask); else applyScan(t, out, list);
       if (extra) scanInfo.unclear.unshift('Only the first ' + max + ' photos were read (' + extra + (extra === 1 ? ' more was' : ' more were') + ' left out). Scan the rest separately.');
     }).catch(function (err) {
       if (gen !== scanGen || err === null) return;
@@ -3371,6 +3383,13 @@
   function costNote(info) {                            // v28: what the suggestion cost, from the answer's usage counts
     return info.cents ? ' This one cost about ' + info.cents + (info.cents === 1 ? ' cent' : ' cents') + (info.reused ? ' (the guides and library were reused from the last hour, at a tenth of the price).' : '.') : '';
   }
+  // v33: what the clinician's answers did, after a scan with them
+  function askNote(info) {
+    if (!info.asked) return '';
+    var w = info.wrote || [];
+    return (w.length ? ' Your answers filled in the cover under the exercises (' + w.join(', ') + '): check it too.' : '') +
+      (info.extra ? ' Claude added ' + info.extra + (info.extra === 1 ? ' exercise' : ' exercises') + ' you asked for (marked under ' + (info.extra === 1 ? 'it' : 'them') + ').' : '');
+  }
   function renderScanBar() {
     var bar = $('scanBar'), btn = $('scanBtn'), t = state.tool;
     if (btn) {
@@ -3408,7 +3427,7 @@
       : t === 'ex' ? (info.kind === 'empty'
       ? '<span class="scan-msg">No exercises were found on the ' + (info.photos > 1 ? 'photos' : 'photo') + '. Check it’s a photo of the exercise page, or try a clearer photo. Nothing was changed.</span>'
       : '<span class="scan-msg"><b>' + (info.added ? 'Added ' : 'Filled ') + info.n + (info.n === 1 ? ' exercise' : ' exercises') + ' from your notes' + (info.added ? ', after the ones already there' : '') + '.</b> Check them against the page before creating the handout.' +
-        (info.matched ? ' ' + info.matched + ' matched your library.' : '') + '</span>')
+        (info.matched ? ' ' + info.matched + ' matched your library.' : '') + askNote(info) + '</span>')
       : info.kind === 'empty'
       ? '<span class="scan-msg">Nothing on the photo matched the ' + esc(TOOL_NAMES[t]) + ' tests' + (extra.length ? ' (only the ' + extra.join(' and ') + ')' : '') + '. Check you’re on the right tab, or try a clearer photo.</span>'
       : '<span class="scan-msg"><b>Filled ' + info.n + (info.n === 1 ? ' result' : ' results') + (extra.length ? ' and the ' + extra.join(' and ') : '') + ' from your notes.</b> Check the highlighted boxes against the paper or screenshot before creating the report.</span>');
@@ -3444,7 +3463,7 @@
   // the client printed on the handout (Suggest drafts one); weeks = the block length and review = the next review date (ISO),
   // printed under the title; reviewAuto = the review date is worked out from the date and the block length (until changed by
   // hand); large = the handout in large print
-  function freshEx() { return { meta: { name: '', date: todayIso(), practitioner: userName() }, title: '', instructions: '', rationale: '', reason: '', weeks: '', review: '', reviewAuto: false, large: false, items: [], seq: 1, scanned: {}, cardOpen: true, link: '', plan: freshPlan() }; }
+  function freshEx() { return { meta: { name: '', date: todayIso(), practitioner: userName() }, title: '', instructions: '', rationale: '', reason: '', weeks: '', review: '', reviewAuto: false, large: false, items: [], seq: 1, scanned: {}, cardOpen: true, link: '', plan: freshPlan(), ask: freshAsk() }; }   // v33: ask
   // v23: what Suggest from the report asks before it suggests (the person and the setting); kept with the program and saved with it.
   // v24: plus a condition (an id from guides/index.json, 'none' for none) and its stage, which pick the evidence guides sent.
   // v25: plus the condition's side (Left, Right or Both; '' while not chosen), so Claude can tell which findings the condition explains
@@ -3468,6 +3487,84 @@
     return out;
   }
   function exStr(v) { return typeof v === 'string' ? v : (typeof v === 'number' && isFinite(v) ? String(v) : ''); }
+  // v33: Photo to handout asks first (Matthew, 4 Oct: "I also want it to prompt - how many days, what's the injury, how long
+  // is the training block and is there anything else you need me (AI) to add"). His choices: the form right after the photos
+  // are picked (the camera still opens at once); every exercise and number kept as written, the answers writing the rest
+  // (the title when none is written, how often in the instructions, Why this plan, the block and so the review date) and
+  // Claude adding only what "anything else" asks for, marked; one list stays one list; days 2, 3, 4, 5 or Every day; the
+  // injury typed in words and mentioned only in Why this plan; the block 2, 4, 6, 8 or 12 weeks; not asked again for Add to it.
+  var ASK_DAYS = ['2', '3', '4', '5', 'Every day'], ASK_WEEKS = ['2', '4', '6', '8', '12'], ASK_LEN = { injury: 200, notes: 600 };
+  function freshAsk() { return { days: '', injury: '', weeks: '', notes: '' }; }
+  function tidyAsk(a) {
+    var o = freshAsk();
+    if (a && typeof a === 'object' && !Array.isArray(a)) {
+      if (ASK_DAYS.indexOf(a.days) >= 0) o.days = a.days;
+      if (ASK_WEEKS.indexOf(a.weeks) >= 0) o.weeks = a.weeks;
+      ['injury', 'notes'].forEach(function (k) { if (typeof a[k] === 'string') o[k] = a[k].replace(/\r\n?/g, '\n').slice(0, ASK_LEN[k]); });
+    }
+    return o;
+  }
+  function askGiven(a) { return !!(a && (a.days || a.weeks || !blank(a.injury) || !blank(a.notes))); }
+  // the form between picking the photos and Claude reading them (Photo to handout on Home, and Scan exercise page in the
+  // builder; Add to it goes straight on). photoAskFor: { a: the answers being given (a copy), go(answers, or null to read
+  // without them) }. Cancel or Escape leaves everything as it was; Skip reads the page without answers.
+  var photoAskFor = null;
+  function photoAskRows(a) {
+    function seg(k, label, list) {
+      return '<div class="f"><span id="pa-' + k + '-l">' + esc(label) + '</span><div class="seg ask-' + k + '" role="group" aria-labelledby="pa-' + k + '-l">' +
+        list.map(function (o) { return '<button type="button" data-pa="' + k + '" data-value="' + esc(o) + '" aria-pressed="' + (a[k] === o) + '">' + esc(o) + '</button>'; }).join('') + '</div></div>';
+    }
+    return seg('days', 'How many days a week?', ASK_DAYS) +
+      '<div class="f"><label for="paInjury">What’s the injury?</label><input id="paInjury" type="text" data-pa-text="injury" maxlength="' + ASK_LEN.injury + '" value="' + esc(a.injury) + '"' +
+      ' placeholder="e.g. right ankle sprain, 3 weeks ago" autocapitalize="sentences" autocomplete="off" enterkeyhint="done" aria-describedby="paInjuryHint">' +
+      '<small id="paInjuryHint">Claude mentions it only in Why this plan, in everyday words.</small></div>' +
+      seg('weeks', 'How long is the training block? (weeks)', ASK_WEEKS) +
+      '<div class="f brief"><label for="paNotes">Anything else you’d like Claude to add?</label><textarea id="paNotes" data-pa-text="notes" rows="3" maxlength="' + ASK_LEN.notes + '"' +
+      ' placeholder="e.g. add a 5-minute bike warm-up; keep the cues simple. No names or dates." autocapitalize="sentences" aria-describedby="paNotesHint">' + esc(a.notes) + '</textarea>' +
+      '<small id="paNotesHint">Claude follows it; it isn’t printed as you typed it.</small></div>';
+  }
+  function openPhotoAsk(files, go, a) {
+    var cfg = exScanCfg(), photos = files.filter(function (f) { return !f.type || f.type.indexOf('image/') === 0; });
+    if (!files.length) return;
+    // nothing to ask when the page can't be read now: the scan says why (busy, no settings file, not a photo, offline)
+    if (scanBusy || suggestBusy || !DATA.ai || !cfg.model || !photos.length || navigator.onLine === false) { go(null); return; }
+    if (!aiKey()) {
+      openAiSettings(function () { openPhotoAsk(files, go, a); }, 'To read photos of a handwritten exercise page, the app needs a Claude API key. ' + ONCE_NOTE());
+      return;
+    }
+    var n = Math.min(photos.length, cfg.max_photos || 6);
+    photoAskFor = { a: tidyAsk(a), go: go };
+    els.photoAskTitle.textContent = n > 1 ? 'Before Claude reads the ' + n + ' pages' : 'Before Claude reads the page';
+    els.photoAskGo.textContent = n > 1 ? 'Read the pages' : 'Read the page';
+    els.photoAskFields.innerHTML = photoAskRows(photoAskFor.a);
+    openModal(els.photoAsk, els.photoAskGo, function () { photoAskFor = null; });
+  }
+  function photoAskDone(use) {                         // Read the page (use: the answers as given, kept even when cleared) or Skip
+    var o = photoAskFor;
+    if (!o) { closeModal(); return; }
+    var a = use ? tidyAsk(o.a) : null;
+    closeModal();
+    o.go(a);
+  }
+  function onPhotoAskClick(e) {                        // a choice; tapped again, it's cleared (every answer is optional)
+    var b = e.target.closest('button[data-pa]');
+    if (!b || !photoAskFor) return;
+    var k = b.dataset.pa, a = photoAskFor.a;
+    a[k] = a[k] === b.dataset.value ? '' : b.dataset.value;
+    b.parentNode.querySelectorAll('button').forEach(function (x) { x.setAttribute('aria-pressed', String(x.dataset.value === a[k])); });
+  }
+  function onPhotoAskInput(e) {
+    var t = e.target.closest('[data-pa-text]');
+    if (t && photoAskFor) photoAskFor.a[t.dataset.paText] = t.value.slice(0, ASK_LEN[t.dataset.paText]);
+  }
+  // the builder's Scan exercise page: the answers start from this program's last ones and are kept with it
+  function exPhotoScan(files) {
+    openPhotoAsk(files, function (a) {
+      if (state.tool !== 'ex') return;
+      if (a) { state.ex.ask = a; saveDraft(); }
+      startScan(files, { ask: a });
+    }, state.ex.ask);
+  }
   // v32: the block length (whole weeks, 1–52, '' when not given) and an ISO date ('' when missing or unreadable)
   function exWeeks(v) { var n = parseInt(String(v == null ? '' : v).replace(/[^0-9]/g, '').slice(0, 2), 10); return n >= 1 && n <= 52 ? String(n) : ''; }
   function exIsoDate(v) { return typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v) && E.parseDate(v, ['Y-m-d']) ? v : ''; }
@@ -3500,6 +3597,7 @@
     x.review = exIsoDate(x.review);
     x.reviewAuto = x.reviewAuto === true && !blank(x.review);
     x.large = x.large === true;
+    x.ask = tidyAsk(x.ask);                            // v33: the photo form's answers (drafts before v33 have none)
     var seen = {}, top = 0, list = [];
     (Array.isArray(x.items) ? x.items : []).forEach(function (it) {
       if (!it || typeof it !== 'object' || (it.kind !== 'ex' && it.kind !== 'section')) return;
@@ -4285,7 +4383,13 @@
       'Section headings on the page (for example Warm-up, Day A, Day B, Gym or Home) become sections, in order, each holding the exercises written under it. If the page has no headings, return one section with an empty heading holding every exercise.',
       'Instructions for the whole program rather than one exercise (for example "3x/week" or "ice after") go in the top-level notes, written out plainly (for example "3 times a week. Ice after."). A title for the whole program, if one is written, goes in title; otherwise title is an empty string.',
       'Ignore names and any other personal details on the page (the patient’s name, date of birth, phone number or address) and never include them in your answer.',
-      'Put a short note in unclear for anything that is hard to read or ambiguous, naming the exercise it is about (for example "Step-up: 10 or 16 reps?"), and for any shorthand kept as written. Leave unclear empty when everything is clear.'
+      'Put a short note in unclear for anything that is hard to read or ambiguous, naming the exercise it is about (for example "Step-up: 10 or 16 reps?"), and for any shorthand kept as written. Leave unclear empty when everything is clear.',
+      'Sometimes the request also has the clinician’s answers to a few questions: how many days a week, the injury, the block length, and anything else they’d like added. With no answers, leave why_this_plan empty, set added to false on every exercise and add nothing.',
+      'With answers, keep the page as the clinician wrote it: every exercise, every value and their order stay exactly as written (the rules above), and the layout stays as written: one list stays one list, done on every session day, even when the days a week are given; days or sections written on the page stay as they are.',
+      'With answers, title: as written on the page; if none is written, a short title for what the exercises work on, with the block length when it is given, in sentence case (for example "Strength and balance – 6 weeks"). The injury goes only in why_this_plan: leave it out of the title and the notes.',
+      'With answers, notes (the general instructions): what the page says for the whole program, with how often at the start when the days are given and the page doesn’t already say ("3 times a week." or "Every day."); if the page gives a different number of days, keep the page’s and say so in unclear. Short and plain. The handout prints the block length and the review date separately, so leave them out here.',
+      'why_this_plan: 2 or 3 short sentences printed on the client’s handout under the title, written to them as “you” (only here): what this program works on and why, with the injury in everyday words as the clinician gave it, how often and for how long, and what happens next (a review at the end of the block). Warm and direct, plain Australian English; no names; no diagnosis beyond what the clinician wrote; no promises about results or returning to sport. For example: “These exercises build strength and balance in your right ankle after your sprain. Do them three times a week for the next six weeks, and we’ll review how it’s going at the end of the block.”',
+      'Anything else from the clinician is an instruction: follow it. When it asks for something that isn’t on the page (an exercise, a warm-up, a cue, a rest time), add it, written the same way as the page’s exercises; set added to true on an exercise you add (false on every exercise from the page). Change something written on the page only when it asks you to. Put one line in unclear for each thing you added or changed (for example "Added a 5-minute bike warm-up, as asked."). Add nothing that wasn’t asked for.'
     ]
   };
   function exScanCfg() {                               // same model, key and endpoint as the interpretation; "exercise_scan" in interpretation.json overrides
@@ -4296,23 +4400,36 @@
   }
   // v15: with exercises in the library, a last paragraph lists their names (at most 300; names only, nothing about the
   // patient) so a clearly matching exercise comes back under the clinic's own name
-  function exScanRequest(n) {
+  // v33: the clinician's answers from the form after the photos (no names: the patient's and the clinician's are taken out)
+  function askLines(a) {
+    var x = state.ex, scrub = function (t) { return withoutName(withoutName(clean1(t), x.meta.name, 'patient'), x.meta.practitioner, 'physiotherapist'); };
+    if (!askGiven(a)) return '\n\nNo answers from the clinician this time: leave why_this_plan empty, set added to false on every exercise and add nothing.';
+    var L = ['', 'The clinician’s answers (use them as your instructions say):'];
+    if (a.days) L.push('- How often: ' + (a.days === 'Every day' ? 'every day' : a.days + ' days a week') + ' (the same exercises each session unless the page sets out days).');
+    if (!blank(a.injury)) L.push('- The injury: ' + scrub(a.injury));
+    if (a.weeks) L.push('- Block length: ' + a.weeks + ' weeks.');
+    if (!blank(a.notes)) L.push('- Anything else (follow it): ' + scrub(a.notes));
+    return '\n' + L.join('\n');
+  }
+  function exScanRequest(n, ask) {
     var names = libList().slice(0, 300).map(function (e) { return e.name; });
     return 'Turn the handwritten exercise program in ' + (n > 1 ? 'these ' + n + ' photos (pages in order)' : 'this photo') +
-      ' into the table format: the title and general instructions if written, then each section in the order written, with its exercises. Use an empty string for anything that isn’t written.' +
+      ' into the table format: the title and general instructions if written, then each section in the order written, with its exercises. Use an empty string for anything that isn’t written.' + askLines(ask) +
       (names.length ? '\n\nExercises in the clinic’s library (when a written exercise is clearly one of these, use this name exactly; keep any variation that is written, such as equipment, side or a hold time, in the name or notes): ' + names.join('; ') : '');
   }
   function exScanSchema() {
-    var str = { type: 'string' }, ex = { type: 'object', properties: {}, required: EX_FIELDS.slice(), additionalProperties: false };
+    var str = { type: 'string' }, ex = { type: 'object', properties: {}, required: EX_FIELDS.concat(['added']), additionalProperties: false };
     EX_FIELDS.forEach(function (f) { ex.properties[f] = str; });
+    ex.properties.added = { type: 'boolean' };      // v33: an exercise the clinician's answers asked for, not on the page
     return {
       type: 'object',
       properties: {
         title: str, notes: str,
         sections: { type: 'array', items: { type: 'object', properties: { heading: str, exercises: { type: 'array', items: ex } }, required: ['heading', 'exercises'], additionalProperties: false } },
+        why_this_plan: str,                            // v33: written from the clinician's answers (empty without them)
         unclear: { type: 'array', items: str }
       },
-      required: ['title', 'notes', 'sections', 'unclear'],
+      required: ['title', 'notes', 'sections', 'why_this_plan', 'unclear'],
       additionalProperties: false
     };
   }
@@ -4329,13 +4446,14 @@
     return s.length > max ? s.slice(0, max).trim() : s;
   }
   // replace the table with the scanned one (the title and instructions only when found); Undo puts back exactly what was there
-  function applyExScan(out, photos, append) {           // append (v30): after the rows already there, keeping their title and notes
-    var x = state.ex, found = [], n = 0;
+  function applyExScan(out, photos, append, ask) {      // append (v30): after the rows already there, keeping their title and notes; ask (v33): the answers
+    var x = state.ex, found = [], n = 0, extra = 0;
     (out && Array.isArray(out.sections) ? out.sections : []).forEach(function (sec) {
       if (!sec || typeof sec !== 'object') return;
       var rows = (Array.isArray(sec.exercises) ? sec.exercises : []).map(function (e) {
         var r = {};
         EX_FIELDS.forEach(function (f) { r[f] = exTidy(e && typeof e === 'object' ? e[f] : '', f); });
+        if (ask && e && e.added === true) r.added = true;   // v33: asked for in "anything else", not on the page
         return r;
       }).filter(function (r) { return EX_FIELDS.some(function (f) { return r[f]; }); });
       if (!rows.length) return;
@@ -4350,6 +4468,7 @@
     var rows = found.map(function (f) {
       var it = f.heading ? newExSection(f.heading) : newExRow(f.row);
       if (!f.heading) { var e = E.libMatch(it.name, lib); if (e) { it.lib = e.id; matched++; } }   // v15: linked; the values stay as read
+      if (!f.heading && f.row.added) { it.why = 'Added by Claude, as you asked'; extra++; }   // v33: shown under the row, never printed
       marks[it.id] = true;
       return it;
     });
@@ -4364,8 +4483,18 @@
       if (title) { x.title = title; marks.title = true; } else if (x.scanned.title) marks.title = true;
       if (notes) { x.instructions = notes; marks.instructions = true; } else if (x.scanned.instructions) marks.instructions = true;
     }
+    // v33: with the clinician's answers: Why this plan (blue until edited) and the block length, the review date following it
+    var wrote = [];
+    if (ask && !added) {
+      var why = exTidy(out.why_this_plan, 'reason');
+      if (title) wrote.push('the title');
+      if (notes) wrote.push('the instructions');
+      if (why) { x.reason = why; marks.reason = true; wrote.push('Why this plan'); }
+      if (ask.weeks) { x.weeks = exWeeks(ask.weeks); autoReview(); wrote.push('a ' + x.weeks + '-week block'); }
+    }
     x.scanned = marks;
-    scanInfo = { tool: 'ex', kind: 'done', n: n, photos: photos, unclear: unclear, undo: before, matched: matched, added: added };
+    scanInfo = { tool: 'ex', kind: 'done', n: n, photos: photos, unclear: unclear, undo: before, matched: matched, added: added,
+      asked: !!ask && !added, wrote: wrote, weeks: ask && !added ? ask.weeks : '', extra: extra };
   }
   // the program as it is now (for an Undo), and putting it back unless Clear all replaced the program since
   function exSnap() {
@@ -6479,6 +6608,12 @@
       els.suggestPlan.addEventListener('input', onPlanInput);            // v27: the notes for Claude
       els.suggestCancel.addEventListener('click', function () { closeModal(); });
       els.suggestGo.addEventListener('click', runExSuggest);
+      els.photoAskFields.addEventListener('click', onPhotoAskClick);     // v33: the form before Claude reads the exercise page
+      els.photoAskFields.addEventListener('input', onPhotoAskInput);
+      els.photoAskFields.addEventListener('keydown', function (e) { if (e.key === 'Enter' && e.target.id === 'paInjury') { e.preventDefault(); e.target.blur(); } });
+      els.photoAskCancel.addEventListener('click', function () { closeModal(); });
+      els.photoAskSkip.addEventListener('click', function () { photoAskDone(false); });
+      els.photoAskGo.addEventListener('click', function () { photoAskDone(true); });
       // v20: the version running, at the foot of the ⋯ menu (from app.js's own ?v= in index.html)
       var appScript = document.querySelector('script[src*="app.js"]'), appV = appScript && /[?&]v=(\d+)/.exec(appScript.getAttribute('src') || '');
       if ($('menuVer')) $('menuVer').textContent = 'BASE Health Report' + (appV ? ' · version ' + appV[1] : '');
