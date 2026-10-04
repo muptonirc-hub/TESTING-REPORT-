@@ -820,6 +820,23 @@ p.interp-flag { display: flex; align-items: center; justify-content: center; col
 .ex-linkline svg { flex: none; width: 16px; height: 16px; margin-top: 1px; color: var(--teal-ink); }
 .ex-linkacts { display: flex; flex-wrap: wrap; gap: 0 2px; margin: 2px 0 0 -8px; }
 .ex-linkacts .quiet { min-height: 36px; font-size: 14px; }
+/* v31: the linked report's findings beside the program: in the handout panel from 1000 px (an iPad in landscape), and
+   below that (where the panel sits under the program) a card above the program, folded to one line until opened */
+.ex-find-sub { margin: -4px 0 4px; font-size: 12.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.ex-find .ok { font-size: 13.5px; margin-top: 2px; }
+.ex-find-guide { margin-top: 4px; border-top: 1px solid var(--line); }
+.ex-find-card { display: none; }
+.ex-find-card .card-head { flex-wrap: nowrap; align-items: flex-start; margin-bottom: 8px; }
+.ex-find-card.folded .card-head { margin-bottom: 0; }
+.ex-find-card .fold-t { flex: 1 1 auto; }
+.ex-find-card .ex-find-sub { margin: 3px 0 0; }
+.ex-find-peek { margin: 6px 0 0; font-size: 14px; line-height: 1.35; color: var(--fg); overflow-wrap: anywhere;
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; }
+.ex-find-tog { flex: none; min-width: 76px; }
+@media (max-width: 999px) {
+  .ex-find-side { display: none; }
+  .ex-find-card { display: block; }
+}
 .f input[readonly] { border-style: dashed; background: transparent; }   /* v19: the linked program's name and date (the report's) */
 .f input[readonly]:focus { box-shadow: none; border-color: var(--line-strong); }
 
@@ -1707,13 +1724,13 @@ html.row-dragging, html.row-dragging * { cursor: grabbing !important; user-selec
 
 <div class="toast" id="toast" role="status" hidden></div>
 
-<script src="engine.js?v=30" defer></script>
-<script src="report-fonts.js?v=30" defer></script>
-<script src="jspdf.umd.min.js?v=30" defer></script>
-<script src="qrcode.js?v=30" defer></script>
-<script src="report.js?v=30" defer></script>
-<script src="cloud-config.js?v=30" defer></script>
-<script src="cloud.js?v=30" defer></script>
-<script src="app.js?v=30" defer></script>
+<script src="engine.js?v=31" defer></script>
+<script src="report-fonts.js?v=31" defer></script>
+<script src="jspdf.umd.min.js?v=31" defer></script>
+<script src="qrcode.js?v=31" defer></script>
+<script src="report.js?v=31" defer></script>
+<script src="cloud-config.js?v=31" defer></script>
+<script src="cloud.js?v=31" defer></script>
+<script src="app.js?v=31" defer></script>
 </body>
 </html>

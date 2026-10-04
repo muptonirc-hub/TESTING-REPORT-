@@ -3532,7 +3532,7 @@
     else renderEx();
   }
   function renderEx() {
-    els.entry.innerHTML = '<div class="pagehead">' + pickHtml('ex') + '<p>' + esc(HEAD.ex[1]) + '</p></div>' + exPatientCard() + exProgramCard();
+    els.entry.innerHTML = '<div class="pagehead">' + pickHtml('ex') + '<p>' + esc(HEAD.ex[1]) + '</p></div>' + exPatientCard() + exFindCardHtml() + exProgramCard();   // v31: the report's findings
     fitExNotes();
     fitExWraps();
     applyExMarks();
@@ -3749,6 +3749,87 @@
     saveDraft();
   }
   function andList(a) { return a.length > 1 ? a.slice(0, -1).join(', ') + ' and ' + a[a.length - 1] : (a[0] || ''); }
+  // ---- v31: the linked report's findings beside the program (Matthew, 4 Oct, from the UI research review: the off-target and
+  // close results with their values and targets, worst first as in the report's Top priorities, so choosing exercises never
+  // means going back to the report). In the handout panel on a wide screen (an iPad in landscape); below 1000 px, where that
+  // panel sits under the program, a fold-out card above the program. Each finding is a button to its row in the report.
+  // Nothing scored in the report (or no link): no card.
+  var EX_FIND_MAX = 10;                                // listed; the rest are counted ('+ 3 more in the report')
+  var exFindOpen = false;                              // the fold-out card opened (this visit only)
+  function exFindData() {
+    var lt = linkedTool();
+    if (!lt) return null;
+    var c = computeFor(lt), list, guide = null;
+    if (lt === 'str') {
+      if (!c.rows.length) return null;
+      list = c.prios.map(function (r) { return { key: r.id, name: r.name, status: r.status, detail: r.text + ' · target ' + r.target }; });
+    } else {
+      if (!c.groups.length) return null;
+      list = E.priorities(c.groups, 999).map(function (r) {
+        return { key: r.name, name: r.name, status: r.status, detail: (E.fmt(r.result) + ' ' + (r.unit || '')).trim() + (r.side ? ' (' + r.side + ' higher)' : '') + ' · target ' + r.target };
+      });
+      // the DSI on the screen (v28): never rated, but it sets the training emphasis
+      E.flatten(c.groups).forEach(function (r) { if (!guide && r.status === 'Guide' && r.guide) guide = r; });
+    }
+    var n = c.counts;
+    return { tool: lt, list: list, guide: guide, green: n.Green, total: n.Green + n.Amber + n.Red };
+  }
+  function exFindSub(d) {                              // 'Performance screen · 6 of 11 on target'
+    return TOOL_NAMES[d.tool] + (d.total ? ' · ' + d.green + ' of ' + d.total + ' on target' : '');
+  }
+  function exFindItem(key, name, chipHtml, detail) {
+    return '<li><button type="button" class="prio-go" data-action="ex-find-go" data-goto="' + esc(key) + '"><span class="pn">' + esc(name) + '</span>' +
+      chipHtml + '<span class="pd">' + esc(detail) + '</span></button></li>';
+  }
+  function exFindListHtml(d) {
+    var h = '';
+    if (d.list.length) {
+      h = '<ol class="prio ex-find-list">' + d.list.slice(0, EX_FIND_MAX).map(function (f) {
+        return exFindItem(f.key, f.name, chip(f.status, statusWord(f.status, d.tool)), f.detail);   // Behind on the rehab tools
+      }).join('') + '</ol>' + (d.list.length > EX_FIND_MAX ? '<p class="fine">+ ' + (d.list.length - EX_FIND_MAX) + ' more in the report</p>' : '');
+    } else if (d.total) {
+      h = '<p class="ok">Nothing flagged — every tested result is on target.</p>';
+    }
+    if (d.guide) {
+      h += '<ul class="prio ex-find-guide">' + exFindItem(d.guide.name, d.guide.name, chip('Guide', d.guide.guide),
+        E.fmt(d.guide.result) + ' · sets the training emphasis, not a target') + '</ul>';
+    }
+    return h;
+  }
+  function exFindPeek(d) {                             // the folded card's line: the first three findings by name
+    if (!d.list.length) return d.total ? 'Nothing flagged — every tested result is on target.' : (d.guide ? d.guide.name + ': ' + d.guide.guide : '');
+    var names = d.list.slice(0, 3).map(function (f) { return f.name; }).join(', ');
+    return names + (d.list.length > 3 ? ' + ' + (d.list.length - 3) + ' more' : '');
+  }
+  function exFindSideHtml() {                          // in the handout panel (shown from 1000 px)
+    var d = exFindData();
+    if (!d) return '';
+    return '<section class="ex-find ex-find-side" aria-labelledby="exFindSideH"><h3 id="exFindSideH">From the report' + (d.list.length ? ' <small>worst first</small>' : '') + '</h3>' +
+      '<p class="ex-find-sub">' + esc(exFindSub(d)) + '</p>' + exFindListHtml(d) + '</section>';
+  }
+  function exFindCardHtml() {                          // above the program (shown below 1000 px), folded to one line until opened
+    var d = exFindData();
+    if (!d) return '';
+    var open = exFindOpen;
+    return '<section class="card ex-find ex-find-card' + (open ? '' : ' folded') + '" id="exFindCard" aria-labelledby="exFindCardH"><div class="card-head">' +
+      '<div class="fold-t"><h2 id="exFindCardH">From the report</h2><p class="ex-find-sub">' + esc(exFindSub(d)) + '</p>' +
+      (open ? '' : '<p class="ex-find-peek">' + esc(exFindPeek(d)) + '</p>') + '</div>' +
+      '<button type="button" class="ghost ex-find-tog" data-action="ex-find-toggle" aria-expanded="' + open + '" aria-controls="exFindBody">' + (open ? 'Hide' : 'Show') + '</button></div>' +
+      '<div class="ex-find-body" id="exFindBody"' + (open ? '' : ' hidden') + '>' + exFindListHtml(d) + '</div></section>';
+  }
+  function toggleExFind() {
+    exFindOpen = !exFindOpen;
+    var card = $('exFindCard');
+    if (!card) return;
+    card.outerHTML = exFindCardHtml();
+    var b = document.querySelector('#exFindCard .ex-find-tog');
+    if (b) b.focus();
+  }
+  function gotoFinding(key) {                          // a finding tapped: its row in the report, flashed (as from Top priorities)
+    if (!linkedTool()) return;
+    backToReport();
+    gotoMetric(key);
+  }
   function renderExSummary(c) {
     var why = c.exercises ? '' : 'Add at least one exercise to create the handout.';
     // v19: linked to a report: one PDF with both, so the report has to be ready too (else its reason shows)
@@ -3768,11 +3849,14 @@
     var counts = c.exercises + (c.exercises === 1 ? ' exercise' : ' exercises') + (c.sections ? ' · ' + c.sections + (c.sections === 1 ? ' section' : ' sections') : '') +
       (vids ? ' · ' + vids + (vids === 1 ? ' video' : ' videos') : '');
     var prints = 'Prints ' + andList(cols.slice(1).map(function (f) { return EX_LABEL[f]; })) + '.' + (laterText ? ' ' + laterText : '');
+    // v31: the panel is redrawn as the program is typed; a findings list scrolled down stays where it was
+    var was = els.summary.querySelector('.ex-sum .sum-scroll'), keepTop = was ? was.scrollTop : 0;
     els.summary.innerHTML = '<div class="sum ex-sum"><div class="sum-scroll"><h2>Exercise handout</h2>' +
-      '<p class="ex-sumline">' + esc(counts) + '</p><p class="fine ex-prints">' + esc(prints) + '</p>' +
+      '<p class="ex-sumline">' + esc(counts) + '</p><p class="fine ex-prints">' + esc(prints) + '</p>' + exFindSideHtml() +
       '</div><div class="sum-foot">' + linkHtml + '<button type="button" class="primary make" data-action="report"' + (why ? ' disabled' : '') + '>' + make + '</button>' +
       (why ? '<p class="fine">' + esc(why) + '</p>' : '') +
       '<p class="fine client-line">' + esc(clientLine('ex')) + '</p></div></div>';
+    if (keepTop) { var sc = els.summary.querySelector('.sum-scroll'); if (sc) sc.scrollTop = keepTop; }
     els.dock.innerHTML = '<div class="dt"><span class="ex-dock"><b>' + c.exercises + '</b> ' + (c.exercises === 1 ? 'exercise' : 'exercises') +
       (c.sections ? ' · <b>' + c.sections + '</b> ' + (c.sections === 1 ? 'section' : 'sections') : '') + '</span></div>' +
       '<button type="button" class="primary" data-action="report"' + (why ? ' disabled' : '') + '>' + dockMake(make) + '</button>';
@@ -3867,6 +3951,8 @@
     }
     if (a === 'ex-lib' || a === 'ex-lib-in') { openLibPick(b, a === 'ex-lib-in' ? b.dataset.after : ''); return true; }   // v15: + From library
     if (a === 'ex-suggest') { startExSuggest(); return true; }   // v21
+    if (a === 'ex-find-toggle') { toggleExFind(); return true; }   // v31: the report's findings
+    if (a === 'ex-find-go') { gotoFinding(b.dataset.goto); return true; }
     if (!a || a.indexOf('ex-') !== 0) return false;
     var row = b.closest('.ex-row'), i = row ? exIndex(row.dataset.id) : -1;
     if (i < 0) return true;
