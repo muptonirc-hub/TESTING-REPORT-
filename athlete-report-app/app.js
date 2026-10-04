@@ -1780,7 +1780,7 @@
     if (!lt) return;
     var m = state[lt].meta, x = state.ex.meta;
     if (x.name !== (m.name || '')) x.name = m.name || '';
-    if (x.date !== (m.date || '')) x.date = m.date || '';
+    if (x.date !== (m.date || '')) { x.date = m.date || ''; autoReview(); }   // v32: and an automatic review date with it
   }
   // + Add an exercise program (a report's summary): link, carry the patient over, open the builder. A program already
   // there for this patient (or with no name yet) is kept; another patient's is cleared first, with Undo.
@@ -1988,7 +1988,8 @@
         if (it.kind === 'section') { if (!blank(it.heading)) rows.push(['s', clean1(it.heading)]); }
         else if (exFilled(it)) rows.push(['e', it.lib || ''].concat(EX_FIELDS.map(function (f) { return clean1(it[f]); })));
       });
-      return JSON.stringify([sortedPairs(x.meta), clean1(x.title), String(x.instructions || '').trim(), rows, String(x.rationale || '').trim()]);   // v25: + rationale
+      return JSON.stringify([sortedPairs(x.meta), clean1(x.title), String(x.instructions || '').trim(), rows, String(x.rationale || '').trim(),   // v25: + rationale
+        String(x.reason || '').trim(), x.weeks || '', x.review || '', !!x.large]);   // v32: + the cover and large print
     }
     var s = state[t], vals = compactValues(t);
     return JSON.stringify([sortedPairs(s.meta), Object.keys(vals).sort().map(function (k) { return [k, sortedPairs(vals[k])]; }),
@@ -3431,7 +3432,7 @@
   var EX_MAIN = ['sets', 'reps', 'load'];
   var EX_DETAIL = ['rest', 'tempo', 'side', 'notes'];
   var EX_LABEL = { name: 'Exercise', sets: 'Sets', reps: 'Reps', load: 'Load', rest: 'Rest', tempo: 'Tempo', side: 'Side', notes: 'Notes' };
-  var EX_LEN = { name: 120, notes: 300, heading: 80, title: 120, instructions: 1000, rationale: 900, brief: 600 };   // characters kept (other boxes: 60); v27: brief = the notes for Claude
+  var EX_LEN = { name: 120, notes: 300, heading: 80, title: 120, instructions: 1000, rationale: 900, brief: 600, reason: 500 };   // characters kept (other boxes: 60); v27: brief = the notes for Claude; v32: reason = Why this plan
   var EX_WORDS = { name: 1, load: 1, side: 1, notes: 1 };                              // boxes that start with a capital
   // v17: delete is a bin (it shows on every row now, beside More, so it reads as delete rather than close)
   var ICON_TRASH = '<svg viewBox="0 0 24 24" width="19" height="19" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M10 11v6M14 11v6M5.5 7l1 12a2 2 0 0 0 2 1.8h7a2 2 0 0 0 2-1.8l1-12M9 7V4.5h6V7"/></svg>';
@@ -3439,7 +3440,11 @@
 
   // link (v19): the Screening tool whose report this program prints after ('' when it prints on its own)
   // rationale (v25): Claude's "how this program fits together" note for the physiotherapist: editable, saved with the program, never printed
-  function freshEx() { return { meta: { name: '', date: todayIso(), practitioner: userName() }, title: '', instructions: '', rationale: '', items: [], seq: 1, scanned: {}, cardOpen: true, link: '', plan: freshPlan() }; }
+  // v32 (Matthew chose "Handout as the client's plan" from the brand-research review): reason = "Why this plan", a short note for
+  // the client printed on the handout (Suggest drafts one); weeks = the block length and review = the next review date (ISO),
+  // printed under the title; reviewAuto = the review date is worked out from the date and the block length (until changed by
+  // hand); large = the handout in large print
+  function freshEx() { return { meta: { name: '', date: todayIso(), practitioner: userName() }, title: '', instructions: '', rationale: '', reason: '', weeks: '', review: '', reviewAuto: false, large: false, items: [], seq: 1, scanned: {}, cardOpen: true, link: '', plan: freshPlan() }; }
   // v23: what Suggest from the report asks before it suggests (the person and the setting); kept with the program and saved with it.
   // v24: plus a condition (an id from guides/index.json, 'none' for none) and its stage, which pick the evidence guides sent.
   // v25: plus the condition's side (Left, Right or Both; '' while not chosen), so Claude can tell which findings the condition explains
@@ -3463,6 +3468,25 @@
     return out;
   }
   function exStr(v) { return typeof v === 'string' ? v : (typeof v === 'number' && isFinite(v) ? String(v) : ''); }
+  // v32: the block length (whole weeks, 1–52, '' when not given) and an ISO date ('' when missing or unreadable)
+  function exWeeks(v) { var n = parseInt(String(v == null ? '' : v).replace(/[^0-9]/g, '').slice(0, 2), 10); return n >= 1 && n <= 52 ? String(n) : ''; }
+  function exIsoDate(v) { return typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v) && E.parseDate(v, ['Y-m-d']) ? v : ''; }
+  function addDaysIso(iso, n) {
+    var p = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso || '');
+    return p ? new Date(Date.UTC(+p[1], +p[2] - 1, +p[3] + n)).toISOString().slice(0, 10) : '';
+  }
+  // the next review follows the program's date and the block length until the date is changed by hand (or cleared)
+  function autoReview() {
+    var x = state.ex, w = +x.weeks || 0;
+    if (!x.reviewAuto && !blank(x.review)) return;
+    x.review = w ? addDaysIso(x.meta.date || todayIso(), w * 7) : '';
+    x.reviewAuto = !blank(x.review);
+  }
+  function syncReviewBox() {                           // the date box (unless it is being changed) and "This date has passed"
+    var r = $('ex-review'), p = $('exPast');
+    if (r && r !== document.activeElement && r.value !== state.ex.review) r.value = state.ex.review;
+    if (p) p.hidden = !exReviewPast();
+  }
   // drafts from v9 and earlier have no program; anything malformed in a stored one is tidied
   function tidyEx() {
     var x = state.ex;
@@ -3471,6 +3495,11 @@
     var dt = x.meta.date;                              // a date cleared by hand stays cleared; anything unreadable becomes today
     x.meta = { name: exStr(x.meta.name), date: dt === '' || (typeof dt === 'string' && E.parseDate(dt, ['Y-m-d'])) ? dt : todayIso(), practitioner: exStr(x.meta.practitioner) };
     x.title = exStr(x.title); x.instructions = exStr(x.instructions); x.rationale = exStr(x.rationale).slice(0, EX_LEN.rationale);   // v25
+    x.reason = exStr(x.reason).slice(0, EX_LEN.reason);  // v32: the cover of the handout (drafts before v32 have none)
+    x.weeks = exWeeks(x.weeks);
+    x.review = exIsoDate(x.review);
+    x.reviewAuto = x.reviewAuto === true && !blank(x.review);
+    x.large = x.large === true;
     var seen = {}, top = 0, list = [];
     (Array.isArray(x.items) ? x.items : []).forEach(function (it) {
       if (!it || typeof it !== 'object' || (it.kind !== 'ex' && it.kind !== 'section')) return;
@@ -3492,7 +3521,7 @@
     list.forEach(function (o) { if (!o.id) o.id = 'r' + (x.seq++); });
     x.items = list;
     var sc = x.scanned && typeof x.scanned === 'object' && !Array.isArray(x.scanned) ? x.scanned : {}, keep = {};
-    Object.keys(sc).forEach(function (k) { if (sc[k] === true && (k === 'title' || k === 'instructions' || k === 'rationale' || seen[k])) keep[k] = true; });
+    Object.keys(sc).forEach(function (k) { if (sc[k] === true && (k === 'title' || k === 'instructions' || k === 'rationale' || k === 'reason' || seen[k])) keep[k] = true; });
     x.scanned = keep;
     x.cardOpen = x.cardOpen !== false;                 // v11: the patient card open unless folded into the strip
     x.link = TOOLS.indexOf(x.link) >= 0 ? x.link : ''; // v19: the report it prints after (drafts from v18: none)
@@ -3555,7 +3584,7 @@
   // empty. No Edit mode: every row has More and its bin, and More holds Move up / Move down.
   var exTopOpen = false;                               // + Title and instructions tapped (this visit only)
   function exProgramCard() {
-    var x = state.ex, rows = x.items.length > 0, top = exTopOpen || !blank(x.title) || !blank(x.instructions);
+    var x = state.ex, rows = x.items.length > 0, top = exTopOpen || exTopFilled();
     return '<section class="card ex-prog" id="exCard" aria-labelledby="exProgH"><div class="card-head"><h2 id="exProgH">Program</h2><div class="ex-headr"><span class="ex-count" id="exCount"></span></div></div>' +
       '<div class="ex-table" id="exTable">' + exTableHtml() + '</div>' +
       // v16: what a row's handle does (read with it), and where a moved row landed (for screen readers)
@@ -3579,14 +3608,35 @@
     return '<label class="f ex-rat" for="ex-rationale"><span>How this program fits together <small>(for you, not printed)</small></span>' +
       '<textarea id="ex-rationale" data-ex="rationale" rows="3" maxlength="' + EX_LEN.rationale + '" autocapitalize="sentences">' + esc(x.rationale) + '</textarea></label>';
   }
+  // v32: the handout's cover: the title, Why this plan (for the client, printed; a suggestion drafts one), the general
+  // instructions, and the block length with the next review (worked out from the date until changed by hand)
+  function exTopFilled() { var x = state.ex; return !blank(x.title) || !blank(x.instructions) || !blank(x.reason) || !blank(x.weeks) || !blank(x.review); }
+  function exReviewPast() { var r = state.ex.review; return !blank(r) && r < todayIso(); }
   function exTopHtml(open, rows) {
     var x = state.ex;
     return (open ? '<label class="f" for="ex-title"><span>Title</span><input id="ex-title" data-ex="title" type="text" value="' + esc(x.title) + '" maxlength="' + EX_LEN.title + '"' +
       ' placeholder="Optional, e.g. Knee rehab – phase 2" autocapitalize="sentences" autocomplete="off" enterkeyhint="next"></label>' +
+      '<label class="f ex-reasonf" for="ex-reason"><span>Why this plan <small>(printed for the client)</small></span><textarea id="ex-reason" data-ex="reason" rows="2" maxlength="' + EX_LEN.reason + '"' +
+      ' placeholder="Optional: a sentence or two on what this block works on and how it links to their testing" autocapitalize="sentences">' + esc(x.reason) + '</textarea></label>' +
       '<label class="f" for="ex-instructions"><span>General instructions</span><textarea id="ex-instructions" data-ex="instructions" rows="2" maxlength="' + EX_LEN.instructions + '"' +
-      ' placeholder="Optional, e.g. 3 × per week. Ice after if sore." autocapitalize="sentences">' + esc(x.instructions) + '</textarea></label>' : '') +
-      '<div class="ex-tplbar">' + (open ? '' : '<button type="button" class="quiet" id="exTopOpen" data-action="ex-top-open" aria-controls="exTop">+ Title and instructions</button>') +
+      ' placeholder="Optional, e.g. 3 × per week. Ice after if sore." autocapitalize="sentences">' + esc(x.instructions) + '</textarea></label>' +
+      '<div class="ex-cover"><label class="f ex-weeks" for="ex-weeks"><span>Block length</span><span class="ex-suffix"><input id="ex-weeks" data-ex="weeks" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="2"' +
+      ' value="' + esc(x.weeks) + '" placeholder="e.g. 6" autocomplete="off" enterkeyhint="next"><span aria-hidden="true">weeks</span></span></label>' +
+      '<label class="f ex-review" for="ex-review"><span>Next review</span><input id="ex-review" data-ex="review" type="date" value="' + esc(x.review) + '"></label></div>' +
+      '<p class="ex-past" id="exPast" role="status"' + (exReviewPast() ? '' : ' hidden') + '>This date has passed.</p>' : '') +
+      '<div class="ex-tplbar">' + (open ? '' : '<button type="button" class="quiet" id="exTopOpen" data-action="ex-top-open" aria-controls="exTop">+ Title, why this plan and next review</button>') +
       '<button type="button" class="quiet" id="tplSave" data-action="tpl-save" aria-haspopup="dialog"' + (rows ? '' : ' hidden') + '>Save as template</button></div>';
+  }
+  // v32: the section opened (and its boxes refreshed) when a suggestion, a scan or an Undo changes what it holds; never while
+  // one of its boxes is being typed in
+  function renderExTop() {
+    var top = $('exTop'), x = state.ex;
+    if (!top || top.contains(document.activeElement)) return;
+    var open = exTopOpen || exTopFilled();
+    top.classList.toggle('folded', !open);
+    top.innerHTML = exTopHtml(open, x.items.length > 0);
+    fitExNotes();
+    applyExMarks();
   }
   // v15: an exercise row linked to a library exercise (the entry, or null when unlinked or the entry has gone)
   function exLinked(it) { return it && it.kind === 'ex' && it.lib ? libGet(it.lib) : null; }
@@ -3690,6 +3740,7 @@
     if (!tbl) return;
     tbl.innerHTML = exTableHtml();
     renderExRationale();                               // v25: the box comes and goes with its text
+    renderExTop();                                     // v32: and the handout's cover opens when a suggestion fills it
     fitExWraps();
     applyExMarks();
     refreshEx();
@@ -3719,10 +3770,10 @@
   function applyExMarks() {                            // the blue "check me" look on rows (and title, instructions) filled by a scan
     var sc = state.ex.scanned;
     els.entry.querySelectorAll('.ex-row[data-id]').forEach(function (row) { row.classList.toggle('scanned', !!sc[row.dataset.id]); });
-    ['title', 'instructions', 'rationale'].forEach(function (k) { var el = $('ex-' + k); if (el) el.classList.toggle('scanned', !!sc[k]); });
+    ['title', 'instructions', 'rationale', 'reason'].forEach(function (k) { var el = $('ex-' + k); if (el) el.classList.toggle('scanned', !!sc[k]); });
   }
   function fitExNotes() {                              // grow the instructions box (and the rationale box, v25) to show all of it
-    ['ex-instructions', 'ex-rationale'].forEach(function (id) {
+    ['ex-instructions', 'ex-rationale', 'ex-reason'].forEach(function (id) {
       var ta = $(id);
       if (!ta) return;
       ta.style.height = 'auto';
@@ -3852,7 +3903,10 @@
     // v31: the panel is redrawn as the program is typed; a findings list scrolled down stays where it was
     var was = els.summary.querySelector('.ex-sum .sum-scroll'), keepTop = was ? was.scrollTop : 0;
     els.summary.innerHTML = '<div class="sum ex-sum"><div class="sum-scroll"><h2>Exercise handout</h2>' +
-      '<p class="ex-sumline">' + esc(counts) + '</p><p class="fine ex-prints">' + esc(prints) + '</p>' + exFindSideHtml() +
+      '<p class="ex-sumline">' + esc(counts) + '</p><p class="fine ex-prints">' + esc(prints) + '</p>' +
+      // v32: large print for clients who find small text hard to read (kept with the program)
+      '<label class="ex-large" for="exLarge"><input type="checkbox" id="exLarge"' + (state.ex.large ? ' checked' : '') + '><span>Large print</span></label>' +
+      exFindSideHtml() +
       '</div><div class="sum-foot">' + linkHtml + '<button type="button" class="primary make" data-action="report"' + (why ? ' disabled' : '') + '>' + make + '</button>' +
       (why ? '<p class="fine">' + esc(why) + '</p>' : '') +
       '<p class="fine client-line">' + esc(clientLine('ex')) + '</p></div></div>';
@@ -3870,14 +3924,31 @@
       // v19: while linked the name and date are the report's (read-only; an iPad may still open the date wheel)
       if (linkedTool() && (el.dataset.meta === 'name' || el.dataset.meta === 'date')) { followReport(); el.value = x.meta[el.dataset.meta]; return; }
       x.meta[el.dataset.meta] = el.value;
+      if (el.dataset.meta === 'date') { autoReview(); syncReviewBox(); }   // v32: the next review follows the date
       refreshEx();
       if (el.dataset.meta === 'name') suggestClients('ex', el.value);   // v15: saved clients, as on the report tools
       return;
     }
-    if (el.dataset.ex) {                               // the title or the general instructions
+    if (el.dataset.ex === 'weeks') {                   // v32: whole weeks (digits only); the next review follows
+      var digits = el.value.replace(/[^0-9]/g, '').slice(0, 2);
+      if (digits !== el.value) el.value = digits;
+      x.weeks = exWeeks(digits);
+      autoReview();
+      syncReviewBox();
+      refreshEx();
+      return;
+    }
+    if (el.dataset.ex === 'review') {                  // v32: a date chosen by hand stays (the block length no longer moves it)
+      x.review = exIsoDate(el.value);
+      x.reviewAuto = false;
+      syncReviewBox();
+      refreshEx();
+      return;
+    }
+    if (el.dataset.ex) {                               // the title or the general instructions (v32: or Why this plan)
       x[el.dataset.ex] = el.value;
       if (x.scanned[el.dataset.ex]) { delete x.scanned[el.dataset.ex]; el.classList.remove('scanned'); }
-      if (el.id === 'ex-instructions' || el.id === 'ex-rationale') fitExNotes();
+      if (el.id === 'ex-instructions' || el.id === 'ex-rationale' || el.id === 'ex-reason') fitExNotes();
       refreshEx();
       return;
     }
@@ -4188,14 +4259,17 @@
       items.push(keep);
     });
     var m = x.meta, name = clean1(m.name), title = clean1(x.title), instructions = String(x.instructions || '').trim();
+    var reason = String(x.reason || '').trim().slice(0, EX_LEN.reason), weeks = exWeeks(x.weeks), review = exIsoDate(x.review);   // v32: the cover
     return {
       file: name ? name.replace(/[\\/:*?"<>|]+/g, '-').replace(/ /g, '_') + '_exercises.pdf' : 'exercises.pdf',
       rep: window.BHReport.exercises({
         meta: { name: name, date: E.displayIso(m.date), practitioner: clean1(m.practitioner) },
         title: title, instructions: instructions,
+        reason: reason, weeks: weeks, review: review ? E.displayIso(review) : '', large: !!x.large,   // v32
         groups: groups.filter(function (g) { return g.rows.length; })
       }),
-      program: { title: title, instructions: instructions, items: items, plan: tidyPlan(x.plan), rationale: String(x.rationale || '').trim().slice(0, EX_LEN.rationale) }   // v23: the plan goes with the saved program; v25: the rationale too
+      program: { title: title, instructions: instructions, items: items, plan: tidyPlan(x.plan), rationale: String(x.rationale || '').trim().slice(0, EX_LEN.rationale),   // v23: the plan goes with the saved program; v25: the rationale too
+        reason: reason, weeks: weeks, review: review, large: !!x.large }   // v32: and the cover, as printed
     };
   }
 
@@ -4248,7 +4322,7 @@
     var s = String(v == null ? '' : v);
     if (s.normalize) s = s.normalize('NFC');
     s = s.replace(/[\uD800-\uDFFF]/g, '').replace(/[\uFE0F\u200B-\u200D\u2060\uFEFF]/g, '');
-    s = f === 'instructions' || f === 'rationale' ? s.replace(/\r\n?/g, '\n').replace(/[ \t\u00A0]+/g, ' ').replace(/ *\n */g, '\n').replace(/\n{3,}/g, '\n\n').trim()
+    s = f === 'instructions' || f === 'rationale' || f === 'reason' ? s.replace(/\r\n?/g, '\n').replace(/[ \t\u00A0]+/g, ' ').replace(/ *\n */g, '\n').replace(/\n{3,}/g, '\n\n').trim()
       : s.replace(/\s+/g, ' ').trim();
     if (/^(?:[-–—]+|n\/?a)$/i.test(s)) return '';
     var max = EX_LEN[f] || 60;
@@ -4296,25 +4370,32 @@
   // the program as it is now (for an Undo), and putting it back unless Clear all replaced the program since
   function exSnap() {
     var x = state.ex;
-    return { title: x.title, instructions: x.instructions, rationale: x.rationale, items: JSON.parse(JSON.stringify(x.items)), scanned: Object.assign({}, x.scanned), seq: x.seq };
+    return { title: x.title, instructions: x.instructions, rationale: x.rationale, reason: x.reason, weeks: x.weeks, review: x.review, reviewAuto: x.reviewAuto,   // v32: the cover too
+      items: JSON.parse(JSON.stringify(x.items)), scanned: Object.assign({}, x.scanned), seq: x.seq };
+  }
+  function exCoverBack(x, u) {                         // v32: Why this plan, the block length and the next review as they were
+    x.reason = exStr(u.reason); x.weeks = exWeeks(u.weeks); x.review = exIsoDate(u.review); x.reviewAuto = u.reviewAuto === true && !blank(x.review);
   }
   function exRestore(u, prog) {
     if (state.ex !== prog) return false;
     prog.title = u.title; prog.instructions = u.instructions; prog.rationale = exStr(u.rationale); prog.items = u.items; prog.scanned = u.scanned;
+    exCoverBack(prog, u);
     prog.seq = Math.max(prog.seq, u.seq);              // ids are never reused
     if (state.tool === 'ex' && state.exPage === 'builder') render(); else saveDraft();
     return true;
   }
   function showExScan() {                              // redraw the program without touching the patient card (its keyboard stays put)
-    var x = state.ex, ti = $('ex-title'), tx = $('ex-instructions');
+    var x = state.ex, ti = $('ex-title'), tx = $('ex-instructions'), tr = $('ex-reason');
     if (ti && ti.value !== x.title) ti.value = x.title;
     if (tx && tx.value !== x.instructions) { tx.value = x.instructions; fitExNotes(); }
+    if (tr && tr.value !== x.reason) { tr.value = x.reason; fitExNotes(); }   // v32
     renderExTable();
   }
   function undoExScan() {
     var u = scanInfo && scanInfo.tool === 'ex' && scanInfo.undo, x = state.ex, ai = !!(scanInfo && scanInfo.ai);
     if (!u) return;
     x.title = u.title; x.instructions = u.instructions; x.rationale = exStr(u.rationale); x.items = u.items; x.scanned = u.scanned;
+    exCoverBack(x, u);
     x.seq = Math.max(x.seq, u.seq);                    // ids are never reused
     scanInfo = null;
     render();
@@ -4355,6 +4436,7 @@
       'rationale: 3 to 6 plain sentences for the physiotherapist (never printed on the handout), starting "Focus: … Secondary: … Deferred: …": what this block is for and why it leads; which findings you treated as the condition (named, with the number and side) and which as separate; which findings were deferred and to which block; what was left out or kept light because of the stage; what the next block adds or swaps and the sign or test result that opens it (a 24-hour pain level, a symmetry, a test number, a time floor); and what to re-test and when.',
       'For each exercise give every variable: sets and reps as plain numbers or ranges ("3", "8–10", or "30 s" for a hold); load as a short guide the person can act on ("Body weight", "Heavy, 2 reps in reserve", "A weight you could lift 8 times"); rest ("2 min", "60 s"); tempo only where it matters ("3 s down", "3-0-3", or empty); side ("Each side", "Left", "Right", or empty). Put the intent cue in note (under 100 characters), for example "Every rep as fast as you can on the way up"; for an exercise of your own the note also says how to do it.',
       'instructions: one line of general instructions for the handout from the plan, for example "3 sessions a week for 6 weeks, at least a day between sessions", or an empty string.',
+      'why_this_plan: 2 or 3 short sentences printed on the client’s handout under the title, written to them as “you” (only here; everywhere else they are the athlete or the patient): what this block works on, the main finding from their testing behind it in everyday words (at most one number, no test names or abbreviations), and what happens next, such as the retest at the end of the block. Warm and direct, plain Australian English, no names, no diagnosis, no promises about results or returning to sport. For example: “Your testing showed your legs produce less power than we’d like for your sport. This block builds strength first, then speed, three days a week. We’ll retest at the end of the six weeks to see how you’re tracking.”',
       'why: one short line, under 80 characters, naming the quality and the finding behind it, with its number and target, for example "Eccentric hamstring strength: Nordic L/R 12.9%, target ≤ 9" or "Calf capacity: right 22 reps, left 27". Plain Australian English, no jargon.',
       'title: a short title naming the block’s focus as a quality, for example "Block 1: lower-body power output (strength kept)" or "Achilles loading, weeks 1–6", or an empty string.',
       'notes: anything the physiotherapist should know, one sentence each: why an exercise of your own was chosen over the library, or a finding that needs their judgement. Leave notes empty when there is nothing to say.',
@@ -4515,9 +4597,10 @@
         title: str, instructions: str,
         sections: { type: 'array', items: { type: 'object', properties: { heading: str, exercises: { type: 'array', items: ex } }, required: ['heading', 'exercises'], additionalProperties: false } },
         rationale: str,                                // v25: how the program fits together, for the physiotherapist
+        why_this_plan: str,                            // v32: a short note for the client, printed on the handout
         notes: { type: 'array', items: str }
       },
-      required: ['title', 'instructions', 'sections', 'rationale', 'notes'],
+      required: ['title', 'instructions', 'sections', 'rationale', 'why_this_plan', 'notes'],
       additionalProperties: false
     };
   }
@@ -4714,6 +4797,11 @@
     if (title && blank(x.title)) { x.title = title; x.scanned.title = true; }
     if (instr && blank(x.instructions)) { x.instructions = instr; x.scanned.instructions = true; }   // v23: e.g. "3 sessions a week for 6 weeks"
     if (rat) { x.rationale = rat; x.scanned.rationale = true; }   // v25: the new reasoning replaces the old (Undo brings it back)
+    // v32: Why this plan, for the client: filled when empty or still Claude's own unedited draft (a note the physio wrote stays);
+    // the block length from the plan when none is given, and with it the next review
+    var why = exTidy(out.why_this_plan, 'reason');
+    if (why && (blank(x.reason) || x.scanned.reason)) { x.reason = why; x.scanned.reason = true; }
+    if (blank(x.weeks)) { x.weeks = exWeeks(tidyPlan(x.plan).weeks); autoReview(); }
     scanInfo = { tool: 'ex', kind: 'done', ai: true, from: lt, n: n, own: own, added: added, unclear: notes, undo: before };
   }
 
@@ -5345,6 +5433,7 @@
       if (t.title) x.title = t.title;
       x.instructions = t.instructions || '';
       x.rationale = '';                                // v25: a template replaces the program, so Claude's reasoning about the old one goes
+      x.reason = '';                                   // v32: and the note telling the client why the old one
       x.items = rows;
       x.scanned = {};
       if (scanInfo && scanInfo.tool === 'ex') scanInfo = null;   // a scan's Undo no longer applies
@@ -5640,7 +5729,7 @@
   }
   function exHasContent() {
     var x = state.ex, c = exCounts();
-    return c.exercises > 0 || c.sections > 0 || !blank(x.title) || !blank(x.instructions);
+    return c.exercises > 0 || c.sections > 0 || !blank(x.title) || !blank(x.instructions) || !blank(x.reason);   // v32: + Why this plan
   }
   // v15: a client chosen on the Exercises tab: the name, and their last saved program in place of the one on screen
   // (title, instructions and rows with fresh ids; each row keeps its library link, dose and notes; the cues and video
@@ -5664,6 +5753,9 @@
     x.title = exTidy(exStr(p.title), 'title');
     x.instructions = exTidy(exStr(p.instructions), 'instructions');
     x.rationale = exTidy(exStr(p.rationale), 'rationale');   // v25
+    // v32: Why this plan and the block length come back; the next review is worked out again from today's date
+    x.reason = exTidy(exStr(p.reason), 'reason'); x.weeks = exWeeks(p.weeks); x.large = p.large === true;
+    x.review = ''; x.reviewAuto = false; autoReview();
     x.items = progItems(p.items).map(function (it) { return it.kind === 'section' ? newExSection(it.heading) : newExRow(it); });
     if (p.plan) x.plan = tidyPlan(p.plan);             // v23: the client's last plan (sessions a week, setting, experience, block)
     x.scanned = {};
@@ -6290,6 +6382,12 @@
       els.entry.addEventListener('click', onClick);
       els.entry.addEventListener('keydown', onKey);
       els.summary.addEventListener('click', onClick);
+      els.summary.addEventListener('change', function (e) {   // v32: Large print (the handout panel)
+        if (e.target.id !== 'exLarge') return;
+        state.ex.large = e.target.checked;
+        saveDraft();
+        keepAwake();
+      });
       els.dock.addEventListener('click', onClick);
       document.querySelector('.tools').addEventListener('click', function (e) {
         var b = e.target.closest('button[data-section]');

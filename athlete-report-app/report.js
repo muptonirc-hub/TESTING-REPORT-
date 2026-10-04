@@ -26,7 +26,7 @@
   // white, the logo's near-black for the header band and the site's navy for the device bands
   var C = {
     BLUE: '#448EEE', BLUEINK: '#2760C8', DARK: '#202020', BLACK: '#111418', INK: '#22262B',
-    MUTE: '#6B7280', LINE: '#E4E7EA', GBAND: '#1A2951', G: '#2E7D32', A: '#DD8800', R: '#C62828',
+    MUTE: '#5F6672', LINE: '#E4E7EA', GBAND: '#1A2951', G: '#2E7D32', A: '#DD8800', R: '#C62828',
     WHITE: '#FFFFFF', NA: '#999999', GUIDE: '#4E6E97', GUIDEZONE: '#C9D5E6'
   };
   var COL = { Green: C.G, Amber: C.A, Red: C.R, Guide: C.GUIDE };   // v28: Guide = the DSI, never rated (a neutral blue-grey)
@@ -224,8 +224,8 @@
   function dash(v) { v = clean(v).trim(); return v ? v : '—'; }
 
   // label/value pairs that wrap like the .meta flex row; size = CSS px (10 unless a report asks for larger type)
-  function meta(doc, pairs, size) {
-    var sz = size || 10;
+  function meta(doc, pairs, size, tight) {           // v32: tight = less space above and below (a second row)
+    var sz = size || 10, pad = tight ? px(3) : px(10);
     var x0 = ML + px(2), maxW = CW - px(4), gapX = px(22), gapY = px(4), lh = lineH(sz);
     var lines = [[]], x = 0;
     pairs.forEach(function (p) {
@@ -243,12 +243,12 @@
       x = item.x + item.w;
       line.push(item);
     });
-    var y = doc.y + px(10);
+    var y = doc.y + pad;
     lines.forEach(function (line) {
       var rows = 1;
       line.forEach(function (it) {
         var bl = baseline(y, sz);
-        doc.text(it.label, x0 + it.x, bl, { style: 'bold', size: fs(sz), color: C.BLUE });
+        doc.text(it.label, x0 + it.x, bl, { style: 'bold', size: fs(sz), color: C.BLUEINK });   // v32: 5.8:1 (the lighter blue was 3.3:1)
         (it.vlines || [it.value]).forEach(function (v, i) {
           doc.text(v, x0 + it.x + it.lw, bl + i * lh, { style: 'regular', size: fs(sz), color: C.INK });
         });
@@ -256,7 +256,7 @@
       });
       y += rows * lh + gapY;
     });
-    doc.y = y - gapY + px(10);
+    doc.y = y - gapY + pad;
   }
 
   // Status symbols (tick, exclamation mark, cross, dash) so a status reads without colour. Drawn as filled shapes,
@@ -306,10 +306,17 @@
     var w = tw + iw + ig + px(2 * padX), h = lineH(size) + px(2 * padY);
     var left = o.right ? x - w : x;
     doc.rect(left, midY - h / 2, w, h, { r: px(o.radius || 3), fill: color });
-    if (iw) statusIcon(doc, o.icon, left + px(padX) + iw / 2, midY, px(size), C.WHITE);
-    doc.text(text, left + px(padX) + iw + ig, baseline(midY - h / 2 + px(padY), size), { style: 'bold', size: fs(size), color: C.WHITE });
+    var ink = inkOn(color);                         // v32: white words where they read at 4.5:1, else near-black
+    if (iw) statusIcon(doc, o.icon, left + px(padX) + iw / 2, midY, px(size), ink);
+    doc.text(text, left + px(padX) + iw + ig, baseline(midY - h / 2 + px(padY), size), { style: 'bold', size: fs(size), color: ink });
     return w;
   }
+  // v32: the colour for words on a filled shape: white when it gives at least 4.5:1 (WCAG 2.2 SC 1.4.3), else near-black
+  function luminance(hex) {
+    var h = String(hex || '').replace('#', ''), c = [0, 2, 4].map(function (i) { var v = parseInt(h.slice(i, i + 2), 16) / 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); });
+    return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+  }
+  function inkOn(fill) { return /^#[0-9A-Fa-f]{6}$/.test(fill || '') && 1.05 / (luminance(fill) + 0.05) < 4.5 ? C.BLACK : C.WHITE; }
   function chipW(text, o) {                       // the width chip() will use
     o = o || {};
     var size = o.size || 9, padX = o.padX == null ? 7 : o.padX;
@@ -652,7 +659,7 @@
       // name, unit (5px after the name) and "· L higher" flow together inside column 1
       var parts = [{ s: r.name, style: 'bold', size: 10, color: C.INK, gap: 0 },
         { s: r.unit, style: 'regular', size: 8.5, color: C.MUTE, gap: px(5) }];
-      if (r.side) parts.push({ s: '· ' + r.side + ' higher', style: 'bold', size: 8.5, color: C.BLUE, gap: width(' ', 'bold', fs(10)) });
+      if (r.side) parts.push({ s: '· ' + r.side + ' higher', style: 'bold', size: 8.5, color: C.BLUEINK, gap: width(' ', 'bold', fs(10)) });   // v32: 5.8:1
       var lines = [[]], lx = 0;
       parts.forEach(function (p) {
         var words = clean(p.s).trim().split(' ').filter(Boolean);
@@ -836,7 +843,7 @@
       r.values.forEach(function (v, i) {
         var last = i === n - 1;
         doc.text(v === null || v === undefined ? '—' : E.fmt(v), xc + i * (colW + gap) + colW, baseline(mid - lineH(10) / 2, 10),
-          { style: last ? 'bold' : 'regular', size: fs(10), color: v === null || v === undefined ? C.NA : (last ? C.BLACK : C.INK), align: 'right' });
+          { style: last ? 'bold' : 'regular', size: fs(10), color: v === null || v === undefined ? C.MUTE : (last ? C.BLACK : C.INK), align: 'right' });   // v32: a missing value's dash in the muted grey (5.8:1)
       });
       var delta = (r.first === null || r.last === null) ? null : r.last - r.first, col = changeCol(r);
       sparkline(doc, r.values, xs + px(6), mid, spkW - px(12), px(13), col);
@@ -975,7 +982,7 @@
         c.ll.forEach(function (l, j) {
           doc.text(l, x + px(4) + c.lx, baseline(t + j * lineH(10), 10), { style: 'bold', size: fs(10), color: C.INK });
         });
-        doc.text(c.val, x + colW - px(4), baseline(t, 10), { style: 'bold', size: fs(10), color: c.r.value === null ? C.NA : C.BLACK, align: 'right' });
+        doc.text(c.val, x + colW - px(4), baseline(t, 10), { style: 'bold', size: fs(10), color: c.r.value === null ? C.MUTE : C.BLACK, align: 'right' });   // v32: as above
         var st = t + Math.max(lineH(10) * c.ll.length, lineH(9) + px(2)) + px(1);
         c.sl.forEach(function (l, j) {
           doc.text(l, x + px(4) + c.lx, baseline(st + j * lineH(8), 8), { style: 'regular', size: fs(8), color: C.MUTE });
@@ -994,17 +1001,17 @@
     }
   }
 
-  function footerH(text) { return px(12) + px(2 + 6) + wrap(text, 'italic', fs(8), CW).length * lineH(8); }
-  function footer(doc, text) {
-    var lines = wrap(text, 'italic', fs(8), CW);
-    var h = px(12) + px(2 + 6) + lines.length * lineH(8);
+  function footerH(text, size) { var z = size || 8; return px(12) + px(2 + 6) + wrap(text, 'italic', fs(z), CW).length * lineH(z); }
+  function footer(doc, text, size) {                // size (v32): the handout's Large print
+    var z = size || 8, lines = wrap(text, 'italic', fs(z), CW);
+    var h = px(12) + px(2 + 6) + lines.length * lineH(z);
     doc.ensure(h);
     var top = doc.y + px(12);
     doc.line(ML, top + px(1), ML + CW, top + px(1), { stroke: C.BLUE, lw: px(2) });
     lines.forEach(function (l, i) {
-      doc.text(l, ML, baseline(top + px(8) + i * lineH(8), 8), { style: 'italic', size: fs(8), color: C.MUTE });
+      doc.text(l, ML, baseline(top + px(8) + i * lineH(z), z), { style: 'italic', size: fs(z), color: C.MUTE });
     });
-    doc.y = top + px(8) + lines.length * lineH(8);
+    doc.y = top + px(8) + lines.length * lineH(z);
   }
 
   // ------------------------------------------------------------------ the three reports
@@ -1199,7 +1206,8 @@
   // with a QR code of the link in that row (and a link annotation over it, so the code can also be tapped in the PDF),
   // plus one line above the first band saying how to use the codes. Rows without cues or a video lay out exactly as in
   // v14, and a handout with neither is the v14 handout to the byte.
-  var EX_CUE_SZ = EX_SZ * 0.85, EX_CUE_MAX = 3, EX_CUE_MAXLINES = 2, EX_CUE_DASH = '– ';   // ~8.5 pt cues
+  var EX_CUE_SZ = EX_SZ * 0.9, EX_CUE_MAX = 3, EX_CUE_MAXLINES = 2, EX_CUE_DASH = '– ';   // 9 pt cues (v32: from 8.5)
+  var EX_LABEL_SZ = 10.5;                            // the notes box's labels (v32: a variable, for Large print)
   var EX_VIDEO_COL = ['video', 'VIDEO'], EX_VIDEO_W = 17;                                   // the VIDEO column (mm)
   var EX_QR_MM = 14, EX_QR_QUIET = 2, EX_QR_MAXV = 10;          // code size (mm), white margin (modules), largest version
   var EX_NOTE_SZ = 12, EX_NOTE = 'Scan a code with your phone camera to watch the exercise.', EX_LINK_TEXT = 'Video link';
@@ -1439,58 +1447,86 @@
       doc.line(ML, doc.y, ML + CW, doc.y, { stroke: '#D5DBE0', lw: px(1) });
     });
   }
-  // the general instructions: a tinted box with a teal edge, its label on the first part; it keeps line breaks and
-  // splits across pages if it has to (like the interpretation box)
-  function exInstructions(doc, text) {
-    var raw = String(text || '').replace(/\r\n?/g, '\n').trim();
-    if (!raw) return;
-    var size = EX_SZ, LH = 1.4, lh = lineH(size, LH), bar = px(3), padX = px(10), padY = px(7), paraGap = px(4), ls = 10.5, labelH = lineH(ls) + px(3);
-    var maxW = CW - bar - 2 * padX, lines = [], gapNext = 0;
-    raw.split('\n').forEach(function (para) {
-      if (!clean(para).trim()) { gapNext = paraGap; return; }
-      wrap(para, 'regular', fs(size), maxW).forEach(function (l, i) { lines.push({ s: l, gap: i === 0 && lines.length ? gapNext : 0 }); });
-      gapNext = 0;
+  // the notes box (v32: Why this plan, then the general instructions, each with its label; until v31 the instructions alone): a
+  // tinted box with a blue edge that keeps line breaks and splits across pages if it has to (like the interpretation box); a
+  // label never ends a page's part of the box
+  function exNotes(doc, parts) {
+    var size = EX_SZ, LH = 1.4, lh = lineH(size, LH), bar = px(3), padX = px(10), padY = px(7), paraGap = px(4), ls = EX_LABEL_SZ, labelH = lineH(ls) + px(3), partGap = px(9);
+    var maxW = CW - bar - 2 * padX, lines = [];
+    parts.forEach(function (part) {
+      var raw = String(part[1] || '').replace(/\r\n?/g, '\n').trim(), body = [], gapNext = 0;
+      if (!raw) return;
+      raw.split('\n').forEach(function (para) {
+        if (!clean(para).trim()) { gapNext = paraGap; return; }
+        wrap(para, 'regular', fs(size), maxW).forEach(function (l, i) { body.push({ s: l, h: lh, gap: i === 0 && body.length ? gapNext : 0 }); });
+        gapNext = 0;
+      });
+      if (!body.length) return;
+      lines.push({ s: part[0], label: true, h: labelH, gap: lines.length ? partGap : 0 });
+      lines = lines.concat(body);
     });
     if (!lines.length) return;
     doc.y += px(4);
-    var i = 0, first = true;
+    var i = 0;
     while (i < lines.length) {
-      var head = first ? labelH : 0, avail = PAGE_H - MB - doc.y - 2 * padY - head, n = 0, h = 0;
-      while (i + n < lines.length && h + (n ? lines[i + n].gap : 0) + lh <= avail + 0.01) { h += (n ? lines[i + n].gap : 0) + lh; n++; }
-      if (!n) {
+      var avail = PAGE_H - MB - doc.y - 2 * padY, n = 0, h = 0;
+      while (i + n < lines.length && h + (n ? lines[i + n].gap : 0) + lines[i + n].h <= avail + 0.01) { h += (n ? lines[i + n].gap : 0) + lines[i + n].h; n++; }
+      if (n > 1 && lines[i + n - 1].label && i + n < lines.length) { n--; h -= lines[i + n].gap + lines[i + n].h; }   // the label goes over with its text
+      if (!n || (n === 1 && lines[i].label && i + 1 < lines.length)) {
         if (doc.y > MT + 0.5) { doc.newPage(); continue; }
-        n = 1; h = lh;
+        n = 1; h = lines[i].h;
       }
-      var top = doc.y, boxH = head + h + 2 * padY;
+      var top = doc.y, boxH = h + 2 * padY;
       doc.rect(ML, top, CW, boxH, { r: [0, px(3), px(3), 0], fill: '#F1F7F6' });
       doc.rect(ML, top, bar, boxH, { fill: C.BLUE });
       var y = top + padY;
-      if (first) { doc.text('General instructions', ML + bar + padX, baseline(y, ls), { style: 'bold', size: fs(ls), color: C.BLUEINK }); y += labelH; }
       for (var k = 0; k < n; k++) {
-        if (k) y += lines[i + k].gap;
-        doc.text(lines[i + k].s, ML + bar + padX, baseline(y, size, LH), { style: 'regular', size: fs(size), color: C.INK });
-        y += lh;
+        var L = lines[i + k];
+        if (k) y += L.gap;
+        if (L.label) doc.text(L.s, ML + bar + padX, baseline(y, ls), { style: 'bold', size: fs(ls), color: C.BLUEINK });
+        else doc.text(L.s, ML + bar + padX, baseline(y, size, LH), { style: 'regular', size: fs(size), color: C.INK });
+        y += L.h;
       }
       doc.y = top + boxH;
-      i += n; first = false;
+      i += n;
       if (i < lines.length) doc.newPage();
     }
   }
-  var EX_FOOT = 'Prepared by BASE Health Noosa. Follow your practitioner’s instructions.';
+  // v32: the footer names the clinician who prepared the program (the brand-research review: a plan with a visible author), and
+  // says "clinician" as the rest of the page does
+  var EX_FOOT = 'Prepared by BASE Health Noosa. Follow your clinician’s instructions.';
+  function exFoot(who) { return who ? 'Prepared by ' + who + ' · BASE Health Noosa. Follow your clinician’s instructions.' : EX_FOOT; }
+  // v32: Large print, for a client who finds small text hard to read: every size on the handout a quarter larger (the short
+  // columns with room to match); the header band and the QR codes stay as they are
+  var EX_LARGE = 1.25;
   function exercises(d) {
-    var doc = new Doc(), m = d.meta || {};
+    if (!d.large) return exercisesAt(d, 1);
+    var keep = [EX_SZ, EX_HEAD, EX_BAND, EX_CUE_SZ, EX_NOTE_SZ, EX_LABEL_SZ, EX_WMM];
+    EX_SZ *= EX_LARGE; EX_HEAD *= EX_LARGE; EX_BAND *= EX_LARGE; EX_CUE_SZ *= EX_LARGE; EX_NOTE_SZ *= EX_LARGE; EX_LABEL_SZ *= EX_LARGE;
+    EX_WMM = {};
+    Object.keys(keep[6]).forEach(function (k) { EX_WMM[k] = keep[6][k].map(function (v) { return v * EX_LARGE; }); });
+    try { return exercisesAt(d, EX_LARGE); }
+    finally { EX_SZ = keep[0]; EX_HEAD = keep[1]; EX_BAND = keep[2]; EX_CUE_SZ = keep[3]; EX_NOTE_SZ = keep[4]; EX_LABEL_SZ = keep[5]; EX_WMM = keep[6]; }
+  }
+  function exercisesAt(d, k) {
+    var doc = new Doc(), m = d.meta || {}, foot = exFoot(clean(exText(m.practitioner)).trim()), fsz = 8 * k;
     header(doc, 'Exercise Program', 'Prescribed exercises • sets, reps and load');
-    meta(doc, [['Patient', exText(m.name)], ['Date', m.date], ['Clinician', exText(m.practitioner)]]);
-    var title = clean(exText(d.title)).trim();
+    meta(doc, [['Patient', exText(m.name)], ['Date', m.date], ['Clinician', exText(m.practitioner)]], 10 * k);
+    var title = clean(exText(d.title)).trim(), ts = 18 * k;
     if (title) {
       doc.y += px(2);
-      wrap(title, 'bold', fs(18), CW - px(4)).forEach(function (l) {
-        doc.text(l, ML + px(2), baseline(doc.y, 18), { style: 'bold', size: fs(18), color: C.BLACK });
-        doc.y += lineH(18);
+      wrap(title, 'bold', fs(ts), CW - px(4)).forEach(function (l) {
+        doc.text(l, ML + px(2), baseline(doc.y, ts), { style: 'bold', size: fs(ts), color: C.BLACK });
+        doc.y += lineH(ts);
       });
       doc.y += px(4);
     }
-    exInstructions(doc, exText(d.instructions));
+    // v32: the block and the next review under the title, then Why this plan and the general instructions in one box
+    var weeks = /^\d{1,2}$/.test(String(d.weeks || '')) && +d.weeks > 0 ? +d.weeks : 0, review = clean(exText(d.review)).trim(), cover = [];
+    if (weeks) cover.push(['Block', weeks + (weeks === 1 ? ' week' : ' weeks')]);
+    if (review) cover.push(['Next review', review]);
+    if (cover.length) meta(doc, cover, 10 * k, !!title);
+    exNotes(doc, [['Why this plan', exText(d.reason)], ['General instructions', exText(d.instructions)]]);
     var groups = (d.groups || []).map(function (g) {
       return {
         heading: clean(exText(g.heading)).trim(),
@@ -1504,8 +1540,8 @@
         }).filter(function (o) { return EX_COLS.some(function (c) { return o[c[0]]; }); })
       };
     }).filter(function (g) { return g.rows.length; });
-    exTable(doc, groups, footerH(EX_FOOT));
-    footer(doc, EX_FOOT);
+    exTable(doc, groups, footerH(foot, fsz));
+    footer(doc, foot, fsz);
     return finish(doc, 'Exercise Program', exText(m.name));
   }
 
