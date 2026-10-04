@@ -962,7 +962,7 @@ p.interp-flag { display: flex; align-items: center; justify-content: center; col
 .f > span.ex-suffix { display: flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 500; color: var(--muted); }
 .ex-suffix input { width: 64px; flex: none; text-align: center; color: var(--fg); font-weight: 400; }
 .ex-past { margin: -4px 0 0; font-size: 13px; font-weight: 600; color: var(--amber-ink); }
-.ex-large { display: inline-flex; align-items: center; gap: 10px; min-height: 44px; margin: 2px 0 0; font-size: 14px; font-weight: 600; color: var(--fg); cursor: pointer; }
+.ex-large { display: flex; width: fit-content; max-width: 100%; align-items: center; gap: 10px; min-height: 44px; margin: 2px 0 0; font-size: 14px; font-weight: 600; color: var(--fg); cursor: pointer; }   /* v34: one option a line (side by side they touched) */
 .ex-large input { width: 20px; height: 20px; margin: 0; flex: none; accent-color: var(--accent); }
 @media (max-width: 599px) { .ex-cover { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .ex-table { container: extable / inline-size; }
@@ -1175,6 +1175,28 @@ html.row-dragging, html.row-dragging * { cursor: grabbing !important; user-selec
 .lib-vstate .quiet { min-height: 36px; padding-inline: 8px; gap: 6px; }
 .lib-vstate.bad { color: var(--red-ink); }
 #libVideo[aria-invalid="true"] { border-color: var(--red); }
+/* v34: the editor's photo and video boxes */
+.lib-media { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.lm-box { display: flex; align-items: flex-start; gap: 12px; min-width: 0; padding: 10px; border: 1px solid var(--line); border-radius: 12px; background: var(--field); }
+.lm-pic { position: relative; flex: none; display: flex; align-items: center; justify-content: center; width: 96px; height: 72px; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--surface); color: var(--muted); font-size: 12.5px; font-weight: 600; }
+.lm-pic img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.lm-playmark { position: absolute; right: 5px; bottom: 5px; display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 11px; background: rgba(0, 0, 0, .6); color: #fff; }
+.lm-side { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.lm-side b { font-size: 14.5px; }
+.lm-sub { font-size: 12.5px; line-height: 1.35; color: var(--muted); }
+.lm-side progress { width: 100%; height: 8px; accent-color: var(--accent); }
+.lm-acts { display: flex; flex-wrap: wrap; gap: 4px 6px; margin-top: 4px; }
+.lm-acts .ghost { min-height: 40px; padding: 6px 12px; font-size: 14px; }
+.lm-acts .quiet { min-height: 40px; padding-inline: 8px; font-size: 14px; gap: 6px; }
+.lm-acts .lm-remove { color: var(--red-ink); }
+.lib-mmsg { margin: 6px 2px 0 !important; font-size: 13px !important; line-height: 1.4; color: var(--muted); }
+.lib-mmsg.bad { color: var(--red-ink) !important; font-weight: 600; }
+/* v34: an exercise's picture in the library list, + From library and the builder's strip */
+.lr-pic, .lp-pic, .el-pic { flex: none; overflow: hidden; border: 1px solid var(--line); background: var(--field); }
+.lr-pic { width: 64px; height: 48px; border-radius: 8px; }
+.lp-pic { width: 56px; height: 42px; border-radius: 7px; }
+.el-pic { width: 35px; height: 26px; padding: 0; border-radius: 6px; cursor: pointer; }
+.lr-pic img, .lp-pic img, .el-pic img { display: block; width: 100%; height: 100%; object-fit: cover; }
 .lib-check { display: flex; align-items: center; gap: 12px; min-height: 48px; margin-top: 16px; padding: 6px 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--field); font-weight: 600; cursor: pointer; }
 .lib-check input { flex: none; width: 22px; height: 22px; margin: 0; accent-color: var(--accent); }
 .lib-more { display: flex; gap: 10px; margin-top: 16px; }
@@ -1198,6 +1220,9 @@ html.row-dragging, html.row-dragging * { cursor: grabbing !important; user-selec
 .video-card { max-width: 760px; }
 .video-box { position: relative; height: 0; padding-top: 56.25%; margin-top: 12px; border-radius: 12px; overflow: hidden; background: #000; }
 .video-box iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+.video-box video, .video-box img { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; background: #000; }   /* v34: an uploaded video or photo */
+.video-box img { object-fit: contain; }
+.video-box.pic, .video-box.pic img { background: var(--field); }
 .video-msg { margin-top: 12px !important; }
 .modal-actions a.ghost { flex: 1; text-decoration: none; text-align: center; }
 /* templates: Replace / Add, the list, the hint */
@@ -1309,6 +1334,9 @@ html.row-dragging, html.row-dragging * { cursor: grabbing !important; user-selec
   .ex-tplbar .quiet, .ex-libact .quiet, .lib-vstate .quiet { min-height: 44px; }
   .ex-lib { min-height: 44px; }
   .el-play { width: 44px; height: 44px; border-radius: 10px; }
+  .el-pic { width: 59px; height: 44px; border-radius: 9px; }       /* v34: the picture, a 44 px target */
+  .lib-media { grid-template-columns: minmax(0, 1fr); }
+  .lm-acts .ghost, .lm-acts .quiet { min-height: 44px; }
   .ex-add-in .quiet { min-height: 44px; }
   /* the editor: a full-height sheet */
   .lib-modal { padding: 0; }
@@ -1658,7 +1686,12 @@ html.row-dragging, html.row-dragging * { cursor: grabbing !important; user-selec
     </div>
     <label class="f lib-f" for="libInstr"><span>Instructions</span><textarea id="libInstr" rows="3" maxlength="1000" autocapitalize="sentences" aria-describedby="libInstrHint"></textarea></label>
     <p class="lib-hint" id="libInstrHint">For clinicians; not printed</p>
-    <label class="f lib-f" for="libVideo"><span>Video link</span>
+    <!-- v34: an uploaded photo and video (Cloud Storage, the clinic login); the boxes are drawn by app.js -->
+    <h3 class="lib-h" id="libMediaH">Photo and video</h3>
+    <p class="lib-hint lib-hint-top" id="libMediaHint">Film staff or a consenting model, never a client without their written consent. Landscape, plain background.</p>
+    <div class="lib-media" id="libMedia" role="group" aria-labelledby="libMediaH" aria-describedby="libMediaHint"></div>
+    <p class="lib-mmsg" id="libMediaMsg" role="status" aria-live="polite" hidden></p>
+    <label class="f lib-f" for="libVideo"><span>Or a video link</span>
       <input id="libVideo" type="url" inputmode="url" maxlength="500" placeholder="https://youtu.be/…" autocapitalize="none" autocorrect="off" spellcheck="false" autocomplete="off" enterkeyhint="done" aria-describedby="libVideoHint libVideoState"></label>
     <p class="lib-hint" id="libVideoHint">A YouTube (unlisted is fine), Vimeo or website link. It prints as a QR code.</p>
     <div class="lib-vstate" id="libVideoState" aria-live="polite" hidden></div>
@@ -1758,13 +1791,13 @@ html.row-dragging, html.row-dragging * { cursor: grabbing !important; user-selec
 
 <div class="toast" id="toast" role="status" hidden></div>
 
-<script src="engine.js?v=33" defer></script>
-<script src="report-fonts.js?v=33" defer></script>
-<script src="jspdf.umd.min.js?v=33" defer></script>
-<script src="qrcode.js?v=33" defer></script>
-<script src="report.js?v=33" defer></script>
-<script src="cloud-config.js?v=33" defer></script>
-<script src="cloud.js?v=33" defer></script>
-<script src="app.js?v=33" defer></script>
+<script src="engine.js?v=34" defer></script>
+<script src="report-fonts.js?v=34" defer></script>
+<script src="jspdf.umd.min.js?v=34" defer></script>
+<script src="qrcode.js?v=34" defer></script>
+<script src="report.js?v=34" defer></script>
+<script src="cloud-config.js?v=34" defer></script>
+<script src="cloud.js?v=34" defer></script>
+<script src="app.js?v=34" defer></script>
 </body>
 </html>

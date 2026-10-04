@@ -139,6 +139,10 @@
   Doc.prototype.link = function (x, y, w, h, url) {
     return this.add({ t: 'link', x: x, y: y, w: w, h: h, url: url });
   };
+  // v34: a JPEG picture (a data URL), drawn to fill the box (the handout's exercise photos, already cut to the box's shape)
+  Doc.prototype.image = function (data, x, y, w, h) {
+    return this.add({ t: 'img', data: data, x: x, y: y, w: w, h: h });
+  };
   // SVG path data -> absolute segments [['M',x,y], ['L',x,y], ['C',x1,y1,x2,y2,x,y], ['Z']] scaled by k and moved to (x, y).
   // Enough of the SVG grammar for the logo: absolute M, relative m/l/c (with implicit repeats) and z.
   function svgSegs(d, ox, oy, k) {
@@ -1211,6 +1215,11 @@
   var EX_VIDEO_COL = ['video', 'VIDEO'], EX_VIDEO_W = 17;                                   // the VIDEO column (mm)
   var EX_QR_MM = 14, EX_QR_QUIET = 2, EX_QR_MAXV = 10;          // code size (mm), white margin (modules), largest version
   var EX_NOTE_SZ = 12, EX_NOTE = 'Scan a code with your phone camera to watch the exercise.', EX_LINK_TEXT = 'Video link';
+  // v34: the library's photo of an exercise (its 4:3 thumbnail as a JPEG data URL, r.photo) in a first column of its own,
+  // top-aligned with the row's text, with a hairline frame; the row grows to fit it. Rows without one leave the column
+  // blank; a handout with no photos lays out exactly as before.
+  var EX_PHOTO_COL = ['photo', ''], EX_PHOTO_W = 24, EX_PHOTO_H = 18;               // the picture (mm), 4:3
+  function exPhotoOk(v) { return typeof v === 'string' && v.length < 3000000 && /^data:image\/jpeg;base64,[A-Za-z0-9+\/=]+$/.test(v); }
   function exCues(list) {                            // tidy text lines, none empty, at most three
     var out = [];
     (Array.isArray(list) ? list : []).forEach(function (c) {
@@ -1231,9 +1240,10 @@
     });
     return s.length <= 2000 ? s : '';
   }
-  // The QR code of a link as rows of booleans (true = dark): qrcode-generator, error correction M, the smallest version
-  // that holds the link's UTF-8 bytes. null when the encoder is missing, when the link would need more than version 10
+  // The QR code of a link as rows of booleans (true = dark): qrcode-generator, error correction M (L when M would need
+  // more than version 10), the smallest version that holds the link's UTF-8 bytes. null when the encoder is missing, when the link would need more than version 10
   // (57 modules: anything denser is hard to scan at 14 mm) or when anything goes wrong; the row then prints "Video link".
+  // v34: an uploaded video's address (about 200 characters) may need error correction L to stay within version 10
   function qrMatrix(url) {
     if (typeof QR !== 'function') return null;
     try {
@@ -1242,6 +1252,12 @@
       q.addData(url, 'Byte');
       q.make();
       var n = q.getModuleCount();
+      if (n > 17 + 4 * EX_QR_MAXV) {
+        q = QR(0, 'L');
+        q.addData(url, 'Byte');
+        q.make();
+        n = q.getModuleCount();
+      }
       if (!(n >= 21 && n <= 17 + 4 * EX_QR_MAXV)) return null;
       var m = [];
       for (var r = 0; r < n; r++) {
@@ -1349,10 +1365,15 @@
     // v15: a VIDEO column (fixed width, last) when any row has a video; the text columns share what is left as before
     var video = groups.some(function (g) { return g.rows.some(function (r) { return !!r.video; }); }), tcols = cols;
     if (video) cols = cols.concat([EX_VIDEO_COL]);
+    // v34: a first column for the photos when any row has one
+    var photo = groups.some(function (g) { return g.rows.some(function (r) { return exPhotoOk(r.photo); }); });
+    if (photo) cols = [EX_PHOTO_COL].concat(cols);
+    var ni = photo ? 1 : 0;                          // the EXERCISE column (the cues go under it)
     var pad = px(8), gap = px(10), lh = lineH(EX_SZ), padY = px(6), clh = lineH(EX_CUE_SZ);
     var avail = CW - 2 * pad - gap * (cols.length - 1);
-    var W = exWidths(tcols, groups, video ? avail - EX_VIDEO_W : avail), xs = [], x = ML + pad;
+    var W = exWidths(tcols, groups, avail - (video ? EX_VIDEO_W : 0) - (photo ? EX_PHOTO_W : 0)), xs = [], x = ML + pad;
     if (video) W.video = EX_VIDEO_W;
+    if (photo) W.photo = EX_PHOTO_W;
     cols.forEach(function (c) { xs.push(x); x += W[c[0]] + gap; });
     var qrs = {};                                    // one code per distinct link
     function qrFor(url) { if (!Object.prototype.hasOwnProperty.call(qrs, url)) qrs[url] = qrMatrix(url); return qrs[url]; }
@@ -1372,19 +1393,23 @@
     }
     function colHead() {                             // the column labels, repeated after every page break
       var top = doc.y, hy = baseline(top + px(6), EX_HEAD);
-      cols.forEach(function (c, i) { doc.text(c[1], xs[i], hy, { style: 'bold', size: fs(EX_HEAD), color: C.MUTE, cs: px(0.5) }); });
+      cols.forEach(function (c, i) { if (c[1]) doc.text(c[1], xs[i], hy, { style: 'bold', size: fs(EX_HEAD), color: C.MUTE, cs: px(0.5) }); });   // (the photo column has no label)
       doc.line(ML, top + headH - px(0.5), ML + CW, top + headH - px(0.5), { stroke: '#D5DBE0', lw: px(1) });
       doc.y = top + headH;
     }
     function layout(r) {
-      var cells = cols.map(function (c, i) { return c[0] === 'video' ? [] : exCellLines(r[c[0]], c[0] === 'name' ? 'bold' : 'regular', W[c[0]]); });
+      var cells = cols.map(function (c, i) { return c[0] === 'video' || c[0] === 'photo' ? [] : exCellLines(r[c[0]], c[0] === 'name' ? 'bold' : 'regular', W[c[0]]); });
       var n = Math.max.apply(null, [1].concat(cells.map(function (l) { return l.length; })));
       var L = { cells: cells, h: n * lh + 2 * padY };
       if (r.cues && r.cues.length) {                 // v15: the cues under the name; the row grows to fit them
         L.cues = [];
         r.cues.forEach(function (c) { L.cues = L.cues.concat(exCueLines(c, W.name)); });
-        L.cueTop = cells[0].length ? cells[0].length * lh + px(1) : 0;
+        L.cueTop = cells[ni].length ? cells[ni].length * lh + px(1) : 0;
         L.h = Math.max(L.h, L.cueTop + L.cues.length * clh + 2 * padY);
+      }
+      if (photo && exPhotoOk(r.photo)) {             // v34: the photo
+        L.photo = r.photo;
+        L.h = Math.max(L.h, EX_PHOTO_H + 2 * padY);
       }
       if (video && r.video) {                        // v15: the code (or "Video link" when there can't be one)
         L.video = { url: r.video, m: qrFor(r.video) };
@@ -1438,8 +1463,12 @@
         });
         if (L.cues) {
           L.cues.forEach(function (cl, i) {
-            doc.text(cl.s, xs[0] + cl.dx, baseline(top + padY + L.cueTop + i * clh, EX_CUE_SZ), { style: 'regular', size: fs(EX_CUE_SZ), color: C.MUTE });
+            doc.text(cl.s, xs[ni] + cl.dx, baseline(top + padY + L.cueTop + i * clh, EX_CUE_SZ), { style: 'regular', size: fs(EX_CUE_SZ), color: C.MUTE });
           });
+        }
+        if (L.photo) {                                 // v34: the photo in its frame, top-aligned with the text
+          doc.image(L.photo, xs[0], top + padY, EX_PHOTO_W, EX_PHOTO_H);
+          doc.rect(xs[0], top + padY, EX_PHOTO_W, EX_PHOTO_H, { stroke: '#D5DBE0', lw: px(0.75) });
         }
         if (L.video) videoCell(L.video, xs[cols.length - 1], top + padY);
         doc.y = top + L.h;
@@ -1501,12 +1530,13 @@
   var EX_LARGE = 1.25;
   function exercises(d) {
     if (!d.large) return exercisesAt(d, 1);
-    var keep = [EX_SZ, EX_HEAD, EX_BAND, EX_CUE_SZ, EX_NOTE_SZ, EX_LABEL_SZ, EX_WMM];
+    var keep = [EX_SZ, EX_HEAD, EX_BAND, EX_CUE_SZ, EX_NOTE_SZ, EX_LABEL_SZ, EX_WMM, EX_PHOTO_W, EX_PHOTO_H];
     EX_SZ *= EX_LARGE; EX_HEAD *= EX_LARGE; EX_BAND *= EX_LARGE; EX_CUE_SZ *= EX_LARGE; EX_NOTE_SZ *= EX_LARGE; EX_LABEL_SZ *= EX_LARGE;
+    EX_PHOTO_W *= EX_LARGE; EX_PHOTO_H *= EX_LARGE;   // v34: the photos too
     EX_WMM = {};
     Object.keys(keep[6]).forEach(function (k) { EX_WMM[k] = keep[6][k].map(function (v) { return v * EX_LARGE; }); });
     try { return exercisesAt(d, EX_LARGE); }
-    finally { EX_SZ = keep[0]; EX_HEAD = keep[1]; EX_BAND = keep[2]; EX_CUE_SZ = keep[3]; EX_NOTE_SZ = keep[4]; EX_LABEL_SZ = keep[5]; EX_WMM = keep[6]; }
+    finally { EX_SZ = keep[0]; EX_HEAD = keep[1]; EX_BAND = keep[2]; EX_CUE_SZ = keep[3]; EX_NOTE_SZ = keep[4]; EX_LABEL_SZ = keep[5]; EX_WMM = keep[6]; EX_PHOTO_W = keep[7]; EX_PHOTO_H = keep[8]; }
   }
   function exercisesAt(d, k) {
     var doc = new Doc(), m = d.meta || {}, foot = exFoot(clean(exText(m.practitioner)).trim()), fsz = 8 * k;
@@ -1536,6 +1566,7 @@
           var cues = exCues(r.cues), video = exVideo(r.video);         // v15: from the clinic's exercise library
           if (cues.length) o.cues = cues;
           if (video) o.video = video;
+          if (exPhotoOk(r.photo)) o.photo = r.photo;                   // v34: its photo
           return o;
         }).filter(function (o) { return EX_COLS.some(function (c) { return o[c[0]]; }); })
       };
@@ -1625,6 +1656,8 @@
           });
         } else if (it.t === 'link') {                  // v15: a link annotation (the video links on the handout)
           pdf.link(it.x, it.y, it.w, it.h, { url: it.url });
+        } else if (it.t === 'img') {                   // v34: an exercise photo (a picture that can't be read is left out)
+          try { pdf.addImage(it.data, 'JPEG', it.x, it.y, it.w, it.h, undefined, 'FAST'); } catch (e) { /* left out */ }
         }
       });
     });
@@ -1680,6 +1713,8 @@
           });
         } else if (it.t === 'link') {                  // v15: a transparent tap target that opens the link
           out.push('<a href="' + escXml(it.url) + '" target="_blank" rel="noopener"><rect x="' + n2(it.x) + '" y="' + n2(it.y) + '" width="' + n2(it.w) + '" height="' + n2(it.h) + '" fill="transparent"/></a>');
+        } else if (it.t === 'img' && /^data:image\/jpeg;base64,[A-Za-z0-9+\/=]+$/.test(it.data)) {   // v34: an exercise photo
+          out.push('<image href="' + it.data + '" x="' + n2(it.x) + '" y="' + n2(it.y) + '" width="' + n2(it.w) + '" height="' + n2(it.h) + '" preserveAspectRatio="xMidYMid slice"/>');
         }
       });
       out.push('</svg>');

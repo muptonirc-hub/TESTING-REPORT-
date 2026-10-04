@@ -3,9 +3,11 @@
    Online it always asks the server first (so updated norms and app files show up straight away),
    falling back to the saved copy when offline or when the network takes longer than 4 seconds.
    Google's endpoints (the clinic store, v13) and the exercise videos (YouTube, Vimeo, v15) are on other origins, so they are
-   never cached or intercepted here. v24 adds the evidence guide library (guides/); v25 two more guides; v26 a third. */
-var CACHE = 'bh-athlete-report-v33';
-var FILES = ['./', 'index.html', 'app.js?v=33', 'engine.js?v=33', 'qrcode.js?v=33', 'report.js?v=33', 'report-fonts.js?v=33', 'jspdf.umd.min.js?v=33', 'cloud-config.js?v=33', 'cloud.js?v=33',
+   never cached or intercepted here. v24 adds the evidence guide library (guides/); v25 two more guides; v26 a third.
+   v34: the library's photos and videos live in Cloud Storage (another origin, so not intercepted either); the app keeps
+   the small pictures the handout prints in a cache of its own (bh-media-v1), which an update leaves alone. */
+var CACHE = 'bh-athlete-report-v34';
+var FILES = ['./', 'index.html', 'app.js?v=34', 'engine.js?v=34', 'qrcode.js?v=34', 'report.js?v=34', 'report-fonts.js?v=34', 'jspdf.umd.min.js?v=34', 'cloud-config.js?v=34', 'cloud.js?v=34',
   'norms.json', 'strength_norms.json', 'hamstring_norms.json', 'acl_norms.json', 'interpretation.json', 'explainers.json', 'exercise_library.json', 'programming_guide.md', 'manifest.webmanifest',
   'guides/index.json', 'guides/training-variables.md', 'guides/rehab-principles.md', 'guides/muscle-strains.md', 'guides/acl.md', 'guides/tendinopathy.md', 'guides/ankle-sprain.md',
   'guides/groin-pain.md', 'guides/rotator-cuff.md', 'guides/pfp-oa.md', 'guides/low-back-pain.md', 'guides/performance-tests.md', 'guides/rehab-performance.md', 'guides/block-design.md',
@@ -25,7 +27,8 @@ self.addEventListener('install', function (event) {
 self.addEventListener('activate', function (event) {
   event.waitUntil(
     caches.keys()
-      .then(function (keys) { return Promise.all(keys.filter(function (k) { return k !== CACHE; }).map(function (k) { return caches.delete(k); })); })
+      // older copies of the app go; v34: the exercise photos the app keeps for offline handouts (bh-media-…) stay
+      .then(function (keys) { return Promise.all(keys.filter(function (k) { return k !== CACHE && k.indexOf('bh-media-') !== 0; }).map(function (k) { return caches.delete(k); })); })
       .then(function () { return self.clients.claim(); })
   );
 });

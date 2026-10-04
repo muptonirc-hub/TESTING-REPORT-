@@ -1878,7 +1878,23 @@
   function canShare(file) {
     try { return !!(navigator.share && navigator.canShare && navigator.canShare({ files: [file] })); } catch (e) { return false; }
   }
+  // v34: a handout with the library's photos loads them first (a few seconds at most; one that can't be had prints without)
+  var photoWait = false;
   function openReport() {
+    var lt0 = linkedTool(), withEx = state.tool === 'ex' || (lt0 && lt0 === state.tool && exCounts().exercises > 0);
+    var urls = withEx ? handoutPhotoUrls().filter(function (u) { return !photoData[u]; }) : [];
+    if (!urls.length) { openReportNow(); return; }
+    if (photoWait) return;
+    photoWait = true;
+    var slow = setTimeout(function () { toast('Loading the exercise photos…'); }, 600);
+    loadPhotos(urls, 8000).then(function () {
+      clearTimeout(slow);
+      photoWait = false;
+      if (!els.toast.hidden && els.toast.textContent === 'Loading the exercise photos…') els.toast.hidden = true;
+      openReportNow();
+    });
+  }
+  function openReportNow() {
     var ex = state.tool === 'ex', t = state.tool, lt = linkedTool();
     // v19: a report with its linked program (made from either side) is one PDF, the report's pages first
     var both = lt && (ex || lt === t) && exCounts().exercises > 0 ? lt : '';
@@ -1994,7 +2010,7 @@
         else if (exFilled(it)) rows.push(['e', it.lib || ''].concat(EX_FIELDS.map(function (f) { return clean1(it[f]); })));
       });
       return JSON.stringify([sortedPairs(x.meta), clean1(x.title), String(x.instructions || '').trim(), rows, String(x.rationale || '').trim(),   // v25: + rationale
-        String(x.reason || '').trim(), x.weeks || '', x.review || '', !!x.large]);   // v32: + the cover and large print
+        String(x.reason || '').trim(), x.weeks || '', x.review || '', !!x.large].concat(x.photos === false ? ['no photos'] : []));   // v32: + the cover and large print; v34: photos switched off
     }
     var s = state[t], vals = compactValues(t);
     return JSON.stringify([sortedPairs(s.meta), Object.keys(vals).sort().map(function (k) { return [k, sortedPairs(vals[k])]; }),
@@ -3463,7 +3479,7 @@
   // the client printed on the handout (Suggest drafts one); weeks = the block length and review = the next review date (ISO),
   // printed under the title; reviewAuto = the review date is worked out from the date and the block length (until changed by
   // hand); large = the handout in large print
-  function freshEx() { return { meta: { name: '', date: todayIso(), practitioner: userName() }, title: '', instructions: '', rationale: '', reason: '', weeks: '', review: '', reviewAuto: false, large: false, items: [], seq: 1, scanned: {}, cardOpen: true, link: '', plan: freshPlan(), ask: freshAsk() }; }   // v33: ask
+  function freshEx() { return { meta: { name: '', date: todayIso(), practitioner: userName() }, title: '', instructions: '', rationale: '', reason: '', weeks: '', review: '', reviewAuto: false, large: false, photos: true, items: [], seq: 1, scanned: {}, cardOpen: true, link: '', plan: freshPlan(), ask: freshAsk() }; }   // v33: ask; v34: photos (on the handout)
   // v23: what Suggest from the report asks before it suggests (the person and the setting); kept with the program and saved with it.
   // v24: plus a condition (an id from guides/index.json, 'none' for none) and its stage, which pick the evidence guides sent.
   // v25: plus the condition's side (Left, Right or Both; '' while not chosen), so Claude can tell which findings the condition explains
@@ -3597,6 +3613,7 @@
     x.review = exIsoDate(x.review);
     x.reviewAuto = x.reviewAuto === true && !blank(x.review);
     x.large = x.large === true;
+    x.photos = x.photos !== false;                     // v34: the library's photos on the handout (on unless switched off)
     x.ask = tidyAsk(x.ask);                            // v33: the photo form's answers (drafts before v33 have none)
     var seen = {}, top = 0, list = [];
     (Array.isArray(x.items) ? x.items : []).forEach(function (it) {
@@ -3740,9 +3757,10 @@
   function exLinked(it) { return it && it.kind === 'ex' && it.lib ? libGet(it.lib) : null; }
   // under the name of a linked row: the cues (as printed on the handout) and ▶ when there is a video
   function exLibStripHtml(it) {
-    var e = exLinked(it);
-    if (!e || (!e.cues.length && !hasVideo(e))) return '';
-    return '<span class="el-cues">' + esc(e.cues.join(' · ')) + '</span>' +   // v18: no Draft badge here (the library page shows it)
+    var e = exLinked(it), pic = thumbOf(e);
+    if (!e || (!e.cues.length && !hasVideo(e) && !pic)) return '';
+    return (pic ? '<button type="button" class="el-pic" data-action="ex-photo" aria-label="See ' + esc(e.name) + (e.photo ? ' photo' : ' video') + '"><img src="' + esc(pic) + '" alt=""></button>' : '') +   // v34
+      '<span class="el-cues">' + esc(e.cues.join(' · ')) + '</span>' +   // v18: no Draft badge here (the library page shows it)
       (hasVideo(e) ? '<button type="button" class="el-play" data-action="ex-video" aria-label="Watch ' + esc(e.name) + ' video">' + PLAY + '</button>' : '');
   }
   // in the row's details (More) and in Edit mode: Unlink, or Link to an exercise of the same name, or Save to library
@@ -3992,11 +4010,11 @@
     var cols = exColumns(), later = EX_DETAIL.filter(function (f) { return cols.indexOf(f) < 0; }).map(function (f) { return EX_LABEL[f]; });
     var laterText = later.length ? (later.length > 1 ? later.slice(0, -1).join(', ') + ' and ' + later[later.length - 1] : later[0]) + (later.length > 1 ? ' are' : ' is') + ' added when used.' : '';
     // v15: how many filled rows are linked to the library, and how many of those print a video QR code
-    var linked = 0, vids = 0;
-    state.ex.items.forEach(function (it) { var e = exFilled(it) && exLinked(it); if (e) { linked++; if (hasVideo(e)) vids++; } });
+    var linked = 0, vids = 0, pics = 0;
+    state.ex.items.forEach(function (it) { var e = exFilled(it) && exLinked(it); if (e) { linked++; if (hasVideo(e)) vids++; if (thumbOf(e)) pics++; } });   // v34: + photos
     // v18: the panel says it in two short lines (until v17: tiles, a column list and notes)
     var counts = c.exercises + (c.exercises === 1 ? ' exercise' : ' exercises') + (c.sections ? ' · ' + c.sections + (c.sections === 1 ? ' section' : ' sections') : '') +
-      (vids ? ' · ' + vids + (vids === 1 ? ' video' : ' videos') : '');
+      (pics ? ' · ' + pics + (pics === 1 ? ' photo' : ' photos') : '') + (vids ? ' · ' + vids + (vids === 1 ? ' video' : ' videos') : '');
     var prints = 'Prints ' + andList(cols.slice(1).map(function (f) { return EX_LABEL[f]; })) + '.' + (laterText ? ' ' + laterText : '');
     // v31: the panel is redrawn as the program is typed; a findings list scrolled down stays where it was
     var was = els.summary.querySelector('.ex-sum .sum-scroll'), keepTop = was ? was.scrollTop : 0;
@@ -4004,6 +4022,8 @@
       '<p class="ex-sumline">' + esc(counts) + '</p><p class="fine ex-prints">' + esc(prints) + '</p>' +
       // v32: large print for clients who find small text hard to read (kept with the program)
       '<label class="ex-large" for="exLarge"><input type="checkbox" id="exLarge"' + (state.ex.large ? ' checked' : '') + '><span>Large print</span></label>' +
+      // v34: the library's photos beside the exercises (only when some have one)
+      (pics ? '<label class="ex-large" for="exPhotos"><input type="checkbox" id="exPhotos"' + (state.ex.photos !== false ? ' checked' : '') + '><span>Exercise photos</span></label>' : '') +
       exFindSideHtml() +
       '</div><div class="sum-foot">' + linkHtml + '<button type="button" class="primary make" data-action="report"' + (why ? ' disabled' : '') + '>' + make + '</button>' +
       (why ? '<p class="fine">' + esc(why) + '</p>' : '') +
@@ -4127,7 +4147,8 @@
     if (i < 0) return true;
     var it = x.items[i];
     // v15: the row's library link
-    if (a === 'ex-video') { var ve = exLinked(it); if (ve) openVideo(ve.name, ve.video); return true; }
+    if (a === 'ex-video') { var ve = exLinked(it); if (ve) openExVideo(ve); return true; }   // v34: the uploaded video, else the link
+    if (a === 'ex-photo') { var pe = exLinked(it); if (pe) openExPhoto(pe); return true; }
     if (a === 'ex-unlink' || a === 'ex-linkto') {
       var to = a === 'ex-linkto' ? libGet(b.dataset.lib) : null;
       if (a === 'ex-linkto' && !to) return true;
@@ -4353,6 +4374,9 @@
       keep.lib = it.lib || '';
       if (e && e.cues.length) { r.cues = e.cues.slice(); keep.cues = e.cues.slice(); }
       if (vi) { r.video = vi.link; keep.video = vi.link; }
+      else if (e && e.clip) { r.video = e.clip.url; keep.video = e.clip.url; }   // v34: an uploaded video's code
+      var pic = x.photos !== false ? thumbOf(e) : '';   // v34: its photo (or a frame of its video), when loaded
+      if (pic && photoData[pic]) r.photo = photoData[pic];
       cur.rows.push(r);
       items.push(keep);
     });
@@ -4367,7 +4391,7 @@
         groups: groups.filter(function (g) { return g.rows.length; })
       }),
       program: { title: title, instructions: instructions, items: items, plan: tidyPlan(x.plan), rationale: String(x.rationale || '').trim().slice(0, EX_LEN.rationale),   // v23: the plan goes with the saved program; v25: the rationale too
-        reason: reason, weeks: weeks, review: review, large: !!x.large }   // v32: and the cover, as printed
+        reason: reason, weeks: weeks, review: review, large: !!x.large, photos: x.photos !== false }   // v32: and the cover, as printed; v34: photos
     };
   }
 
@@ -5002,6 +5026,7 @@
       cues: (Array.isArray(o.cues) ? o.cues : []).map(function (c) { return cap(c, 90); }).filter(Boolean).slice(0, 3),
       instructions: exTidy(exStr(o.instructions), 'instructions'),
       video: !fromFile && E.videoInfo(video) ? video : '', checked: !fromFile && o.checked === true,
+      photo: fromFile ? null : tidyMedia(o.photo, false), clip: fromFile ? null : tidyMedia(o.clip, true),   // v34: uploaded photo and video
       updatedBy: fromFile ? '' : cap(o.updatedBy, 120), updatedAt: !fromFile && typeof o.updatedAt === 'string' ? o.updatedAt.slice(0, 40) : ''
     };
   }
@@ -5037,7 +5062,7 @@
   }
   function libList() { return libAll().list; }
   function libGet(id) { return id && LIB_ID.test(id) ? libAll().byId[id] || null : null; }
-  function hasVideo(e) { return !!(e && e.video && E.videoInfo(e.video)); }
+  function hasVideo(e) { return !!(e && ((e.video && E.videoInfo(e.video)) || e.clip)); }   // v34: an uploaded video counts
   function doseLine(d) {                               // '3 × 8–12 · Each side · 90 s rest' (only the parts set)
     d = d || {};
     var sets = clean1(d.sets), reps = clean1(d.reps);
@@ -5045,8 +5070,8 @@
     return [sr, clean1(d.load), clean1(d.side), blank(d.rest) ? '' : clean1(d.rest) + ' rest', blank(d.tempo) ? '' : 'tempo ' + clean1(d.tempo)].filter(Boolean).join(' · ');
   }
   function libCounts(list) {
-    var c = { n: list.length, video: 0, drafts: 0 };
-    list.forEach(function (e) { if (hasVideo(e)) c.video++; if (!e.checked) c.drafts++; });
+    var c = { n: list.length, video: 0, drafts: 0, photo: 0 };
+    list.forEach(function (e) { if (hasVideo(e)) c.video++; if (!e.checked) c.drafts++; if (e.photo) c.photo++; });   // v34: photos
     return c;
   }
   // search (name and other names, by key: 2 characters or more), one body area, Has video, Drafts to check
@@ -5103,7 +5128,7 @@
     $('libIntro').textContent = libIntro(all);
     $('libDraftN').textContent = c.drafts;
     $('libCount').textContent = libFiltered(libView) ? 'Showing ' + shown.length + ' of ' + c.n
-      : c.n + (c.n === 1 ? ' exercise' : ' exercises') + (c.video ? ' · ' + c.video + ' with video' : '') + (c.drafts ? ' · ' + c.drafts + (c.drafts === 1 ? ' draft' : ' drafts') + ' to check' : '');
+      : c.n + (c.n === 1 ? ' exercise' : ' exercises') + (c.photo ? ' · ' + c.photo + ' with a photo' : '') + (c.video ? ' · ' + c.video + ' with video' : '') + (c.drafts ? ' · ' + c.drafts + (c.drafts === 1 ? ' draft' : ' drafts') + ' to check' : '');
     if (!all.length) box.innerHTML = '<div class="lib-empty"><p>The library is empty. Add your first exercise.</p></div>';
     else if (!shown.length) {
       box.innerHTML = '<div class="lib-empty"><p>' + (q.length >= 2 ? 'No exercises match “' + esc(q) + '”.' : 'No exercises match these filters.') + '</p>' +
@@ -5112,8 +5137,10 @@
     renderLibSummary(c);
   }
   function libRowHtml(e) {
-    var meta = e.areas.concat(e.type ? [e.type] : []).join(' · '), dose = doseLine(e.dose);
-    return '<button type="button" class="lib-row" data-action="lib-open" data-lib="' + esc(e.id) + '" aria-haspopup="dialog"><span class="lr-main"><b class="lr-name">' + esc(e.name) + '</b>' +
+    var meta = e.areas.concat(e.type ? [e.type] : []).join(' · '), dose = doseLine(e.dose), pic = thumbOf(e);
+    return '<button type="button" class="lib-row" data-action="lib-open" data-lib="' + esc(e.id) + '" aria-haspopup="dialog">' +
+      (pic ? '<span class="lr-pic"><img src="' + esc(pic) + '" alt="" loading="lazy"></span>' : '') +   // v34: its photo (or a frame of its video)
+      '<span class="lr-main"><b class="lr-name">' + esc(e.name) + '</b>' +
       (meta ? '<span class="lr-meta">' + esc(meta) + '</span>' : '') + (dose ? '<span class="lr-dose">' + esc(dose) + '</span>' : '') + '</span>' +
       '<span class="lr-badges">' + (hasVideo(e) ? '<span class="badge vid">' + PLAY + 'Video</span>' : '') + (e.checked ? '' : '<span class="badge draft">Draft</span>') + '</span></button>';
   }
@@ -5123,7 +5150,7 @@
     els.summary.innerHTML = '<div class="sum lib-sum"><div class="sum-scroll"><h2>Exercise library</h2>' +
       '<div class="tally ex-tally lib-tally"><div><b>' + c.n + '</b><span>' + (c.n === 1 ? 'Exercise' : 'Exercises') + '</span></div>' +
       '<div><b>' + c.video + '</b><span>With video</span></div><div><b>' + c.drafts + '</b><span>Drafts to check</span></div></div>' +
-      '<p class="fine lib-how">Exercises you add here can be added to any program with + From library. Cues print under the exercise on the handout; a video link prints as a QR code.</p>' +
+      '<p class="fine lib-how">Exercises you add here can be added to any program with + From library. Cues print under the exercise on the handout, its photo beside it; a video prints as a QR code.</p>' +
       '</div><div class="sum-foot"><button type="button" class="ghost make" data-action="lib-new" aria-haspopup="dialog">+ New exercise</button></div></div>';
     els.dock.innerHTML = '<div class="dt"><span class="ex-dock"><b>' + c.n + '</b> ' + (c.n === 1 ? 'exercise' : 'exercises') + '</span></div>' +
       '<button type="button" class="primary" data-action="lib-new" aria-haspopup="dialog">+ New exercise</button>';
@@ -5149,6 +5176,7 @@
     $('libChecked').checked = e.checked !== false;
     libErr('');
     libVideoState();
+    if (libEdit) { libEdit.media = freshEditMedia(e); renderLibMedia(); }   // v34: the photo and video
   }
   function readLibForm() {
     var dose = {}, aliases = [], seen = {}, areas = [];
@@ -5187,7 +5215,7 @@
   // opts (Save to library from a builder row): { name, dose, row }; the new exercise starts ticked as checked
   function openLibEditor(entry, opts) {
     opts = opts || {};
-    libEdit = { id: entry ? entry.id : '', row: opts.row || '', armed: false, dirty: false };
+    libEdit = { id: entry ? entry.id : '', mid: entry ? entry.id : newId('c-'), row: opts.row || '', armed: false, dirty: false, media: null };   // v34: mid = the id the files go under
     libReturn = document.activeElement;
     var r = libReturn && libReturn.closest ? libReturn.closest('.ex-row') : null;
     libReturnRow = r ? r.dataset.id : '';
@@ -5200,6 +5228,7 @@
   }
   // after the editor closes: back to what opened it (or, when that was redrawn, its replacement), never a box
   function libAfter(restore) {
+    if (libEdit && !libEdit.away) { libMediaEnd(false); libEdit = null; }   // v34: closed without saving: unsaved uploads go
     if (!restore) return false;
     var el = libReturn;
     if (!el || !document.body.contains(el)) {
@@ -5212,16 +5241,20 @@
   }
   function libSave() {
     if (!libEdit) return;
+    if (libMediaBusy()) { libEdit.media.msg = 'Wait for the upload to finish (or Stop it), then Save.'; renderLibMedia(); return; }   // v34
     var v = readLibForm();
     if (!v.name) { libErr('Add a name.'); $('libName').focus(); return; }
     var k = E.libKey(v.name), id = libEdit.id;
     if (libList().some(function (e) { return e.id !== id && E.libKey(e.name) === k; })) { libErr('Another exercise is already called that.'); $('libName').focus(); return; }
     if (!libVideoState()) { $('libVideo').focus(); return; }
-    var entry = tidyEntry({ id: id || newId('c-'), name: v.name, aliases: v.aliases, areas: v.areas, type: v.type, equipment: v.equipment, dose: v.dose, cues: v.cues,
-      instructions: v.instructions, video: v.video, checked: v.checked, updatedBy: CLOUD ? userName() : '', updatedAt: new Date().toISOString() }, false);
+    var md = libEdit.media || {};
+    var entry = tidyEntry({ id: id || libEdit.mid || newId('c-'), name: v.name, aliases: v.aliases, areas: v.areas, type: v.type, equipment: v.equipment, dose: v.dose, cues: v.cues,
+      instructions: v.instructions, video: v.video, checked: v.checked, photo: md.photo || null, clip: md.clip || null,   // v34
+      updatedBy: CLOUD ? userName() : '', updatedAt: new Date().toISOString() }, false);
     if (!entry) return;
     var ok = writeItem('library', entry.id, entry), row = libEdit.row ? exItem(libEdit.row) : null;
     if (row) { row.lib = entry.id; delete row.libWas; saveDraft(); }   // Save to library: that row is linked to the new exercise
+    libMediaEnd(true);                                 // v34: the files it no longer uses go (unless another exercise uses them)
     libEdit = null;
     afterLibChange();
     closeModal();
@@ -5247,6 +5280,7 @@
     }
     clearTimeout(libDelTimer);
     var e = libGet(libEdit.id);
+    libMediaEnd(false);                                // v34: uploads not saved go; the saved files stay (Undo puts the exercise back)
     libEdit = null;
     if (!e) { closeModal(); return; }
     writeItem('library', e.id, null);
@@ -5256,9 +5290,12 @@
   }
   function libDuplicate() {                            // "<name> (copy)", as a new exercise not saved yet
     if (!libEdit || !libEdit.id) return;
-    var v = readLibForm();
+    var v = readLibForm(), md = libEdit.media || {};
+    if (libMediaBusy()) { md.msg = 'Wait for the upload to finish, then Duplicate.'; renderLibMedia(); return; }   // v34
+    if (md.added && md.added.length) { md.added = []; }   // uploaded this edit and now shared by the copy: kept
     v.name = cap((v.name || 'Exercise') + ' (copy)', 120);
-    libEdit = { id: '', row: '', armed: false, dirty: true };
+    v.photo = md.photo || null; v.clip = md.clip || null;   // v34: the copy shares the photo and video
+    libEdit = { id: '', mid: newId('c-'), row: '', armed: false, dirty: true, media: null };
     fillLibForm(v);
     $('libTitle').textContent = 'New exercise';
     $('libMore').hidden = true;
@@ -5270,7 +5307,9 @@
   function libPreview() {
     var url = String($('libVideo').value || '').trim();
     if (!E.videoInfo(url)) return;
+    if (libEdit) libEdit.away = true;                 // v34: the player replaces the editor for a moment
     openVideo(cap($('libName').value, 120) || 'Exercise', url, function () {
+      if (libEdit) libEdit.away = false;
       openModal(els.libDialog, $('libPreview') || $('libVideo'), libAfter);
       return true;
     });
@@ -5324,6 +5363,7 @@
         // v17: a Swap chooses one (round buttons); the exercise already in that row can't be chosen
         var now = !!pickSwap && e.id === cur, input = pickSwap ? '<input type="radio" name="libPickOne"' : '<input type="checkbox"';
         return '<li><label class="lp-row' + (now ? ' lp-now' : '') + '">' + input + ' data-lib="' + esc(e.id) + '"' + (pickOrder.indexOf(e.id) >= 0 ? ' checked' : '') + (now ? ' disabled' : '') + '>' +
+          (thumbOf(e) ? '<span class="lp-pic"><img src="' + esc(thumbOf(e)) + '" alt="" loading="lazy"></span>' : '') +   // v34
           '<span class="lp-main"><b>' + esc(e.name) + '</b>' + (now ? '<span>In this row now</span>' : d ? '<span>' + esc(d) + '</span>' : '') + '</span>' +
           (hasVideo(e) ? '<span class="lp-vid">' + PLAY + '<span class="vh">Has a video</span></span>' : '') + '</label></li>';
       }).join('') + '</ul>';
@@ -5420,6 +5460,385 @@
       return after ? after(restore) : false;
     });
     if (embed) freshFrame(embed, name + ' video');
+  }
+
+  // ------------------------------------------------------------------ v34: photos and videos in the library
+  // Matthew (4 Oct): "add a feature where we can add Videos or Pictures to the Exercise Library". His choice, "Upload both":
+  // the files go to Cloud Storage for Firebase in Sydney (cloud.js › media) with the clinic login. A library exercise may
+  // have one photo and one video, besides its video link: photo { url, path, turl, tpath, w, h } and clip { url, path,
+  // turl, tpath, w, h, secs, bytes, type }, where turl is a 4:3 picture (480 × 360) for the lists and the handout: the
+  // middle of the photo, or a frame of the video. Photos are shrunk on the iPad (long edge 1,600 px, JPEG); a video goes
+  // up as recorded (60 s and 150 MB at most). A file never changes (a new one gets a new name); one an exercise no longer
+  // uses is deleted when the exercise is saved (unless another exercise still uses it: Duplicate shares them), and one
+  // uploaded while editing is deleted if the editor is closed without saving. Deleting an exercise keeps its files (Undo).
+  var MEDIA_HOST = 'https://firebasestorage.googleapis.com/v0/b/';
+  var MEDIA_PATH = /^library\/[A-Za-z0-9][A-Za-z0-9_-]{0,149}\/[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/;
+  var PHOTO_EDGE = 1600, THUMB_W = 480, THUMB_H = 360, CLIP_MAX_SECS = 60, CLIP_MAX_BYTES = 150 * 1024 * 1024;
+  var MEDIA_CACHE = 'bh-media-v1';                     // the 4:3 pictures kept on this device (offline handouts)
+  function mediaUrlOk(u) { return typeof u === 'string' && u.indexOf(MEDIA_HOST) === 0 && u.length <= 700 && !/[\s"'<>\\]/.test(u); }
+  function tidyMedia(m, clip) {
+    if (!m || typeof m !== 'object' || Array.isArray(m) || !mediaUrlOk(m.url) || typeof m.path !== 'string' || !MEDIA_PATH.test(m.path)) return null;
+    function num(v, max) { v = +v; return isFinite(v) && v > 0 && v <= max ? Math.round(v * 10) / 10 : 0; }
+    var o = { url: m.url, path: m.path, w: num(m.w, 20000), h: num(m.h, 20000) };
+    if (mediaUrlOk(m.turl) && typeof m.tpath === 'string' && MEDIA_PATH.test(m.tpath)) { o.turl = m.turl; o.tpath = m.tpath; }
+    if (clip) {
+      o.secs = num(m.secs, 3600); o.bytes = Math.round(num(m.bytes, 1e10));
+      o.type = typeof m.type === 'string' && /^video\/[a-z0-9.+-]{1,40}$/i.test(m.type) ? m.type : 'video/mp4';
+    }
+    return o;
+  }
+  function thumbOf(e) { return e ? (e.photo && e.photo.turl) || (e.clip && e.clip.turl) || '' : ''; }
+  function mediaReady() { return !!(CLOUD && CLOUD.media && CLOUD.media.ready()); }
+  function mediaPaths(m) { return m ? [m.path, m.tpath].filter(Boolean) : []; }
+  function mediaInUse(path) {                           // still used by a saved exercise (Duplicate shares files)
+    return libList().some(function (e) { return mediaPaths(e.photo).concat(mediaPaths(e.clip)).indexOf(path) >= 0; });
+  }
+  function dropMedia(paths) {
+    if (!CLOUD || !CLOUD.media) return;
+    paths.forEach(function (p) { if (p && !mediaInUse(p)) CLOUD.media.remove(p); });
+  }
+  function clipLen(secs) { var s = Math.round(+secs || 0); return s ? Math.floor(s / 60) + ':' + ('0' + s % 60).slice(-2) : ''; }
+  function sizeText(bytes) { var mb = (+bytes || 0) / 1048576; return mb >= 10 ? Math.round(mb) + ' MB' : mb >= 0.1 ? (Math.round(mb * 10) / 10) + ' MB' : ''; }
+  function fileStamp() {
+    var r = '';
+    try { var a = new Uint32Array(1); crypto.getRandomValues(a); r = a[0].toString(36); } catch (e) { r = Math.random().toString(36).slice(2); }
+    return Date.now().toString(36) + (r + '000').slice(0, 3);
+  }
+  // a picture of part of an image or video (sx, sy, sw, sh) at w × h, as a JPEG
+  function canvasJpeg(src, sx, sy, sw, sh, w, h, q) {
+    return new Promise(function (resolve, reject) {
+      var cv = document.createElement('canvas');
+      cv.width = w; cv.height = h;
+      var ctx = cv.getContext('2d');
+      ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, w, h);
+      ctx.drawImage(src, sx, sy, sw, sh, 0, 0, w, h);
+      cv.toBlob(function (b) { cv.width = cv.height = 1; if (b && b.size) resolve(b); else reject(new Error('no picture')); }, 'image/jpeg', q);
+    });
+  }
+  function middle43(w, h) {                            // the largest 4:3 area in the middle of a w × h picture
+    var tw = w, th = Math.round(w * 3 / 4);
+    if (th > h) { th = h; tw = Math.round(h * 4 / 3); }
+    return [Math.round((w - tw) / 2), Math.round((h - th) / 2), tw, th];
+  }
+  // a photo, shrunk: the picture (long edge 1,600 px at most) and its 4:3 middle at 480 × 360, both JPEG
+  function makePhoto(file) {
+    return new Promise(function (resolve, reject) {
+      var url = URL.createObjectURL(file), img = new Image();
+      img.onload = function () {
+        var w = img.naturalWidth, h = img.naturalHeight, sc = Math.min(1, PHOTO_EDGE / Math.max(w, h)), c = middle43(w, h);
+        var fw = Math.max(1, Math.round(w * sc)), fh = Math.max(1, Math.round(h * sc));
+        Promise.all([canvasJpeg(img, 0, 0, w, h, fw, fh, 0.85), canvasJpeg(img, c[0], c[1], c[2], c[3], THUMB_W, THUMB_H, 0.8)]).then(function (b) {
+          URL.revokeObjectURL(url);
+          resolve({ full: b[0], thumb: b[1], w: fw, h: fh });
+        }, function () { URL.revokeObjectURL(url); reject(new Error('Couldn’t prepare that photo. Try another one.')); });
+      };
+      img.onerror = function () { URL.revokeObjectURL(url); reject(new Error('Couldn’t open that photo. Try a photo from the camera or Photos.')); };
+      img.src = url;
+    });
+  }
+  // a video's length and size, and a 4:3 frame of it (half a second in, or the middle of a shorter clip) for its picture.
+  // Played muted for a moment first (iPad Safari draws no frame of a video that hasn't played); a clip whose frame can't
+  // be drawn goes up without a picture
+  function readClip(file) {
+    return new Promise(function (resolve, reject) {
+      var url = URL.createObjectURL(file), v = document.createElement('video'), done = false, info = null;
+      var timer = setTimeout(function () { finish(info ? null : new Error('Couldn’t read that video. Try another one.'), info); }, 20000);
+      function finish(err, val) {
+        if (done) return;
+        done = true; clearTimeout(timer);
+        try { v.pause(); v.removeAttribute('src'); v.load(); } catch (e) { /* gone */ }
+        URL.revokeObjectURL(url);
+        if (err) reject(err); else resolve(val);
+      }
+      v.muted = true; v.defaultMuted = true; v.playsInline = true; v.preload = 'auto';
+      v.setAttribute('muted', ''); v.setAttribute('playsinline', '');
+      v.onerror = function () { finish(new Error('Couldn’t open that video. Try a video from the camera or Photos.')); };
+      v.onloadedmetadata = function () {
+        var secs = isFinite(v.duration) ? v.duration : 0;
+        if (secs > CLIP_MAX_SECS + 0.5) { finish(new Error('That video is ' + Math.round(secs) + ' seconds long. Videos can be up to ' + CLIP_MAX_SECS + ' seconds: trim it in Photos first.')); return; }
+        info = { secs: Math.round(secs * 10) / 10, w: v.videoWidth || 0, h: v.videoHeight || 0, poster: null };
+        var seek = function () {
+          v.onseeked = function () {
+            if (!v.videoWidth) { finish(null, info); return; }
+            var c = middle43(v.videoWidth, v.videoHeight);
+            canvasJpeg(v, c[0], c[1], c[2], c[3], THUMB_W, THUMB_H, 0.8).then(function (b) { info.poster = b; finish(null, info); }, function () { finish(null, info); });
+          };
+          try { v.currentTime = secs ? Math.min(0.5, secs / 2) : 0.01; } catch (e) { finish(null, info); }
+        };
+        var p = null;
+        try { p = v.play(); } catch (e) { p = null; }
+        if (p && p.then) p.then(function () { v.pause(); seek(); }, seek); else seek();
+      };
+      v.src = url;
+    });
+  }
+  // upload the files of one photo or video to library/<id>/, in order, with one progress figure (0–1) for them all;
+  // stop.stop() halts it (the file under way is abandoned, the rest not started)
+  function mediaUpload(id, files, onPct, stop) {
+    var total = files.reduce(function (n, f) { return n + f.blob.size; }, 0) || 1, before = 0, out = [], cur = '';
+    return files.reduce(function (p, f) {
+      return p.then(function () {
+        if (stop.stopped) throw { code: 'aborted' };
+        var sig = {};
+        stop.cur = sig;
+        cur = 'library/' + id + '/' + f.name;
+        return CLOUD.media.upload(cur, f.blob, f.type, { signal: sig, onProgress: function (r) { onPct((before + r * f.blob.size) / total); } }).then(function (res) {
+          before += f.blob.size;
+          out.push(res);
+          cur = '';
+          onPct(before / total);
+        });
+      });
+    }, Promise.resolve()).then(function () { return out; }, function (err) {
+      // half an upload is no use: what did arrive goes, and so does a file stopped just as it arrived
+      dropMedia(out.map(function (r) { return r.path; }).concat(err && err.code === 'aborted' && cur ? [cur] : []));
+      throw err;
+    });
+  }
+  function stopper() {
+    var s = { stopped: false, cur: null };
+    s.stop = function () { s.stopped = true; if (s.cur && s.cur.abort) s.cur.abort(); };
+    return s;
+  }
+  function mediaErrText(err) {
+    var c = err && err.code;
+    if (c === 'aborted') return '';
+    if (c === 'network' || navigator.onLine === false) return 'No internet connection. Connect, then try again.';
+    if (c === 'signed-out') return 'Sign in to the clinic store to add photos and videos.';
+    if (c === 'plan') return 'Uploads aren’t switched on yet: the Firebase project needs the pay-as-you-go (Blaze) plan.';
+    if (c === 'denied' || c === 'nobucket') return 'The clinic’s file storage isn’t ready for uploads yet (Storage and its rules in the Firebase console).';
+    if (c === 'toobig') return 'That file is too big to upload.';
+    if (err && err.message && !c) return err.message;   // a photo or video that couldn't be prepared says why
+    return 'The upload didn’t work. Try again.';
+  }
+
+  // ---- the editor's Photo and Video boxes (#libMedia). libEdit.media: { photo, clip (as the exercise will be saved),
+  // busy: { photo|clip: { pct, stop, prep } }, added: [paths uploaded in this edit], dropped: [paths to delete on Save], msg }
+  function freshEditMedia(e) {
+    return { photo: e && e.photo ? JSON.parse(JSON.stringify(e.photo)) : null, clip: e && e.clip ? JSON.parse(JSON.stringify(e.clip)) : null,
+      busy: {}, added: [], dropped: [], msg: '' };
+  }
+  function libMediaBusy() { var m = libEdit && libEdit.media; return !!(m && (m.busy.photo || m.busy.clip)); }
+  function mediaWhyNot() {                             // why uploads can't happen now ('' when they can)
+    if (!CLOUD) return 'Photos and videos are kept in the clinic store: this copy of the app isn’t connected to one.';
+    if (!CLOUD.signedIn()) return 'Sign in to the clinic store to add photos and videos.';
+    if (navigator.onLine === false) return 'Connect to the internet to add a photo or video.';
+    return '';
+  }
+  function libMediaBoxHtml(kind) {
+    var m = libEdit.media, it = m[kind], busy = m.busy[kind], photo = kind === 'photo', why = mediaWhyNot();
+    var label = photo ? 'Photo' : 'Video', pic = it && it.turl;
+    var sub = busy ? (busy.prep ? 'Preparing…' : 'Uploading ' + Math.round(busy.pct * 100) + '%…')
+      : it ? (photo ? 'Printed on the handout' : [clipLen(it.secs), sizeText(it.bytes)].filter(Boolean).join(' · ') || 'Uploaded')
+      : photo ? 'Shown in the app and printed on the handout' : 'Up to ' + CLIP_MAX_SECS + ' seconds, landscape';
+    var acts = '';
+    if (busy) acts = '<button type="button" class="quiet" data-media="' + kind + '-stop">Stop</button>';
+    else {
+      if (!why) acts += '<label class="ghost file-btn lm-pick"><span>' + (it ? 'Replace' : 'Take or choose') + '</span><input type="file" accept="' + (photo ? 'image/*' : 'video/*') + '" data-media-pick="' + kind + '" aria-label="' + label + ': take or choose"></label>';
+      if (it) acts += '<button type="button" class="quiet" data-media="' + kind + '-view">' + (photo ? 'View' : PLAY + 'Play') + '</button>' +
+        '<button type="button" class="quiet lm-remove" data-media="' + kind + '-remove">Remove</button>';
+    }
+    return '<div class="lm-box" data-kind="' + kind + '"><div class="lm-pic' + (pic ? '' : ' empty') + '">' +
+      (pic ? '<img src="' + esc(pic) + '" alt="" loading="lazy">' + (photo ? '' : '<span class="lm-playmark">' + PLAY + '</span>') : '<span>' + label + '</span>') + '</div>' +
+      '<div class="lm-side"><b>' + label + '</b><span class="lm-sub">' + esc(sub) + '</span>' +
+      (busy && !busy.prep ? '<progress max="100" value="' + Math.round(busy.pct * 100) + '" aria-label="' + label + ' upload"></progress>' : '') +
+      (acts ? '<div class="lm-acts">' + acts + '</div>' : '') + '</div></div>';
+  }
+  function renderLibMedia() {
+    var box = $('libMedia'), msg = $('libMediaMsg');
+    if (!box || !libEdit || !libEdit.media) return;
+    var why = mediaWhyNot(), keep = document.activeElement && box.contains(document.activeElement) ? document.activeElement.getAttribute('data-media') || document.activeElement.getAttribute('data-media-pick') : '';
+    box.innerHTML = libMediaBoxHtml('photo') + libMediaBoxHtml('clip');
+    var text = libEdit.media.msg || (why && !libEdit.media.photo && !libEdit.media.clip ? why : why ? why.replace('to add a photo or video', 'to change these') : '');
+    msg.textContent = text;
+    msg.hidden = !text;
+    msg.classList.toggle('bad', !!libEdit.media.msg);
+    if (keep) { var again = box.querySelector('[data-media="' + keep + '"], [data-media-pick="' + keep + '"]'); if (again) focusQuiet(again); }
+  }
+  // a photo or video picked in the editor: prepared, uploaded, then in the box (saved with the exercise on Save)
+  function libPickMedia(kind, file) {
+    var edit = libEdit;
+    if (!edit || !file || edit.media.busy[kind]) return;
+    var m = edit.media, photo = kind === 'photo', why = mediaWhyNot();
+    m.msg = '';
+    if (why) { m.msg = why; renderLibMedia(); return; }
+    if (file.type && file.type.indexOf(photo ? 'image/' : 'video/') !== 0) { m.msg = photo ? 'That file isn’t a photo.' : 'That file isn’t a video.'; renderLibMedia(); return; }
+    if (!photo && file.size > CLIP_MAX_BYTES) { m.msg = 'That video is ' + sizeText(file.size) + '. Videos can be up to ' + sizeText(CLIP_MAX_BYTES) + ': record a shorter one, or at 720p.'; renderLibMedia(); return; }
+    var stop = stopper(), busy = m.busy[kind] = { pct: 0, stop: stop, prep: true }, id = edit.mid, stamp = fileStamp();
+    edit.dirty = true;
+    renderLibMedia();
+    keepAwake();
+    (photo ? makePhoto(file) : readClip(file)).then(function (p) {
+      if (stop.stopped) throw { code: 'aborted' };
+      busy.prep = false;
+      if (libEdit === edit) renderLibMedia();
+      var files;
+      if (photo) files = [{ name: 'p-' + stamp + '.jpg', blob: p.full, type: 'image/jpeg' }, { name: 'p-' + stamp + '-t.jpg', blob: p.thumb, type: 'image/jpeg' }];
+      else {
+        var type = /^video\/[a-z0-9.+-]+$/i.test(file.type || '') ? file.type : 'video/mp4';
+        var ext = /quicktime/i.test(type) ? 'mov' : /webm/i.test(type) ? 'webm' : /3gpp/i.test(type) ? '3gp' : 'mp4';
+        files = [{ name: 'v-' + stamp + '.' + ext, blob: file, type: type }];
+        if (p.poster) files.push({ name: 'v-' + stamp + '-t.jpg', blob: p.poster, type: 'image/jpeg' });
+        busy.info = p;
+      }
+      return mediaUpload(id, files, function (r) {
+        busy.pct = r;
+        if (libEdit === edit) {                          // the bar and the figure, without redrawing the boxes
+          var bx = $('libMedia') && $('libMedia').querySelector('.lm-box[data-kind="' + kind + '"]');
+          var pr = bx && bx.querySelector('progress'), sb = bx && bx.querySelector('.lm-sub');
+          if (pr) pr.value = Math.round(r * 100);
+          if (sb) sb.textContent = 'Uploading ' + Math.round(r * 100) + '%…';
+        }
+      }, stop).then(function (res) {
+        var made = photo ? { url: res[0].url, path: res[0].path, turl: res[1].url, tpath: res[1].path, w: p.w, h: p.h }
+          : { url: res[0].url, path: res[0].path, w: p.w, h: p.h, secs: p.secs, bytes: res[0].size || file.size, type: files[0].type };
+        if (!photo && res[1]) { made.turl = res[1].url; made.tpath = res[1].path; }
+        return tidyMedia(made, !photo);
+      });
+    }).then(function (made) {
+      delete m.busy[kind];
+      if (libEdit !== edit || !made) { if (made) dropMedia(mediaPaths(made)); return; }   // the editor closed meanwhile
+      var old = m[kind];
+      if (old) {                                       // the one it replaces: gone now if it came this edit, else on Save
+        var mine = mediaPaths(old).filter(function (q) { return m.added.indexOf(q) >= 0; });
+        m.added = m.added.filter(function (q) { return mine.indexOf(q) < 0; });
+        dropMedia(mine);
+        m.dropped = m.dropped.concat(mediaPaths(old).filter(function (q) { return mine.indexOf(q) < 0; }));
+      }
+      m[kind] = made;
+      m.added = m.added.concat(mediaPaths(made));
+      if (made.turl) primePhoto(made.turl);
+      renderLibMedia();
+    }, function (err) {
+      delete m.busy[kind];
+      if (libEdit !== edit) return;
+      m.msg = mediaErrText(err);
+      renderLibMedia();
+    });
+  }
+  function libMediaRemove(kind) {
+    var m = libEdit && libEdit.media, it = m && m[kind];
+    if (!it) return;
+    var mine = mediaPaths(it).filter(function (q) { return m.added.indexOf(q) >= 0; });
+    m.added = m.added.filter(function (q) { return mine.indexOf(q) < 0; });
+    dropMedia(mine);                                   // uploaded this edit: gone now; saved before: gone on Save
+    m.dropped = m.dropped.concat(mediaPaths(it).filter(function (q) { return mine.indexOf(q) < 0; }));
+    m[kind] = null;
+    m.msg = '';
+    libEdit.dirty = true;
+    renderLibMedia();
+    var pick = $('libMedia').querySelector('[data-media-pick="' + kind + '"]');
+    if (pick) focusQuiet(pick);
+  }
+  // the editor is closing: uploads under way stop; files uploaded this edit and not saved are deleted
+  function libMediaEnd(saved) {
+    var m = libEdit && libEdit.media;
+    if (!m) return;
+    Object.keys(m.busy).forEach(function (k) { if (m.busy[k] && m.busy[k].stop) m.busy[k].stop.stop(); });
+    if (!saved) dropMedia(m.added);
+    else dropMedia(m.dropped);
+    m.added = []; m.dropped = [];
+  }
+  function onLibMediaClick(b) {
+    var a = b.getAttribute('data-media'), kind = a.split('-')[0], what = a.split('-')[1], m = libEdit && libEdit.media;
+    if (!m) return;
+    if (what === 'stop') { if (m.busy[kind] && m.busy[kind].stop) m.busy[kind].stop.stop(); return; }
+    if (what === 'remove') { libMediaRemove(kind); return; }
+    if (what === 'view' && m[kind]) {
+      libEdit.away = true;                             // the viewer replaces the editor for a moment: nothing is tidied up
+      openMediaView(cap($('libName').value, 120) || 'Exercise', kind === 'photo' ? { photo: m.photo } : { clip: m.clip }, function () {
+        if (libEdit) libEdit.away = false;
+        openModal(els.libDialog, $('libMedia').querySelector('[data-media="' + a + '"]') || $('libName'), libAfter);
+        return true;
+      });
+    }
+  }
+
+  // ---- the viewer (#videoDialog): an uploaded video plays in a <video>, an uploaded photo shows full size; a video link
+  // still plays in its player (openVideo). what: { photo } or { clip }
+  function openMediaView(name, what, after) {
+    var box = $('videoBox'), msg = $('videoMsg'), open = $('videoOpen'), old = $('videoFrame');
+    if (old) old.parentNode.removeChild(old);
+    var clip = what.clip, photo = what.photo;
+    $('videoTitle').textContent = name;
+    box.hidden = false;
+    box.classList.toggle('pic', !!photo);
+    msg.hidden = true;
+    open.hidden = true;
+    if (clip) {
+      var v = document.createElement('video');
+      v.id = 'videoFrame'; v.controls = true; v.playsInline = true; v.preload = 'metadata';
+      v.setAttribute('playsinline', '');
+      if (clip.turl) v.poster = clip.turl;
+      v.src = clip.url;
+      v.title = name + ' video';
+      v.onerror = function () { msg.textContent = navigator.onLine === false ? 'Videos need an internet connection.' : 'This video couldn’t be played here.'; msg.hidden = false; };
+      box.appendChild(v);
+    } else if (photo) {
+      var img = document.createElement('img');
+      img.id = 'videoFrame'; img.alt = name; img.src = photo.url;
+      img.onerror = function () { msg.textContent = 'This photo couldn’t be loaded (no connection?).'; msg.hidden = false; };
+      box.appendChild(img);
+    }
+    openModal(els.videoDialog, $('videoClose'), function (restore) {
+      var f = $('videoFrame');
+      if (f && f.tagName === 'VIDEO') { try { f.pause(); f.removeAttribute('src'); f.load(); } catch (e) { /* gone */ } }
+      if (f) f.parentNode.removeChild(f);
+      box.classList.remove('pic');
+      open.hidden = false;
+      return after ? after(restore) : false;
+    });
+  }
+  // a linked exercise's video in the builder: the uploaded one, else the link
+  function openExVideo(e) {
+    if (!e) return;
+    if (e.clip) openMediaView(e.name, { clip: e.clip });
+    else if (e.video) openVideo(e.name, e.video);
+  }
+  function openExPhoto(e) { if (e && e.photo) openMediaView(e.name, { photo: e.photo }); else openExVideo(e); }
+
+  // ---- the 4:3 pictures as data the handout can print (JPEG data URLs), kept on this device in the Cache API so a
+  // handout made offline still has them
+  var photoData = {};
+  function blobToDataUrl(b) {
+    return new Promise(function (resolve) {
+      var r = new FileReader();
+      r.onload = function () { resolve(String(r.result || '')); };
+      r.onerror = function () { resolve(''); };
+      r.readAsDataURL(b);
+    });
+  }
+  function fetchPhoto(url) {
+    if (photoData[url]) return Promise.resolve(photoData[url]);
+    var cached = window.caches ? caches.open(MEDIA_CACHE).then(function (c) { return c.match(url); }).catch(function () { return null; }) : Promise.resolve(null);
+    return cached.then(function (hit) {
+      if (hit) return hit.blob();
+      return fetch(url, { mode: 'cors', credentials: 'omit' }).then(function (res) {
+        if (!res.ok) throw new Error('http ' + res.status);
+        if (window.caches) { var copy = res.clone(); caches.open(MEDIA_CACHE).then(function (c) { return c.put(url, copy); }).catch(function () {}); }
+        return res.blob();
+      });
+    }).then(function (b) { return b ? blobToDataUrl(b) : ''; }).then(function (d) {
+      d = String(d || '').replace(/^data:[^;,]*;base64,/, 'data:image/jpeg;base64,');
+      if (/^data:image\/jpeg;base64,\/9j\//.test(d)) { photoData[url] = d; return d; }   // a JPEG (starts FF D8 FF)
+      return null;
+    }).catch(function () { return null; });
+  }
+  function primePhoto(url) { if (url && navigator.onLine !== false) fetchPhoto(url); }
+  function loadPhotos(urls, ms) {                     // the handout's pictures, for at most ms (what's missing prints without)
+    var todo = urls.filter(function (u) { return !photoData[u]; });
+    if (!todo.length) return Promise.resolve();
+    return Promise.race([Promise.all(todo.map(fetchPhoto)), new Promise(function (r) { setTimeout(r, ms || 6000); })]);
+  }
+  // the pictures the handout will print: the linked exercises' photos (or a frame of their video), unless switched off
+  function handoutPhotoUrls() {
+    if (state.ex.photos === false) return [];
+    var out = [];
+    state.ex.items.forEach(function (it) {
+      var e = exFilled(it) && exLinked(it), u = thumbOf(e);
+      if (u && out.indexOf(u) < 0) out.push(u);
+    });
+    return out;
   }
 
   // ------------------------------------------------------------------ program templates (v15)
@@ -5694,6 +6113,7 @@
       var b = e.target.closest('button');
       if (!b) return;
       if (b.dataset.area) { b.setAttribute('aria-pressed', String(b.getAttribute('aria-pressed') !== 'true')); if (libEdit) libEdit.dirty = true; return; }
+      if (b.hasAttribute('data-media')) { onLibMediaClick(b); return; }   // v34: View / Play, Remove, Stop
       if (b.id === 'libPreview') libPreview();
       else if (b.id === 'libSave') libSave();
       else if (b.id === 'libCancel') closeModal();
@@ -5705,11 +6125,15 @@
       if (e.target.id === 'libVideo') libVideoState();
       if (e.target.id === 'libName') libErr('');
     });
-    d.addEventListener('change', function () { if (libEdit) libEdit.dirty = true; });
+    d.addEventListener('change', function (e) {
+      if (libEdit) libEdit.dirty = true;
+      var f = e.target.closest && e.target.closest('input[data-media-pick]');   // v34: a photo or video picked
+      if (f) { var file = f.files && f.files[0]; f.value = ''; if (file) libPickMedia(f.getAttribute('data-media-pick'), file); }
+    });
     d.addEventListener('keydown', function (e) {       // Return in a one-line box moves to the next box
-      if (e.key !== 'Enter' || !e.target.matches('input:not([type=checkbox])')) return;
+      if (e.key !== 'Enter' || !e.target.matches('input:not([type=checkbox]):not([type=file])')) return;
       e.preventDefault();
-      var f = modalFocusables(d).filter(function (x) { return x.matches('input:not([type=checkbox]), select, textarea'); }), i = f.indexOf(e.target);
+      var f = modalFocusables(d).filter(function (x) { return x.matches('input:not([type=checkbox]):not([type=file]), select, textarea'); }), i = f.indexOf(e.target);   // (v34: never a photo or video picker)
       if (i >= 0 && i < f.length - 1) f[i + 1].focus(); else e.target.blur();
     });
     var p = els.libPickDialog;
@@ -5883,7 +6307,7 @@
     x.instructions = exTidy(exStr(p.instructions), 'instructions');
     x.rationale = exTidy(exStr(p.rationale), 'rationale');   // v25
     // v32: Why this plan and the block length come back; the next review is worked out again from today's date
-    x.reason = exTidy(exStr(p.reason), 'reason'); x.weeks = exWeeks(p.weeks); x.large = p.large === true;
+    x.reason = exTidy(exStr(p.reason), 'reason'); x.weeks = exWeeks(p.weeks); x.large = p.large === true; x.photos = p.photos !== false;   // v34: photos
     x.review = ''; x.reviewAuto = false; autoReview();
     x.items = progItems(p.items).map(function (it) { return it.kind === 'section' ? newExSection(it.heading) : newExRow(it); });
     if (p.plan) x.plan = tidyPlan(p.plan);             // v23: the client's last plan (sessions a week, setting, experience, block)
@@ -6511,9 +6935,10 @@
       els.entry.addEventListener('click', onClick);
       els.entry.addEventListener('keydown', onKey);
       els.summary.addEventListener('click', onClick);
-      els.summary.addEventListener('change', function (e) {   // v32: Large print (the handout panel)
-        if (e.target.id !== 'exLarge') return;
-        state.ex.large = e.target.checked;
+      els.summary.addEventListener('change', function (e) {   // v32: Large print (the handout panel); v34: Exercise photos
+        if (e.target.id === 'exLarge') state.ex.large = e.target.checked;
+        else if (e.target.id === 'exPhotos') state.ex.photos = e.target.checked;
+        else return;
         saveDraft();
         keepAwake();
       });

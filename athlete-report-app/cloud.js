@@ -12,7 +12,10 @@
    starter entries and tombstones that hide deleted ones) and `templates` (program templates), one document per id.
    putDoc / deleteDoc queue a full write or a tombstone and update the cache at once; a pull brings sessions, then the
    library, then the templates, each with its own cursor; a push commits the results (and their history copies) first,
-   then the library, then the templates, in separate commits, so a refusal on one collection never holds back another. */
+   then the library, then the templates, in separate commits, so a refusal on one collection never holds back another.
+   v34: Cloud Storage for Firebase holds the library's photos and videos (media.upload / media.remove), with the same
+   login: one multipart request per file, as the Firebase SDK's uploadBytes sends it, and the file's address with its
+   download token in the answer. */
 (function () {
   'use strict';
   var cfg = window.BH_CLOUD || {};
@@ -32,6 +35,11 @@
   var DOC_COLLS = ['library', 'templates'];
   var PUSH_ORDER = [['sessions', 'history'], ['library'], ['templates']];
   var DOC_ID = /^[A-Za-z0-9][A-Za-z0-9_-]{0,149}$/;    // safe as a Firestore document id (no '/', never '__x__')
+  // v34: the project's default bucket (since late 2024 a new one is <projectId>.firebasestorage.app; cloud-config.js may
+  // name another as storageBucket) and the Firebase Storage REST address the SDK uses
+  var BUCKET = String(cfg.storageBucket || (projectId ? projectId + '.firebasestorage.app' : '')).trim();
+  var STORAGE = 'https://firebasestorage.googleapis.com/v0/b/' + encodeURIComponent(BUCKET) + '/o';
+  var MEDIA_PATH = /^library\/[A-Za-z0-9][A-Za-z0-9_-]{0,149}\/[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/;
 
   // ------------------------------------------------------------------ storage helpers
   function getJson(k) { try { return JSON.parse(localStorage.getItem(k)); } catch (e) { return null; } }
@@ -230,6 +238,68 @@
     });
   }
   function httpError(r) { return { code: 'http', status: r.status, message: googleMessage(r) }; }
+
+  // ------------------------------------------------------------------ v34: Cloud Storage (the library's photos and videos)
+  // XMLHttpRequest (not fetch) so an upload reports its progress; Authorization: Firebase <id token>, as the SDK sends it.
+  // A 401 refreshes the token and tries once more. Resolves { status, json } for any answer; rejects { code: 'network' }
+  // when nothing came back and { code: 'aborted' } when stopped (opts.signal.abort()).
+  function storageSend(method, url, body, headers, opts, retried) {
+    opts = opts || {};
+    return ensureToken().then(function (tok) {
+      return new Promise(function (resolve, reject) {
+        var xhr = new XMLHttpRequest();
+        xhr.open(method, url, true);
+        xhr.setRequestHeader('Authorization', 'Firebase ' + tok);
+        Object.keys(headers || {}).forEach(function (k) { xhr.setRequestHeader(k, headers[k]); });
+        if (opts.onProgress && xhr.upload) xhr.upload.onprogress = function (e) { if (e.lengthComputable && e.total) opts.onProgress(e.loaded / e.total); };
+        xhr.onload = function () {
+          var j = null;
+          try { j = JSON.parse(xhr.responseText); } catch (e) { /* not JSON */ }
+          resolve({ status: xhr.status, json: j });
+        };
+        xhr.onerror = function () { reject({ code: 'network', message: 'no connection' }); };
+        xhr.onabort = function () { reject({ code: 'aborted', message: 'stopped' }); };
+        if (opts.signal) opts.signal.abort = function () { try { xhr.abort(); } catch (e) { /* already done */ } };
+        xhr.send(body === undefined ? null : body);
+      });
+    }).then(function (r) {
+      if (r.status === 401 && !retried) return refresh().then(function () { return storageSend(method, url, body, headers, opts, true); });
+      return r;
+    });
+  }
+  // what went wrong, for the app's message: 'offline', 'signed-out', 'plan' (Spark answers 402: no buckets without the
+  // pay-as-you-go plan), 'denied' (403: the storage rules, or no bucket access), 'nobucket' (404), 'toobig' (413), 'http'
+  function storageError(r) {
+    var st = r && r.status, code = st === 402 ? 'plan' : st === 403 ? 'denied' : st === 404 ? 'nobucket' : st === 413 ? 'toobig' : 'http';
+    return { code: code, status: st || 0, message: googleMessage(r) };
+  }
+  function mediaUrl(path, token) { return STORAGE + '/' + encodeURIComponent(path) + '?alt=media&token=' + encodeURIComponent(token); }
+  // upload a file to path ('library/<entry id>/<file>'): { path, url, size }; the address carries the download token
+  // (anyone holding it can download that one file, which the phone page will use). Files never change once uploaded
+  // (a new one gets a new name), so they may be cached for a year.
+  function upload(path, blob, contentType, opts) {
+    if (!enabled || !BUCKET) return Promise.reject({ code: 'local', message: 'no clinic store' });
+    if (!auth) return Promise.reject({ code: 'signed-out', message: 'signed out' });
+    if (!MEDIA_PATH.test(String(path))) return Promise.reject({ code: 'path', message: 'bad path' });
+    var type = /^[a-z]+\/[a-z0-9.+-]+$/i.test(contentType || '') ? contentType : 'application/octet-stream';
+    var boundary = 'bh' + Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
+    var meta = JSON.stringify({ name: path, contentType: type, cacheControl: 'public, max-age=31536000, immutable' });
+    var body = new Blob(['--' + boundary + '\r\nContent-Type: application/json; charset=utf-8\r\n\r\n' + meta + '\r\n--' + boundary + '\r\nContent-Type: ' + type + '\r\n\r\n',
+      blob, '\r\n--' + boundary + '--']);
+    return storageSend('POST', STORAGE + '?name=' + encodeURIComponent(path), body,
+      { 'X-Goog-Upload-Protocol': 'multipart', 'Content-Type': 'multipart/related; boundary=' + boundary }, opts).then(function (r) {
+      var tokens = r.json && typeof r.json.downloadTokens === 'string' ? r.json.downloadTokens.split(',').filter(Boolean) : [];
+      if (r.status >= 200 && r.status < 300 && tokens.length) return { path: path, url: mediaUrl(path, tokens[0]), size: +(r.json.size || 0) || blob.size };
+      throw storageError(r);
+    });
+  }
+  // delete a file: true when it has gone (or was never there), false when the store couldn't be reached or refused
+  function removeFile(path) {
+    if (!enabled || !BUCKET || !auth || !MEDIA_PATH.test(String(path))) return Promise.resolve(false);
+    return storageSend('DELETE', STORAGE + '/' + encodeURIComponent(path)).then(function (r) {
+      return r.status === 200 || r.status === 204 || r.status === 404;
+    }, function () { return false; });
+  }
 
   // ------------------------------------------------------------------ the queue
   function docFields(key, name, sess, deleted) {
@@ -585,7 +655,17 @@
         deniedColls: status.deniedColls.slice(), error: status.error, syncing: !!syncing };
     },
     sync: sync,
-    onChange: function (fn) { if (typeof fn === 'function') listeners.push(fn); }
+    onChange: function (fn) { if (typeof fn === 'function') listeners.push(fn); },
+    // v34: the library's photos and videos (Cloud Storage for Firebase, same login). ready(): signed in with a bucket;
+    // base: the start of every file address in that bucket (to recognise ours)
+    media: {
+      bucket: BUCKET,
+      base: STORAGE + '/',
+      ready: function () { return enabled && !!BUCKET && !!auth; },
+      pathOk: function (p) { return MEDIA_PATH.test(String(p)); },
+      upload: upload,
+      remove: removeFile
+    }
   };
   if (enabled) {
     auth = loadAuth();
