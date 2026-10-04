@@ -15,7 +15,12 @@
    then the library, then the templates, in separate commits, so a refusal on one collection never holds back another.
    v34: Cloud Storage for Firebase holds the library's photos and videos (media.upload / media.remove), with the same
    login: one multipart request per file, as the Firebase SDK's uploadBytes sends it, and the file's address with its
-   download token in the answer. */
+   download token in the answer.
+   v35: a client's program on their phone. shared/<token> holds the program as the phone page shows it (data, JSON) and
+   when its link ends (expires); the store's rules let anyone holding the token read that one document until then and
+   nobody list them. share() queues the write (it goes with the next sync, last); unshare() ends a link at once (the
+   program removed, expires long past). A refusal of `shared` (no rule for it yet) is reported apart (status().shareDenied)
+   and never as the device being refused. */
 (function () {
   'use strict';
   var cfg = window.BH_CLOUD || {};
@@ -33,13 +38,15 @@
   // v15: the clinic's shared documents (cache[coll] = { <id>: entry | { id, deleted: true } }) and the push order: each
   // group goes in commits of its own, the results first
   var DOC_COLLS = ['library', 'templates'];
-  var PUSH_ORDER = [['sessions', 'history'], ['library'], ['templates']];
+  var PUSH_ORDER = [['sessions', 'history'], ['library'], ['templates'], ['shared']];   // v35: + the phone links, last
   var DOC_ID = /^[A-Za-z0-9][A-Za-z0-9_-]{0,149}$/;    // safe as a Firestore document id (no '/', never '__x__')
   // v34: the project's default bucket (since late 2024 a new one is <projectId>.firebasestorage.app; cloud-config.js may
   // name another as storageBucket) and the Firebase Storage REST address the SDK uses
   var BUCKET = String(cfg.storageBucket || (projectId ? projectId + '.firebasestorage.app' : '')).trim();
   var STORAGE = 'https://firebasestorage.googleapis.com/v0/b/' + encodeURIComponent(BUCKET) + '/o';
   var MEDIA_PATH = /^library\/[A-Za-z0-9][A-Za-z0-9_-]{0,149}\/[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/;
+  var SHARE_ID = /^[A-Za-z0-9]{20,64}$/;               // v35: a phone link's token (the document id in shared/)
+  var SHARE_MAX = 900000;                              // characters of program JSON (a document holds 1 MiB)
 
   // ------------------------------------------------------------------ storage helpers
   function getJson(k) { try { return JSON.parse(localStorage.getItem(k)); } catch (e) { return null; } }
@@ -389,6 +396,38 @@
     });
   }
 
+  // ------------------------------------------------------------------ v35: the phone links (shared/<token>)
+  function shareFields(data, expiresIso) {
+    return { data: { stringValue: data }, expires: { timestampValue: expiresIso },
+      updatedBy: { stringValue: getStr(USER) }, device: { stringValue: deviceId() } };
+  }
+  // the program (obj) behind the link <token> until expires (a date-time); a newer write for the same link replaces a
+  // waiting one. false: local mode, an unusable token, date or program
+  function share(token, obj, expires) {
+    if (!enabled || !SHARE_ID.test(String(token)) || !isMap(obj)) return false;
+    var t = Date.parse(expires), json;
+    if (!isFinite(t) || t <= Date.now()) return false;
+    try { json = JSON.stringify(obj); } catch (e) { return false; }
+    if (!json || json.length > SHARE_MAX) return false;
+    queueWrite({ sid: token, kind: 'put', coll: 'shared', doc: shareFields(json, new Date(t).toISOString()) });
+    return true;
+  }
+  // the link ends now: no program, an expiry long past (the phone page then says the program has ended)
+  function unshare(token) {
+    if (!enabled || !SHARE_ID.test(String(token))) return false;
+    var f = shareFields('', '1970-01-01T00:00:00Z');
+    f.ended = { booleanValue: true };
+    queueWrite({ sid: token, kind: 'put', coll: 'shared', doc: f });
+    return true;
+  }
+  // where a link's last write is: 'waiting' (queued; 'denied' when the store refused the phone links in the last sync)
+  // or 'sent'
+  function shareState(token) {
+    var waiting = pending.some(function (x) { return x.coll === 'shared' && x.sid === token; });
+    if (!waiting) return 'sent';
+    return status.deniedColls.indexOf('shared') >= 0 ? 'denied' : 'waiting';
+  }
+
   // ------------------------------------------------------------------ push: the queue to Firestore
   // round = { denied: [collections the store refused this sync], message }: a 403 (the rules) is about one collection, so
   // it is noted and the other collections carry on; any other failure (network, 5xx, 429) stops the sync as in v13
@@ -575,7 +614,7 @@
   // the collections refused in this sync (v13 showed any refusal as "denied"; deniedColls says which ones)
   function setDenied(round) {
     status.deniedColls = round.denied.slice();
-    status.denied = round.denied.length > 0;
+    status.denied = round.denied.filter(function (c) { return c !== 'shared'; }).length > 0;   // v35: the links are reported apart
     status.error = status.denied ? String(round.message || '') : '';
     if (status.denied && resultsWaiting()) status.waited = true;
   }
@@ -652,10 +691,16 @@
     status: function () {
       return { pending: resultsWaiting(), changes: changesWaiting(), changesBy: { library: changesWaiting('library'), templates: changesWaiting('templates') },
         queued: pending.length, offline: status.offline || navigator.onLine === false, failed: status.failed, denied: status.denied,
-        deniedColls: status.deniedColls.slice(), error: status.error, syncing: !!syncing };
+        deniedColls: status.deniedColls.slice(), error: status.error, syncing: !!syncing,
+        shares: pending.filter(function (x) { return x.coll === 'shared'; }).length, shareDenied: status.deniedColls.indexOf('shared') >= 0 };   // v35
     },
     sync: sync,
     onChange: function (fn) { if (typeof fn === 'function') listeners.push(fn); },
+    // v35: the client's program on their phone: share(token, program, expires) / unshare(token) queue the write and
+    // return true (false: local mode, or something unusable); shareState(token): 'waiting', 'denied' or 'sent'
+    share: share,
+    unshare: unshare,
+    shareState: shareState,
     // v34: the library's photos and videos (Cloud Storage for Firebase, same login). ready(): signed in with a bucket;
     // base: the start of every file address in that bucket (to recognise ours)
     media: {

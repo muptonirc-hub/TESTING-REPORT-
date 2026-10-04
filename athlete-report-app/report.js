@@ -1220,6 +1220,11 @@
   // blank; a handout with no photos lays out exactly as before.
   var EX_PHOTO_COL = ['photo', ''], EX_PHOTO_W = 24, EX_PHOTO_H = 18;               // the picture (mm), 4:3
   function exPhotoOk(v) { return typeof v === 'string' && v.length < 3000000 && /^data:image\/jpeg;base64,[A-Za-z0-9+\/=]+$/.test(v); }
+  // v35: the client's program on their phone: a box after the notes with the private link's code, what it is for and
+  // until when it works, and a link over the whole box (a PDF opened on the phone itself can't be scanned). The code
+  // stays 22 mm in Large print; the words grow. d.phone = { url (a web address), until (the date as printed) }
+  var EX_PHONE_QR = 22, EX_PHONE_TITLE = 'Your program on your phone';
+  var EX_PHONE_TEXT = 'Scan the code with your phone’s camera to open these exercises, with their photos and videos. Then add the page to your home screen to keep it handy.';
   function exCues(list) {                            // tidy text lines, none empty, at most three
     var out = [];
     (Array.isArray(list) ? list : []).forEach(function (c) {
@@ -1476,6 +1481,32 @@
       doc.line(ML, doc.y, ML + CW, doc.y, { stroke: '#D5DBE0', lw: px(1) });
     });
   }
+  // v35: the phone box (see EX_PHONE_QR); nothing when the link can't be a code
+  function exPhone(doc, ph) {
+    var url = exVideo(ph && ph.url), m = url ? qrMatrix(url) : null;
+    if (!m) return;
+    var pad = px(12), q = EX_PHONE_QR, tx = ML + pad + q + px(14), tw = ML + CW - pad - tx;
+    var ls = EX_LABEL_SZ, size = EX_SZ, small = EX_NOTE_SZ, LH = 1.3;
+    var body = wrap(EX_PHONE_TEXT, 'regular', fs(size), tw), until = clean(exText(ph.until)).trim();
+    var fine = until ? wrap('Your private link works until ' + until + '.', 'regular', fs(small), tw) : [];
+    var th = lineH(ls) + px(3) + body.length * lineH(size, LH) + (fine.length ? px(4) + fine.length * lineH(small) : 0);
+    var h = Math.max(q, th) + 2 * pad;
+    doc.y += px(8);
+    if (!doc.fits(h) && doc.y > MT + 0.5) doc.newPage();
+    var top = doc.y, k = q / m.length;
+    doc.rect(ML, top, CW, h, { r: px(3), fill: C.WHITE, stroke: C.BLUE, lw: px(1) });
+    doc.add({ t: 'path', segs: qrSegs(m, ML + pad, top + pad, k), fill: C.BLACK });
+    var y = top + pad + Math.max(0, (q - th) / 2);   // the words centred beside the code
+    doc.text(EX_PHONE_TITLE, tx, baseline(y, ls), { style: 'bold', size: fs(ls), color: C.BLUEINK });
+    y += lineH(ls) + px(3);
+    body.forEach(function (l) { doc.text(l, tx, baseline(y, size, LH), { style: 'regular', size: fs(size), color: C.INK }); y += lineH(size, LH); });
+    if (fine.length) {
+      y += px(4);
+      fine.forEach(function (l) { doc.text(l, tx, baseline(y, small), { style: 'regular', size: fs(small), color: C.MUTE }); y += lineH(small); });
+    }
+    doc.link(ML, top, CW, h, url);
+    doc.y = top + h;
+  }
   // the notes box (v32: Why this plan, then the general instructions, each with its label; until v31 the instructions alone): a
   // tinted box with a blue edge that keeps line breaks and splits across pages if it has to (like the interpretation box); a
   // label never ends a page's part of the box
@@ -1557,6 +1588,7 @@
     if (review) cover.push(['Next review', review]);
     if (cover.length) meta(doc, cover, 10 * k, !!title);
     exNotes(doc, [['Why this plan', exText(d.reason)], ['General instructions', exText(d.instructions)]]);
+    if (d.phone) exPhone(doc, d.phone);              // v35
     var groups = (d.groups || []).map(function (g) {
       return {
         heading: clean(exText(g.heading)).trim(),
@@ -1729,5 +1761,6 @@
     });
   }
 
-  return { screening: screening, rehab: rehab, strength: strength, exercises: exercises, toPdf: toPdf, toSvg: toSvg, fontFaces: fontFaces, _width: width, _wrap: wrap };
+  return { screening: screening, rehab: rehab, strength: strength, exercises: exercises, toPdf: toPdf, toSvg: toSvg, fontFaces: fontFaces, _width: width, _wrap: wrap,
+    qr: qrMatrix };                                  // v35: the phone link's code, for the app's Show code
 });

@@ -691,6 +691,23 @@ html:not(.home-on) .home, html.signed-out .home { display: none !important; }
 .sheet-ex p svg { flex: none; margin-top: 1px; color: var(--teal-ink); }
 .sheet-ex b { font-weight: 700; }
 .sheet-ex button { flex: none; min-height: 44px; background: var(--surface); }
+/* v35: the program on the client's phone (a handout in the report view) */
+.sheet-phone { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 16px; max-width: 860px; margin: 0 auto 18px; padding: 12px 12px 12px 16px;
+  border: 1px solid color-mix(in srgb, var(--teal) 30%, var(--line)); border-radius: 12px; background: color-mix(in srgb, var(--teal) 7%, var(--surface)); }
+.sheet-phone p { flex: 1 1 300px; display: flex; align-items: flex-start; gap: 10px; margin: 0; font-size: 15px; line-height: 1.4; color: var(--fg); }
+.sheet-phone p svg { flex: none; margin-top: 1px; color: var(--teal-ink); }
+.sheet-phone b { font-weight: 700; }
+.sheet-phone .sp-state { display: block; color: var(--muted); font-size: 14px; }
+.sheet-phone.bad .sp-state { color: var(--red-ink); font-weight: 600; }
+.sp-acts { display: flex; flex-wrap: wrap; gap: 8px; }
+.sp-acts button { flex: none; min-height: 44px; }
+.sp-acts .ghost { background: var(--surface); }
+.sp-acts .sp-stop { color: var(--red-ink); }
+.phone-card { max-width: 420px; text-align: center; }
+.phone-card p { text-align: center; }
+.phone-qr { width: min(280px, 70vw); margin: 16px auto 10px; }
+.phone-qr svg { display: block; width: 100%; height: auto; border-radius: 8px; box-shadow: 0 0 0 1px var(--line); }
+.ex-phone-fine { margin: -4px 0 0 30px; }
 
 .toast {
   position: fixed; left: 50%; bottom: calc(24px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%);
@@ -1477,6 +1494,8 @@ html.row-dragging, html.row-dragging * { cursor: grabbing !important; user-selec
         <span><b id="sheetExQ">Exercises for this patient?</b> Add a program and it prints after this report, in the same PDF.</span></p>
       <button class="ghost" id="sheetExBtn" type="button">Add exercise program</button>
     </div>
+    <!-- v35: the program on the client's phone: the link's state, Show the code, Share link, Copy link, Stop sharing (or the offer) -->
+    <div class="sheet-phone" id="sheetPhone" hidden></div>
     <div class="pages" id="pages"></div>
   </div>
 </div>
@@ -1789,15 +1808,26 @@ html.row-dragging, html.row-dragging * { cursor: grabbing !important; user-selec
   </div>
 </div>
 
+<!-- v35: the phone link's code, large, for the client to scan from the iPad -->
+<div class="modal" id="phoneDialog" role="dialog" aria-modal="true" aria-labelledby="phoneQrTitle" aria-describedby="phoneQrText" hidden>
+  <div class="modal-card phone-card">
+    <h2 id="phoneQrTitle">Your program on your phone</h2>
+    <p id="phoneQrText">Open your phone’s camera, point it at the code and tap the link. Then add the page to your home screen.</p>
+    <div class="phone-qr" id="phoneQr"></div>
+    <p class="modal-fine" id="phoneQrFine"></p>
+    <div class="modal-actions"><button class="primary" id="phoneQrDone" type="button">Done</button></div>
+  </div>
+</div>
+
 <div class="toast" id="toast" role="status" hidden></div>
 
-<script src="engine.js?v=34" defer></script>
-<script src="report-fonts.js?v=34" defer></script>
-<script src="jspdf.umd.min.js?v=34" defer></script>
-<script src="qrcode.js?v=34" defer></script>
-<script src="report.js?v=34" defer></script>
-<script src="cloud-config.js?v=34" defer></script>
-<script src="cloud.js?v=34" defer></script>
-<script src="app.js?v=34" defer></script>
+<script src="engine.js?v=35" defer></script>
+<script src="report-fonts.js?v=35" defer></script>
+<script src="jspdf.umd.min.js?v=35" defer></script>
+<script src="qrcode.js?v=35" defer></script>
+<script src="report.js?v=35" defer></script>
+<script src="cloud-config.js?v=35" defer></script>
+<script src="cloud.js?v=35" defer></script>
+<script src="app.js?v=35" defer></script>
 </body>
 </html>

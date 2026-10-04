@@ -1862,7 +1862,7 @@
     if (!r || !h) return null;
     var parts = r.rep.title.split(' — '), base = parts.shift(), who = parts.join(' — ');
     return {
-      file: r.file.replace(/\.pdf$/i, '') + '_and_exercises.pdf', program: h.program, both: rt,
+      file: r.file.replace(/\.pdf$/i, '') + '_and_exercises.pdf', program: h.program, both: rt, share: h.share,   // v35: + the phone link
       rep: { pages: r.rep.pages.concat(h.rep.pages), title: base + ' + Exercise Program' + (who ? ' — ' + who : '') }
     };
   }
@@ -1880,10 +1880,12 @@
   }
   // v34: a handout with the library's photos loads them first (a few seconds at most; one that can't be had prints without)
   var photoWait = false;
-  function openReport() {
+  // opts (v35): quiet (made again from the report view: no "Saved" message), focus (the id of what takes focus after)
+  function openReport(opts) {
+    opts = opts && typeof opts === 'object' && !opts.target ? opts : {};   // (a click event is no options)
     var lt0 = linkedTool(), withEx = state.tool === 'ex' || (lt0 && lt0 === state.tool && exCounts().exercises > 0);
     var urls = withEx ? handoutPhotoUrls().filter(function (u) { return !photoData[u]; }) : [];
-    if (!urls.length) { openReportNow(); return; }
+    if (!urls.length) { openReportNow(opts); return; }
     if (photoWait) return;
     photoWait = true;
     var slow = setTimeout(function () { toast('Loading the exercise photos…'); }, 600);
@@ -1891,10 +1893,11 @@
       clearTimeout(slow);
       photoWait = false;
       if (!els.toast.hidden && els.toast.textContent === 'Loading the exercise photos…') els.toast.hidden = true;
-      openReportNow();
+      openReportNow(opts);
     });
   }
-  function openReportNow() {
+  function openReportNow(opts) {
+    opts = opts || {};
     var ex = state.tool === 'ex', t = state.tool, lt = linkedTool();
     // v19: a report with its linked program (made from either side) is one PDF, the report's pages first
     var both = lt && (ex || lt === t) && exCounts().exercises > 0 ? lt : '';
@@ -1902,11 +1905,19 @@
     if (!built) return;
     // v15: the exercise handout is saved to the client's record too (the program as printed)
     var saved = both ? saveBoth(both, built.program) : ex ? saveProgram(built.program) : saveSession(state.tool, compute());
+    // v35: the program to the client's phone (the same link as before for this client), once it is in their record
+    var sh = (both || ex) && built.share, phone = null;
+    if (sh && CLOUD && CLOUD.share(sh.token, sh.copy, sh.expires)) {
+      state.ex.share = { token: sh.token, key: sh.key, expires: sh.expires };
+      saveDraft();
+      CLOUD.sync();                                    // (after the record's upload, if that is under way)
+      phone = { token: sh.token, url: sh.url, day: sh.day, first: sh.first, key: sh.key };
+    }
     if (saved) {
       if (!saved.ok) toast('The session couldn’t be saved to the client record (storage is full or blocked).');
       else {
         if (!both) markSaved(t);                       // v16: what is in the record now (Return home compares with it)
-        toast(both ? (saved.replaced ? 'Updated ' + saved.name + '’s record for this date' : 'Saved the report and the program to ' + saved.name + '’s record')
+        if (!opts.quiet) toast(both ? (saved.replaced ? 'Updated ' + saved.name + '’s record for this date' : 'Saved the report and the program to ' + saved.name + '’s record')
           : saved.replaced ? 'Updated ' + saved.name + '’s record for this date' : 'Saved to ' + saved.name + '’s record (' + saved.count + (saved.count === 1 ? ' session)' : ' sessions)'));
       }
       refresh();
@@ -1919,7 +1930,8 @@
     els.sheetEx.hidden = !offer;
     els.sheetEx.dataset.tool = offer;
     if (offer) $('sheetExQ').textContent = 'Exercises for this ' + person(offer) + '?';   // athlete on the Performance screen (v9 wording)
-    current = { file: null, blob: null, title: built.rep.title };
+    current = { file: null, blob: null, title: built.rep.title, ex: !!(both || ex), phone: phone };   // v35: + the program's phone link
+    renderPhoneCard();
     els.sheetTitle.innerHTML = esc(built.rep.title) + '<small>' + esc(built.file) + '</small>';
     els.pages.innerHTML = '<p class="sheet-msg">Building the report…</p>';
     els.share.disabled = true; els.save.disabled = true; els.home.disabled = true;
@@ -1942,7 +1954,8 @@
       els.save.hidden = share && IS_IOS;
       els.save.className = share ? 'ghost' : 'primary';
       els.share.disabled = false; els.save.disabled = false; els.home.disabled = false;
-      (share ? els.share : els.save).focus();
+      var f = opts.focus && $(opts.focus);             // v35: made again from the phone card: focus stays there
+      (f || (share ? els.share : els.save)).focus();
     }).catch(function (err) {
       if (gen !== reportGen) return;
       els.pages.innerHTML = '<p class="sheet-msg">The PDF couldn’t be built: ' + esc(err && err.message) + '</p>';
@@ -2010,7 +2023,7 @@
         else if (exFilled(it)) rows.push(['e', it.lib || ''].concat(EX_FIELDS.map(function (f) { return clean1(it[f]); })));
       });
       return JSON.stringify([sortedPairs(x.meta), clean1(x.title), String(x.instructions || '').trim(), rows, String(x.rationale || '').trim(),   // v25: + rationale
-        String(x.reason || '').trim(), x.weeks || '', x.review || '', !!x.large].concat(x.photos === false ? ['no photos'] : []));   // v32: + the cover and large print; v34: photos switched off
+        String(x.reason || '').trim(), x.weeks || '', x.review || '', !!x.large].concat(x.photos === false ? ['no photos'] : [], phoneOn() ? ['phone'] : []));   // v32: + the cover and large print; v34: photos switched off; v35: on their phone
     }
     var s = state[t], vals = compactValues(t);
     return JSON.stringify([sortedPairs(s.meta), Object.keys(vals).sort().map(function (k) { return [k, sortedPairs(vals[k])]; }),
@@ -3479,7 +3492,7 @@
   // the client printed on the handout (Suggest drafts one); weeks = the block length and review = the next review date (ISO),
   // printed under the title; reviewAuto = the review date is worked out from the date and the block length (until changed by
   // hand); large = the handout in large print
-  function freshEx() { return { meta: { name: '', date: todayIso(), practitioner: userName() }, title: '', instructions: '', rationale: '', reason: '', weeks: '', review: '', reviewAuto: false, large: false, photos: true, items: [], seq: 1, scanned: {}, cardOpen: true, link: '', plan: freshPlan(), ask: freshAsk() }; }   // v33: ask; v34: photos (on the handout)
+  function freshEx() { return { meta: { name: '', date: todayIso(), practitioner: userName() }, title: '', instructions: '', rationale: '', reason: '', weeks: '', review: '', reviewAuto: false, large: false, photos: true, phone: null, share: null, items: [], seq: 1, scanned: {}, cardOpen: true, link: '', plan: freshPlan(), ask: freshAsk() }; }   // v33: ask; v34: photos (on the handout); v35: phone, share
   // v23: what Suggest from the report asks before it suggests (the person and the setting); kept with the program and saved with it.
   // v24: plus a condition (an id from guides/index.json, 'none' for none) and its stage, which pick the evidence guides sent.
   // v25: plus the condition's side (Left, Right or Both; '' while not chosen), so Claude can tell which findings the condition explains
@@ -3614,6 +3627,9 @@
     x.reviewAuto = x.reviewAuto === true && !blank(x.review);
     x.large = x.large === true;
     x.photos = x.photos !== false;                     // v34: the library's photos on the handout (on unless switched off)
+    x.phone = x.phone === true || x.phone === false ? x.phone : null;   // v35: on their phone (null: as their last program)
+    var sh = x.share;                                  // v35: the link last sent from this page
+    x.share = sh && typeof sh === 'object' && TOKEN_RE.test(sh.token) && typeof sh.key === 'string' ? { token: sh.token, key: sh.key, expires: typeof sh.expires === 'string' ? sh.expires : '' } : null;
     x.ask = tidyAsk(x.ask);                            // v33: the photo form's answers (drafts before v33 have none)
     var seen = {}, top = 0, list = [];
     (Array.isArray(x.items) ? x.items : []).forEach(function (it) {
@@ -3997,6 +4013,17 @@
     backToReport();
     gotoMetric(key);
   }
+  // v35: the handout panel's "On their phone" (signed in to the clinic store only), with until when the link will work
+  function exPhoneFine() {                              // the line under it: what it does, and until when
+    var on = phoneOn(), l = on && state.ex.phone !== true ? clientLink(exKey()) : null;
+    return on ? (l ? 'Updates the link they have. ' : 'A private link and its code on the handout. ') + 'Works until ' + E.displayIso(phoneEnds().day) + '.'
+      : 'A private link to the program, and its code on the handout.';
+  }
+  function exPhoneHtml() {
+    if (!phoneReady()) return '';
+    return '<label class="ex-large" for="exPhone"><input type="checkbox" id="exPhone"' + (phoneOn() ? ' checked' : '') + ' aria-describedby="exPhoneFine"><span>On their phone</span></label>' +
+      '<p class="fine ex-phone-fine" id="exPhoneFine">' + esc(exPhoneFine()) + '</p>';
+  }
   function renderExSummary(c) {
     var why = c.exercises ? '' : 'Add at least one exercise to create the handout.';
     // v19: linked to a report: one PDF with both, so the report has to be ready too (else its reason shows)
@@ -4024,6 +4051,7 @@
       '<label class="ex-large" for="exLarge"><input type="checkbox" id="exLarge"' + (state.ex.large ? ' checked' : '') + '><span>Large print</span></label>' +
       // v34: the library's photos beside the exercises (only when some have one)
       (pics ? '<label class="ex-large" for="exPhotos"><input type="checkbox" id="exPhotos"' + (state.ex.photos !== false ? ' checked' : '') + '><span>Exercise photos</span></label>' : '') +
+      exPhoneHtml() +                                  // v35: on their phone
       exFindSideHtml() +
       '</div><div class="sum-foot">' + linkHtml + '<button type="button" class="primary make" data-action="report"' + (why ? ' disabled' : '') + '>' + make + '</button>' +
       (why ? '<p class="fine">' + esc(why) + '</p>' : '') +
@@ -4361,18 +4389,23 @@
   function buildHandout() {
     var x = state.ex;
     if (!exCounts().exercises) return null;
-    var groups = [], cur = null, items = [];
+    var phone = phoneOn() && phoneReady();             // v35: the copy for the client's phone goes with it
+    var groups = [], cur = null, items = [], pgroups = [], pcur = null;
     x.items.forEach(function (it) {
       if (it.kind === 'section') {
-        if (!blank(it.heading)) { cur = { heading: clean1(it.heading), rows: [] }; groups.push(cur); items.push({ kind: 'section', heading: cur.heading }); }
+        if (!blank(it.heading)) {
+          cur = { heading: clean1(it.heading), rows: [] }; groups.push(cur); items.push({ kind: 'section', heading: cur.heading });
+          pcur = { heading: cur.heading, rows: [] }; pgroups.push(pcur);
+        }
         return;
       }
       if (!exFilled(it)) return;
-      if (!cur) { cur = { heading: '', rows: [] }; groups.push(cur); }
+      if (!cur) { cur = { heading: '', rows: [] }; groups.push(cur); pcur = { heading: '', rows: [] }; pgroups.push(pcur); }
       var r = {}, keep = { kind: 'ex' }, e = exLinked(it), vi = e && E.videoInfo(e.video);
       EX_FIELDS.forEach(function (f) { r[f] = clean1(it[f]); keep[f] = r[f]; });
       keep.lib = it.lib || '';
       if (e && e.cues.length) { r.cues = e.cues.slice(); keep.cues = e.cues.slice(); }
+      if (phone) pcur.rows.push(phoneRow(r, e, vi));   // (before the photo: the phone has the picture's address)
       if (vi) { r.video = vi.link; keep.video = vi.link; }
       else if (e && e.clip) { r.video = e.clip.url; keep.video = e.clip.url; }   // v34: an uploaded video's code
       var pic = x.photos !== false ? thumbOf(e) : '';   // v34: its photo (or a frame of its video), when loaded
@@ -4382,16 +4415,27 @@
     });
     var m = x.meta, name = clean1(m.name), title = clean1(x.title), instructions = String(x.instructions || '').trim();
     var reason = String(x.reason || '').trim().slice(0, EX_LEN.reason), weeks = exWeeks(x.weeks), review = exIsoDate(x.review);   // v32: the cover
+    var share = null;
+    if (phone) {                                       // v35: the link, until when, and the program as the phone shows it
+      var token = phoneToken(), ends = phoneEnds();
+      share = { token: token, key: exKey(), expires: ends.iso, day: ends.day, url: phoneUrl(token), first: firstName(name),
+        copy: { v: 1, first: firstName(name), clinician: clean1(m.practitioner), date: exIsoDate(m.date), title: title, reason: reason, instructions: instructions,
+          weeks: weeks, review: review, groups: pgroups.filter(function (g) { return g.rows.length; }) } };
+    }
+    var program = { title: title, instructions: instructions, items: items, plan: tidyPlan(x.plan), rationale: String(x.rationale || '').trim().slice(0, EX_LEN.rationale),   // v23: the plan goes with the saved program; v25: the rationale too
+      reason: reason, weeks: weeks, review: review, large: !!x.large, photos: x.photos !== false };   // v32: and the cover, as printed; v34: photos
+    if (share) program.share = { token: share.token, expires: share.expires };   // v35: the client's link
     return {
       file: name ? name.replace(/[\\/:*?"<>|]+/g, '-').replace(/ /g, '_') + '_exercises.pdf' : 'exercises.pdf',
       rep: window.BHReport.exercises({
         meta: { name: name, date: E.displayIso(m.date), practitioner: clean1(m.practitioner) },
         title: title, instructions: instructions,
         reason: reason, weeks: weeks, review: review ? E.displayIso(review) : '', large: !!x.large,   // v32
+        phone: share ? { url: share.url, until: E.displayIso(share.day) } : null,   // v35
         groups: groups.filter(function (g) { return g.rows.length; })
       }),
-      program: { title: title, instructions: instructions, items: items, plan: tidyPlan(x.plan), rationale: String(x.rationale || '').trim().slice(0, EX_LEN.rationale),   // v23: the plan goes with the saved program; v25: the rationale too
-        reason: reason, weeks: weeks, review: review, large: !!x.large, photos: x.photos !== false }   // v32: and the cover, as printed; v34: photos
+      program: program,
+      share: share
     };
   }
 
@@ -5629,7 +5673,7 @@
     var m = libEdit.media, it = m[kind], busy = m.busy[kind], photo = kind === 'photo', why = mediaWhyNot();
     var label = photo ? 'Photo' : 'Video', pic = it && it.turl;
     var sub = busy ? (busy.prep ? 'Preparing…' : 'Uploading ' + Math.round(busy.pct * 100) + '%…')
-      : it ? (photo ? 'Printed on the handout' : [clipLen(it.secs), sizeText(it.bytes)].filter(Boolean).join(' · ') || 'Uploaded')
+      : it ? (photo ? 'On the handout and the client’s phone' : [clipLen(it.secs), sizeText(it.bytes)].filter(Boolean).join(' · ') || 'Uploaded')
       : photo ? 'Shown in the app and printed on the handout' : 'Up to ' + CLIP_MAX_SECS + ' seconds, landscape';
     var acts = '';
     if (busy) acts = '<button type="button" class="quiet" data-media="' + kind + '-stop">Stop</button>';
@@ -5839,6 +5883,181 @@
       if (u && out.indexOf(u) < 0) out.push(u);
     });
     return out;
+  }
+
+  // ------------------------------------------------------------------ v35: the client's program on their phone
+  // Matthew (4 Oct): "The exercises prescribed would also be even better if it showed up on an app the patient COULD
+  // download or use via HTML like we are now". His choices: a private link and QR code; the phone page shows the program
+  // (no ticks yet); the link works until four weeks after the next review (twelve weeks after the program's date without
+  // one), can be stopped at any time, and a new handout updates the same link. "On their phone" in the handout panel makes
+  // Create handout save a copy of the program (the first name only: no surname, date of birth or results) to the clinic
+  // store under a random token (shared/<token>, cloud.js) and print its code on the handout; the report view then offers
+  // Show the code, Share link, Copy link and Stop sharing. A client keeps one link: a later program for them updates it (the
+  // page on their home screen shows the newest) until it is stopped. x.phone: true / false as ticked, null = as their last
+  // program (on while they have a link that works); x.share: { token, key (the client it was made for), expires }: the
+  // link last sent from this page. The saved program keeps share: { token, expires } (stopped: true once stopped).
+  var PHONE_PAGE = (function () { try { return new URL('../my-program/', location.href).href.replace(/[?#].*$/, ''); } catch (e) { return ''; } })();
+  var TOKEN_RE = /^[A-Za-z0-9]{20,64}$/;
+  function newToken() {                                // 24 characters from 62: about 143 random bits
+    var abc = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789', out = '';
+    while (out.length < 24) {
+      var a = new Uint8Array(32);
+      crypto.getRandomValues(a);
+      for (var i = 0; i < a.length && out.length < 24; i++) if (a[i] < 248) out += abc.charAt(a[i] % 62);   // 248 = 4 × 62: no bias
+    }
+    return out;
+  }
+  function phoneReady() {                              // signed in to the clinic store, on a device that can make a token
+    return !!(CLOUD && CLOUD.signedIn() && CLOUD.share && PHONE_PAGE && window.crypto && crypto.getRandomValues);
+  }
+  function phoneUrl(token) { return PHONE_PAGE + '#' + token; }
+  function exKey() { return E.nameKey(clean1(state.ex.meta.name)) || ''; }
+  // the client's link in their saved programs (the newest program that has one): { token, expires, stopped, date } or null
+  function clientLink(key) {
+    var cl = key ? clients.clients[key] : null, progs = exPrograms(cl);
+    for (var i = progs.length - 1; i >= 0; i--) {
+      var sh = progs[i].program.share;
+      if (sh && typeof sh === 'object' && TOKEN_RE.test(sh.token)) return { token: sh.token, expires: String(sh.expires || ''), stopped: sh.stopped === true, date: progs[i].date };
+    }
+    return null;
+  }
+  function linkLive(l) { var t = l ? Date.parse(l.expires) : NaN; return !!l && !l.stopped && isFinite(t) && t > Date.now(); }
+  function phoneOn() {
+    var x = state.ex;
+    return x.phone === true || (x.phone !== false && linkLive(clientLink(exKey())));
+  }
+  // the program's token: the link sent from this page for this client, else the client's own (unless stopped), else new
+  function phoneToken() {
+    var x = state.ex, key = exKey(), l;
+    if (x.share && x.share.key === key && TOKEN_RE.test(x.share.token)) return x.share.token;
+    l = clientLink(key);
+    return l && !l.stopped ? l.token : newToken();
+  }
+  // until when: the end of the day four weeks after the next review (Queensland time: UTC+10 all year), else twelve weeks
+  // after the program's date, and never less than four weeks from today. { day (ISO), iso (the moment) }
+  function phoneEnds() {
+    var x = state.ex, rv = exIsoDate(x.review), day = rv ? addDaysIso(rv, 28) : addDaysIso(exIsoDate(x.meta.date) || todayIso(), 84);
+    var least = addDaysIso(todayIso(), 28);
+    if (!day || day < least) day = least;
+    return { day: day, iso: new Date(Date.parse(day + 'T23:59:59+10:00')).toISOString() };
+  }
+  function firstName(n) { return clean1(n).split(' ')[0].slice(0, 40); }
+  // one exercise as the phone page shows it: the handout's words, and the library exercise's photo, video and link
+  function phoneRow(r, e, vi) {
+    var o = {};
+    EX_FIELDS.forEach(function (f) { if (r[f]) o[f] = r[f]; });
+    if (r.cues) o.cues = r.cues.slice(0, 3);
+    if (e && e.photo) o.photo = { url: e.photo.url, turl: e.photo.turl || '' };
+    if (e && e.clip) o.clip = { url: e.clip.url, turl: e.clip.turl || '', secs: e.clip.secs || 0 };
+    if (vi && /^https?:\/\//i.test(vi.link)) o.link = vi.link;
+    return o;
+  }
+  // the link's last write and what the report view says about it
+  function phoneState(token) { return CLOUD && CLOUD.shareState ? CLOUD.shareState(token) : 'sent'; }
+  // the client's saved programs with this link marked as stopped (or, for Undo, not); each one changed is uploaded again
+  function markShareStopped(key, token, stopped) {
+    var cl = key ? clients.clients[key] : null, changed = [];
+    exPrograms(cl).forEach(function (sess) {
+      var sh = sess.program.share;
+      if (!sh || sh.token !== token || (sh.stopped === true) === stopped) return;
+      if (stopped) sh.stopped = true; else delete sh.stopped;
+      changed.push(sess);
+    });
+    if (!changed.length) return;
+    saveClients();
+    if (CLOUD) { changed.forEach(function (sess) { CLOUD.putSession(key, cl.name, sess); }); CLOUD.sync(); }
+  }
+  // the report view's card (#sheetPhone) for a handout: the link's state and what can be done with it, or the offer to send
+  // it. current.phone: { token, url, day, first, key } when the handout on screen has the link's code
+  function renderPhoneCard() {
+    var card = $('sheetPhone');
+    if (!card) return;
+    var ph = current && current.phone, show = !!(current && current.ex) && phoneReady();
+    card.hidden = !show;
+    if (!show) { card.innerHTML = ''; return; }
+    var who = ph ? ph.first : firstName(state.ex.meta.name), whose = who ? who + '’s' : 'their';
+    var keep = document.activeElement && card.contains(document.activeElement) ? document.activeElement.id : '';
+    if (!ph) {
+      card.className = 'sheet-phone';
+      card.innerHTML = '<p>' + PHONE_ICON + '<span><b>Send this program to ' + esc(whose) + ' phone?</b> A private link that works until ' + esc(E.displayIso(phoneEnds().day)) +
+        ', with its code on the handout.</span></p><div class="sp-acts"><button type="button" class="ghost" id="phoneSend">Send to their phone</button></div>';
+    } else {
+      var st = phoneState(ph.token), offline = navigator.onLine === false;
+      var line = st === 'denied' ? 'The clinic store refused the link: its rules need a line for shared programs (see the notes).'
+        : st === 'waiting' ? (offline ? 'Waiting for a connection: the link starts working once this iPad is online.' : 'Sending the link…')
+          : 'The link works until ' + E.displayIso(ph.day) + '. Show ' + (who || 'them') + ' the code to scan, or send the link.';
+      card.className = 'sheet-phone on' + (st === 'denied' ? ' bad' : '');
+      card.innerHTML = '<p>' + PHONE_ICON + '<span><b>On ' + esc(whose) + ' phone</b> <span class="sp-state" role="status">' + esc(line) + '</span></span></p>' +
+        '<div class="sp-acts"><button type="button" class="ghost" id="phoneCode">Show the code</button>' +
+        (navigator.share ? '<button type="button" class="ghost" id="phoneShare">Share link</button>' : '') +
+        '<button type="button" class="ghost" id="phoneCopy">Copy link</button>' +
+        '<button type="button" class="quiet sp-stop" id="phoneStop">Stop sharing</button></div>';
+    }
+    if (keep && $(keep)) focusQuiet($(keep));
+  }
+  var PHONE_ICON = '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6.5" y="2.5" width="11" height="19" rx="2.5"/><path d="M10.5 18.5h3"/></svg>';
+  // the handout again, from the report view, after the link was sent or stopped (quietly: no "Saved" message)
+  function rebuildHandout(focusId) {
+    if (els.sheet.hidden) return;
+    openReport({ quiet: true, focus: focusId });
+  }
+  function phoneSendNow() {                            // Send to their phone (the report view): the handout again, with the code
+    if (!phoneReady()) return;
+    state.ex.phone = true;
+    saveDraft();
+    rebuildHandout('phoneCode');
+  }
+  function phoneStop() {
+    var ph = current && current.phone, x = state.ex;
+    if (!ph || !CLOUD) return;
+    var was = { share: x.share, phone: x.phone };
+    CLOUD.unshare(ph.token);
+    markShareStopped(ph.key, ph.token, true);
+    x.share = null; x.phone = false;
+    saveDraft();
+    CLOUD.sync();
+    rebuildHandout('phoneSend');
+    toast('Stopped sharing: the link no longer opens the program', { label: 'Undo', run: function () {
+      if (state.ex !== x) return;
+      markShareStopped(ph.key, ph.token, false);
+      x.share = was.share || { token: ph.token, key: ph.key, expires: '' };
+      x.phone = true;
+      saveDraft();
+      rebuildHandout('phoneCode');                     // sends the program to the same link again
+    } });
+  }
+  function phoneCopyLink() {
+    var ph = current && current.phone;
+    if (!ph) return;
+    var done = function () { toast('Link copied'); };
+    try {
+      navigator.clipboard.writeText(ph.url).then(done, function () { toast('Couldn’t copy here: use Share link or Show the code'); });
+    } catch (e) { toast('Couldn’t copy here: use Share link or Show the code'); }
+  }
+  function phoneShareLink() {
+    var ph = current && current.phone;
+    if (!ph || !navigator.share) return;
+    navigator.share({ title: 'Your exercise program', text: 'Your exercise program from BASE Health Noosa' + (ph.day ? ' (works until ' + E.displayIso(ph.day) + ')' : '') + ':', url: ph.url })
+      .catch(function (err) { if (err && err.name !== 'AbortError') phoneCopyLink(); });
+  }
+  // the link's code, large, for the client to scan from the iPad
+  function openPhoneCode() {
+    var ph = current && current.phone, m = ph && window.BHReport && window.BHReport.qr ? window.BHReport.qr(ph.url) : null;
+    if (!m) { toast('The code couldn’t be drawn: use Share link instead'); return; }
+    var n = m.length, q = 4, d = '';
+    m.forEach(function (row, r) {
+      var c = 0;
+      while (c < n) {
+        if (!row[c]) { c++; continue; }
+        var s0 = c;
+        while (c < n && row[c]) c++;
+        d += 'M' + (s0 + q) + ' ' + (r + q) + 'h' + (c - s0) + 'v1h-' + (c - s0) + 'z';
+      }
+    });
+    $('phoneQr').innerHTML = '<svg viewBox="0 0 ' + (n + 2 * q) + ' ' + (n + 2 * q) + '" role="img" aria-label="Code for the link to the program" shape-rendering="crispEdges">' +
+      '<rect width="100%" height="100%" fill="#fff"/><path d="' + d + '" fill="#000"/></svg>';
+    $('phoneQrFine').textContent = (ph.first ? 'Private to ' + ph.first + ' · ' : 'Private link · ') + 'works until ' + E.displayIso(ph.day);
+    openModal($('phoneDialog'), $('phoneQrDone'));
   }
 
   // ------------------------------------------------------------------ program templates (v15)
@@ -6308,6 +6527,7 @@
     x.rationale = exTidy(exStr(p.rationale), 'rationale');   // v25
     // v32: Why this plan and the block length come back; the next review is worked out again from today's date
     x.reason = exTidy(exStr(p.reason), 'reason'); x.weeks = exWeeks(p.weeks); x.large = p.large === true; x.photos = p.photos !== false;   // v34: photos
+    x.phone = null; x.share = null;                    // v35: on their phone while they have a link that works
     x.review = ''; x.reviewAuto = false; autoReview();
     x.items = progItems(p.items).map(function (it) { return it.kind === 'section' ? newExSection(it.heading) : newExRow(it); });
     if (p.plan) x.plan = tidyPlan(p.plan);             // v23: the client's last plan (sessions a week, setting, experience, block)
@@ -6843,6 +7063,7 @@
       refresh();
     } else if (evt.kind === 'status') {
       renderCloudBar();
+      if (!els.sheet.hidden) renderPhoneCard();        // v35: the link's state (sending, waiting, refused, working)
     } else if (evt.kind === 'uploaded') {
       renderCloudBar();
       toast('Uploaded ' + evt.n + (evt.n === 1 ? ' waiting result' : ' waiting results'));
@@ -6938,6 +7159,11 @@
       els.summary.addEventListener('change', function (e) {   // v32: Large print (the handout panel); v34: Exercise photos
         if (e.target.id === 'exLarge') state.ex.large = e.target.checked;
         else if (e.target.id === 'exPhotos') state.ex.photos = e.target.checked;
+        else if (e.target.id === 'exPhone') {          // v35: and the line under it
+          state.ex.phone = e.target.checked;
+          var pf = $('exPhoneFine');
+          if (pf) pf.textContent = exPhoneFine();
+        }
         else return;
         saveDraft();
         keepAwake();
@@ -7028,6 +7254,17 @@
       wireExDialogs();                                 // v15: the library editor, + From library, the video player, templates
       els.back.addEventListener('click', closeReport);
       els.sheetExBtn.addEventListener('click', addProgramFromReport);   // v20
+      $('sheetPhone').addEventListener('click', function (e) {          // v35: the program on the client's phone
+        var b = e.target.closest('button');
+        if (!b) return;
+        if (b.id === 'phoneSend') phoneSendNow();
+        else if (b.id === 'phoneCode') openPhoneCode();
+        else if (b.id === 'phoneShare') phoneShareLink();
+        else if (b.id === 'phoneCopy') phoneCopyLink();
+        else if (b.id === 'phoneStop') phoneStop();
+      });
+      $('phoneQrDone').addEventListener('click', function () { closeModal(); });
+      $('phoneDialog').addEventListener('click', function (e) { if (e.target === $('phoneDialog')) closeModal(); });
       els.suggestPlan.addEventListener('click', onPlanClick);            // v23: the Suggest from the report dialog
       els.suggestPlan.addEventListener('change', onPlanChange);          // v24: its condition menu; v27: the notes box
       els.suggestPlan.addEventListener('input', onPlanInput);            // v27: the notes for Claude

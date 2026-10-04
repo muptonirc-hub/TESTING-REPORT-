@@ -5,9 +5,10 @@
    Google's endpoints (the clinic store, v13) and the exercise videos (YouTube, Vimeo, v15) are on other origins, so they are
    never cached or intercepted here. v24 adds the evidence guide library (guides/); v25 two more guides; v26 a third.
    v34: the library's photos and videos live in Cloud Storage (another origin, so not intercepted either); the app keeps
-   the small pictures the handout prints in a cache of its own (bh-media-v1), which an update leaves alone. */
-var CACHE = 'bh-athlete-report-v34';
-var FILES = ['./', 'index.html', 'app.js?v=34', 'engine.js?v=34', 'qrcode.js?v=34', 'report.js?v=34', 'report-fonts.js?v=34', 'jspdf.umd.min.js?v=34', 'cloud-config.js?v=34', 'cloud.js?v=34',
+   the small pictures the handout prints in a cache of its own (bh-media-v1), which an update leaves alone.
+   v35: the client's phone page (../my-program/) is a separate little app with its own offline copy; nothing here. */
+var CACHE = 'bh-athlete-report-v35';
+var FILES = ['./', 'index.html', 'app.js?v=35', 'engine.js?v=35', 'qrcode.js?v=35', 'report.js?v=35', 'report-fonts.js?v=35', 'jspdf.umd.min.js?v=35', 'cloud-config.js?v=35', 'cloud.js?v=35',
   'norms.json', 'strength_norms.json', 'hamstring_norms.json', 'acl_norms.json', 'interpretation.json', 'explainers.json', 'exercise_library.json', 'programming_guide.md', 'manifest.webmanifest',
   'guides/index.json', 'guides/training-variables.md', 'guides/rehab-principles.md', 'guides/muscle-strains.md', 'guides/acl.md', 'guides/tendinopathy.md', 'guides/ankle-sprain.md',
   'guides/groin-pain.md', 'guides/rotator-cuff.md', 'guides/pfp-oa.md', 'guides/low-back-pain.md', 'guides/performance-tests.md', 'guides/rehab-performance.md', 'guides/block-design.md',
