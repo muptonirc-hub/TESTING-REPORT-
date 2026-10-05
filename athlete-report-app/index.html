@@ -691,6 +691,47 @@ html:not(.home-on) .home, html.signed-out .home { display: none !important; }
 .sheet-ex p svg { flex: none; margin-top: 1px; color: var(--teal-ink); }
 .sheet-ex b { font-weight: 700; }
 .sheet-ex button { flex: none; min-height: 44px; background: var(--surface); }
+/* v36: the Custom battery: the population step, the battery bar, the empty state, Choose tests and Saved batteries */
+.pop-step { max-width: 720px; }
+.pop-step h2 { margin: 0 0 4px; }
+.pop-lead { margin: 0 0 14px; color: var(--muted); font-size: 14.5px; line-height: 1.45; }
+.pop-choices { display: grid; gap: 10px; }
+.pop-choice { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 60px; padding: 10px 12px 10px 16px; text-align: left;
+  border: 1px solid var(--line); border-radius: 12px; background: var(--field); color: var(--fg); }
+.pop-choice:hover { border-color: color-mix(in srgb, var(--teal) 50%, var(--line)); }
+.pop-choice .pc-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.pop-choice b { font-weight: 650; font-size: 15.5px; line-height: 1.3; }
+.pop-choice small { font-size: 12.5px; color: var(--muted); line-height: 1.35; }
+.pop-choice svg { flex: none; width: 20px; height: 20px; color: var(--brand); }
+.bat-bar .bat-saved { min-height: 40px; padding: 8px 14px; font-size: 14.5px; }
+.bat-empty { max-width: 720px; }
+.bat-empty h2 { margin: 0 0 6px; }
+.bat-empty p { margin: 0 0 14px; color: var(--muted); font-size: 14.5px; line-height: 1.5; }
+.bat-empty-acts { display: flex; flex-wrap: wrap; gap: 8px; }
+.bat-empty-acts button { min-height: 44px; }
+.cat-card { max-width: 560px; }
+.cat-card .client-search { margin-top: 10px; }
+.cat-list { max-height: 38vh; }
+.cat-list .cat-group { padding: 8px 14px 4px; font-size: 11.5px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); background: var(--surface); position: sticky; top: 0; }
+.cat-list .cat-none { padding: 14px; color: var(--muted); font-size: 14px; }
+.cat-own { margin-top: 10px; padding: 4px 8px 6px; border: 1px dashed var(--line); border-radius: 12px; }
+.cat-own-head { display: flex; align-items: center; flex-wrap: wrap; gap: 2px 10px; }
+.cat-own-head .quiet { min-height: 40px; font-size: 14.5px; }
+.cat-own-ok { font-size: 13px; color: var(--teal-ink); }
+.cat-own .cat-own-lead { margin: 0 6px 10px; font-size: 12.5px; color: var(--muted); line-height: 1.4; }
+.cat-own-fields { padding: 0 6px; }
+.cat-own .ai-err { margin: 8px 6px 0; }
+.cat-own-fields { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 10px; }
+.cat-own-fields .f.wide { grid-column: 1 / -1; }
+.cat-own-fields .seg button { font-size: 14px; }
+.cat-own .ghost { margin: 10px 6px 6px; min-height: 42px; }
+@media (max-width: 419px) { .cat-own-fields { grid-template-columns: minmax(0, 1fr); } }
+.bat-save { display: flex; align-items: flex-end; gap: 8px; margin-top: 14px; }
+.bat-save .name-field { flex: 1; margin-top: 0; }
+.bat-save .ghost { min-height: 44px; flex: none; }
+.bat-list { margin-top: 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--field); max-height: 44vh; overflow-y: auto; }
+.bat-list .tpl-row { min-height: 60px; }
+#batDialog .client-none { margin-top: 14px; }
 /* v35: the program on the client's phone (a handout in the report view) */
 .sheet-phone { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 16px; max-width: 860px; margin: 0 auto 18px; padding: 12px 12px 12px 16px;
   border: 1px solid color-mix(in srgb, var(--teal) 30%, var(--line)); border-radius: 12px; background: color-mix(in srgb, var(--teal) 7%, var(--surface)); }
@@ -1808,6 +1849,57 @@ html.row-dragging, html.row-dragging * { cursor: grabbing !important; user-selec
   </div>
 </div>
 
+<!-- v36: the Custom battery: Choose tests (the catalogue by device, a search box, and the clinic's own test) -->
+<div class="modal" id="catDialog" role="dialog" aria-modal="true" aria-labelledby="catTitle" aria-describedby="catLead" hidden>
+  <div class="modal-card tests-card cat-card">
+    <h2 id="catTitle">Choose tests</h2>
+    <p id="catLead"></p>
+    <label class="client-search" for="catSearch">
+      <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="10.5" cy="10.5" r="6"/><path d="M15 15l5 5"/></svg>
+      <span class="vh">Search tests</span>
+      <input id="catSearch" type="search" placeholder="Search tests" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" enterkeyhint="search">
+    </label>
+    <div class="tests-links"><button class="quiet" id="catNone" type="button">Untick all</button></div>
+    <ul class="tests-list cat-list" id="catList"></ul>
+    <div class="cat-own" id="catOwn">
+      <div class="cat-own-head"><button type="button" class="quiet" id="ownOpen" aria-expanded="false" aria-controls="catOwnForm">+ Your own test</button><span class="cat-own-ok" id="ownOk" role="status"></span></div>
+      <div id="catOwnForm" hidden>
+      <p class="cat-own-lead">A test that isn’t in the catalogue. It is tracked over time and rated only if you give it a target.</p>
+      <div class="cat-own-fields">
+        <label class="f" for="ownName"><span>Name</span><input id="ownName" type="text" maxlength="80" autocapitalize="sentences" autocomplete="off" placeholder="e.g. Y-balance anterior reach" enterkeyhint="next"></label>
+        <label class="f" for="ownUnit"><span>Unit</span><input id="ownUnit" type="text" maxlength="12" autocapitalize="none" autocomplete="off" placeholder="cm, s, reps…" enterkeyhint="next"></label>
+        <div class="f"><span id="ownDirL">Better</span><div class="seg" role="group" aria-labelledby="ownDirL"><button type="button" data-own-dir="Higher" aria-pressed="true">Higher</button><button type="button" data-own-dir="Lower" aria-pressed="false">Lower</button></div></div>
+        <label class="f" for="ownGreen"><span>Target (optional)</span><input id="ownGreen" type="text" inputmode="decimal" autocomplete="off" placeholder="On target from" enterkeyhint="next"></label>
+        <label class="f" for="ownAmber"><span>Close (optional)</span><input id="ownAmber" type="text" inputmode="decimal" autocomplete="off" placeholder="Close from" enterkeyhint="done"></label>
+      </div>
+      <p class="ai-err" id="ownErr" role="alert" hidden></p>
+      <button class="ghost" id="ownAdd" type="button">Add this test</button>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="ghost" id="catCancel" type="button">Cancel</button>
+      <button class="primary" id="catDone" type="button">Done</button>
+    </div>
+  </div>
+</div>
+
+<!-- v36: Saved batteries: save the page's tests under a name, use or delete a saved one -->
+<div class="modal" id="batDialog" role="dialog" aria-modal="true" aria-labelledby="batTitle" aria-describedby="batLead" hidden>
+  <div class="modal-card clients-card">
+    <h2 id="batTitle">Saved batteries</h2>
+    <p id="batLead"></p>
+    <div class="bat-save" id="batSaveRow">
+      <label class="f name-field" for="batName"><span>Save this battery as</span><input id="batName" type="text" maxlength="80" autocapitalize="sentences" autocomplete="off" placeholder="e.g. Netball pre-season" enterkeyhint="done"></label>
+      <button class="ghost" id="batSaveGo" type="button">Save</button>
+    </div>
+    <p class="ai-err" id="batErr" role="alert" hidden></p>
+    <div id="batList"></div>
+    <div class="modal-actions">
+      <button class="primary" id="batClose" type="button">Close</button>
+    </div>
+  </div>
+</div>
+
 <!-- v35: the phone link's code, large, for the client to scan from the iPad -->
 <div class="modal" id="phoneDialog" role="dialog" aria-modal="true" aria-labelledby="phoneQrTitle" aria-describedby="phoneQrText" hidden>
   <div class="modal-card phone-card">
@@ -1821,13 +1913,13 @@ html.row-dragging, html.row-dragging * { cursor: grabbing !important; user-selec
 
 <div class="toast" id="toast" role="status" hidden></div>
 
-<script src="engine.js?v=35" defer></script>
-<script src="report-fonts.js?v=35" defer></script>
-<script src="jspdf.umd.min.js?v=35" defer></script>
-<script src="qrcode.js?v=35" defer></script>
-<script src="report.js?v=35" defer></script>
-<script src="cloud-config.js?v=35" defer></script>
-<script src="cloud.js?v=35" defer></script>
-<script src="app.js?v=35" defer></script>
+<script src="engine.js?v=36" defer></script>
+<script src="report-fonts.js?v=36" defer></script>
+<script src="jspdf.umd.min.js?v=36" defer></script>
+<script src="qrcode.js?v=36" defer></script>
+<script src="report.js?v=36" defer></script>
+<script src="cloud-config.js?v=36" defer></script>
+<script src="cloud.js?v=36" defer></script>
+<script src="app.js?v=36" defer></script>
 </body>
 </html>

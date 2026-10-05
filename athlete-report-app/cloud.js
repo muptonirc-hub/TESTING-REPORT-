@@ -37,8 +37,8 @@
   var MAX_WRITES = 400;                                // writes per commit (Firestore's limit is 500)
   // v15: the clinic's shared documents (cache[coll] = { <id>: entry | { id, deleted: true } }) and the push order: each
   // group goes in commits of its own, the results first
-  var DOC_COLLS = ['library', 'templates'];
-  var PUSH_ORDER = [['sessions', 'history'], ['library'], ['templates'], ['shared']];   // v35: + the phone links, last
+  var DOC_COLLS = ['library', 'templates', 'batteries'];   // v36: + the saved screening batteries
+  var PUSH_ORDER = [['sessions', 'history'], ['library'], ['templates'], ['batteries'], ['shared']];   // v35: + the phone links, last
   var DOC_ID = /^[A-Za-z0-9][A-Za-z0-9_-]{0,149}$/;    // safe as a Firestore document id (no '/', never '__x__')
   // v34: the project's default bucket (since late 2024 a new one is <projectId>.firebasestorage.app; cloud-config.js may
   // name another as storageBucket) and the Firebase Storage REST address the SDK uses
@@ -104,7 +104,7 @@
   function freshCursor() { return { at: '', name: '' }; }
   function freshCache(email) {
     return { v: 1, email: email || '', syncedAt: '', cursorName: '', clients: {}, legacy: 'pending',
-      library: {}, templates: {}, cursors: { library: freshCursor(), templates: freshCursor() } };
+      library: {}, templates: {}, batteries: {}, cursors: { library: freshCursor(), templates: freshCursor(), batteries: freshCursor() } };   // v36: + batteries
   }
   function isMap(m) { return !!m && typeof m === 'object' && !Array.isArray(m); }
   function loadCache() {
@@ -689,7 +689,7 @@
     // pending: results waiting; changes: library + template writes waiting (changesBy per collection); denied: the store
     // refused something in the last sync, deniedColls: which collections ('sessions', 'history', 'library', 'templates', 'meta')
     status: function () {
-      return { pending: resultsWaiting(), changes: changesWaiting(), changesBy: { library: changesWaiting('library'), templates: changesWaiting('templates') },
+      return { pending: resultsWaiting(), changes: changesWaiting(), changesBy: { library: changesWaiting('library'), templates: changesWaiting('templates'), batteries: changesWaiting('batteries') },   // v36
         queued: pending.length, offline: status.offline || navigator.onLine === false, failed: status.failed, denied: status.denied,
         deniedColls: status.deniedColls.slice(), error: status.error, syncing: !!syncing,
         shares: pending.filter(function (x) { return x.coll === 'shared'; }).length, shareDenied: status.deniedColls.indexOf('shared') >= 0 };   // v35

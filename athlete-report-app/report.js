@@ -1031,8 +1031,10 @@
   var P1 = { head: 13, meta: 11.33, band: 11.33, interp: 13.33, cards: { domain: 11, status: 10, count: 9.5 },
     prio: { name: 13.33, detail: 11.33, what: 10.67, chip: 10 } };
   function screening(d) {
-    var doc = new Doc(), m = d.meta || {}, P = P1;
-    header(doc, 'Athlete Performance & Readiness Report', 'VALD Testing • Normative screening with change-vs-previous');
+    var doc = new Doc(), m = d.meta || {}, P = P1, custom = d.kind === 'custom';   // v36: the Custom battery prints as this report, named for what it is
+    var title = custom ? 'Custom Screening Battery' : 'Athlete Performance & Readiness Report';
+    header(doc, title, custom ? (clean(d.battery).trim() ? clean(d.battery).trim() + ' • ' : '') + 'Tests chosen by the clinician • Normative screening with change-vs-previous'
+      : 'VALD Testing • Normative screening with change-vs-previous');
     meta(doc, [['Athlete', m.name], ['Date', m.date], ['Sport', m.sport], ['Clinician', m.tester], ['Age', m.age],
       ['Sex', m.sex], ['Mass', clean(m.mass).trim() ? clean(m.mass).trim() + ' kg' : ''], ['Notes', m.notes]], P.meta);
     coachBand(doc, d.coach);
@@ -1050,11 +1052,12 @@
     asymmetry(doc, d.groups, P.head);
     var foot = withNote('Confidence shown in grey (★★★ strong · ★★☆ moderate · ★☆☆ weak). ' +
       'Norms are population- and protocol-dependent; targets reflect the selected reference population only. ' +
+      (custom ? 'Strength tests are scored relative to body weight against the clinic’s targets; the clinic’s own tests are rated only where a target was set. ' : '') +
       'This report organises and displays testing data and is not medical advice.', rowsHavePrev(d.groups));
     results(doc, d.groups, [150, 52, 120], 'target', d.progress ? 0 : footerH(foot), 'target', { title: 'Full results', size: P.head });
     progressTable(doc, d.progress, P.head, footerH(foot));
     footer(doc, foot);
-    return finish(doc, 'Athlete Performance & Readiness Report', m.name);
+    return finish(doc, title, m.name);
   }
 
   function rehab(d) {

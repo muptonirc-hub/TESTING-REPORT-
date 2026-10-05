@@ -134,6 +134,7 @@
 
   function targetStr(norm) {
     if (isEmptyObj(norm)) return 'n/a';
+    if (typeof norm.label === 'string' && norm.label.trim()) return norm.label.trim();   // v36: the target as the clinic writes it ('≥ 1/3 × BW')
     var d = norm.dir;
     if (d === 'Higher') return '≥ ' + pyStr(norm.green);
     if (d === 'Lower') return '≤ ' + pyStr(norm.green);
@@ -200,8 +201,9 @@
         var result;
         if (m.calc === 'DSI') {
           result = dsiVal;
-        } else if (m.calc === 'PERKG' || m.calc === 'PERBW') {
-          var div = m.calc === 'PERKG' ? mkg : (mkg === null ? null : mkg * 9.81);
+        } else if (m.calc === 'PERKG' || m.calc === 'PERBW' || m.calc === 'XBW' || m.calc === 'PCTBW') {
+          // v36: XBW (a load in kg ÷ body mass) and PCTBW (the same × 100): the LL Strength tests inside a custom battery
+          var div = m.calc === 'PERBW' ? (mkg === null ? null : mkg * 9.81) : (m.calc === 'PCTBW' ? (mkg === null ? null : mkg / 100) : mkg);
           var raw = num(inp.result);
           result = (raw && mkg) ? pyRound(raw / div, 2) : null;
           var pr = num(inp.previous);
@@ -441,7 +443,7 @@
   // ---------------------------------------------------------------- scorecard (report_pdf.py)
   var DOMAIN_MAP = [['COUNTERMOVEMENT', 'Jump / power'], ['MID-THIGH', 'Max strength'], ['HOP', 'Reactive'],
     ['NORDIC', 'Hamstring'], ['HIP', 'Hip / groin'], ['DYNAMIC STRENGTH', 'DSI'], ['SPRINT', 'Speed'],
-    ['SPEED', 'Speed'], ['DYNAMO', 'Isometric']];
+    ['SPEED', 'Speed'], ['DYNAMO', 'Isometric'], ['LOWER-LIMB', 'LL strength'], ['OWN TESTS', 'Own tests']];   // v36: the Custom battery's two groups
   function titleCase(s) {
     return s.replace(/[A-Za-z]+/g, function (w) { return w.charAt(0).toUpperCase() + w.slice(1).toLowerCase(); });
   }

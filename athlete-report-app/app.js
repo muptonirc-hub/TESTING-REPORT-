@@ -100,9 +100,11 @@
     return p ? '<svg class="si" viewBox="0 0 12 12" width="12" height="12" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round">' + p + '</svg>' : '';
   }
   function wordKind(t) { return t === 'ham' || t === 'acl' ? 'rehab' : 'target'; }
+  // v36: the Custom battery is scored like the Performance screen (population norms), so most of its code is the screen's
+  function SL(t) { return t === 'screen' || t === 'custom'; }
   // Screening is for athletes; LL Strength and the rehab tabs are used with patients of all kinds (v9)
-  function person(t) { return t === 'screen' ? 'athlete' : 'patient'; }
-  function Person(t) { return t === 'screen' ? 'Athlete' : 'Patient'; }
+  function person(t) { return SL(t) ? 'athlete' : 'patient'; }
+  function Person(t) { return SL(t) ? 'Athlete' : 'Patient'; }
   function statusWord(status, t) { return E.statusWord(status, wordKind(t || state.tool)); }
   function chip(status, text) {                        // v28: a 'Guide' chip (the DSI) names the training emphasis, in a neutral look
     var cls = status === 'n/a' ? 'na' : status;
@@ -110,8 +112,8 @@
   }
 
   // ------------------------------------------------------------------ state
-  var TOOLS = ['screen', 'str', 'ham', 'acl'];         // the four reports (the Exercises tab, 'ex', is handled on its own)
-  var TOOL_NAMES = { screen: 'Performance screen', str: 'LL Strength', ham: 'Hamstring rehab', acl: 'ACL rehab', ex: 'Exercises' };   // v14: 'Screening' is the section
+  var TOOLS = ['screen', 'str', 'ham', 'acl', 'custom'];   // the five reports (the Exercises tab, 'ex', is handled on its own); v36: + the Custom battery
+  var TOOL_NAMES = { screen: 'Performance screen', str: 'LL Strength', ham: 'Hamstring rehab', acl: 'ACL rehab', custom: 'Custom battery', ex: 'Exercises' };   // v14: 'Screening' is the section
   function freshInterp() { return { text: '', ai: false, basis: '' }; }
   // For the coach (v8): the clinician's call on training, printed as a band on the report. Never worked out by the
   // app, never filled in from records and never sent to Claude.
@@ -122,11 +124,13 @@
   // the Clinician box (tester on Screening and LL Strength, clinician on Hamstring, practitioner on Exercises) whenever that
   // box is empty; never a typed value. The ACL box is the surgeon's, so it is left alone.
   function userName() { return CLOUD ? CLOUD.userName() : ''; }
-  var NAME_FIELDS = { screen: 'tester', str: 'tester', ham: 'clinician', ex: 'practitioner' };
+  var NAME_FIELDS = { screen: 'tester', str: 'tester', ham: 'clinician', custom: 'tester', ex: 'practitioner' };
   // cardOpen (v11): the details card is open (true) or folded into the one-line strip (false)
   function freshTool(tool, keep) {
     keep = keep || {};
     if (tool === 'screen') return { meta: { name: '', date: todayIso(), sex: '', age: '', sport: '', tester: keep.tester || userName(), mass: '', notes: '' }, pop: 'general', values: {}, radar: null, collapsed: {}, importLog: null, interp: freshInterp(), coach: freshCoach(), cardOpen: true };
+    // v36: the Custom battery: the population is chosen first (pop null until then), the tests are the battery's items
+    if (tool === 'custom') return { meta: { name: '', date: todayIso(), sex: '', age: '', sport: '', tester: keep.tester || userName(), mass: '', notes: '' }, pop: null, battery: [], batName: '', values: {}, radar: null, collapsed: {}, interp: freshInterp(), coach: freshCoach(), cardOpen: true };
     if (tool === 'ham') return { meta: { name: '', date: todayIso(), injured: '', clinician: keep.clinician || userName(), doi: '', weeks: '', sport: '', notes: '' }, phase: null, values: {}, collapsed: {}, interp: freshInterp(), coach: freshCoach(), cardOpen: true };
     if (tool === 'str') return { meta: { name: '', date: todayIso(), mass: '', sport: '', tester: keep.tester || userName(), notes: '' }, values: {}, collapsed: {}, interp: freshInterp(), coach: freshCoach(), cardOpen: true };
     return { meta: { name: '', date: todayIso(), injured: '', surgeon: keep.surgeon || '', graft: '', dos: '', months: '', sport: '', notes: '' }, phase: null, sex: null, values: {}, collapsed: {}, interp: freshInterp(), coach: freshCoach(), cardOpen: true };
@@ -173,6 +177,11 @@
     var pops = E.sportPopulations(DATA.screen);
     if (state.screen.pop !== 'general' && pops.indexOf(state.screen.pop) < 0) state.screen.pop = 'general';
     if (!state.str) state.str = freshTool('str');
+    if (!state.custom) state.custom = freshTool('custom');   // v36: drafts from v35 and earlier
+    var cu = state.custom;
+    if (cu.pop !== null && cu.pop !== 'general' && pops.indexOf(cu.pop) < 0) cu.pop = null;
+    cu.battery = tidyBattery(cu.battery);
+    cu.batName = typeof cu.batName === 'string' ? cu.batName : '';
     TOOLS.forEach(function (t) {                     // drafts saved before the interpretation box existed
       var it = state[t].interp;
       if (!it || typeof it !== 'object') state[t].interp = freshInterp();
@@ -210,24 +219,31 @@
   }
 
   // ------------------------------------------------------------------ scoring
-  function screenNorm(name, pop) {
+  function screenNorm(name, pop, t) {                  // v36: t (default the Performance screen): the Custom battery's set
     if (!pop.population) return null;
-    var N = DATA.screen;
+    var N = setOf(t || 'screen');
     var band = (pop.ageBand && pop.ageBand !== 'All ages') ? ((((N.age_norms || {})[pop.population]) || {})[pop.ageBand] || {}) : {};
     var b = band[name];
     if (b && Object.keys(b).length) return b;
     var p = (N.populations[pop.population] || {})[name];
     return p === undefined ? null : p;
   }
-  function computeScreen() {
-    var s = state.screen;
-    var pop = E.resolvePopulation(s.pop, s.meta.sex, s.meta.age);
-    var inputs = {};
+  function computeScreen(t) {                          // v36: t = 'screen' (default) or 'custom'
+    t = t || 'screen';
+    var s = state[t], N = setOf(t);
+    // v36: the Custom battery scores nothing until its population is chosen (null); the Performance screen defaults to general
+    var pop = t === 'custom' && s.pop === null ? { population: null, ageBand: 'All ages', label: null, note: 'Choose the population to compare against.', level: 'warn' }
+      : E.resolvePopulation(s.pop, s.meta.sex, s.meta.age);
+    var inputs = {}, perMass = {}, massNow = E.parseInput(s.meta.mass);
+    // v36: a previous load or force from the client's record was scored with that day's body mass: rescaled so that
+    // dividing by today's mass gives the score it had then
+    if (t === 'custom') N.groups.forEach(function (g) { g.metrics.forEach(function (m) { if (/^(XBW|PCTBW|PERKG|PERBW)$/.test(m.calc || '')) perMass[m.name] = 1; }); });
     Object.keys(s.values).forEach(function (name) {
-      var v = s.values[name];
-      inputs[name] = { result: E.parseInput(v.result), previous: E.parseInput(v.previous), side: v.side || '' };
+      var v = s.values[name], prev = E.parseInput(v.previous), pm = perMass[name] ? E.parseInput(v.prevMass) : null;
+      if (prev !== null && pm && massNow && pm > 0 && massNow > 0) prev = prev * massNow / pm;
+      inputs[name] = { result: E.parseInput(v.result), previous: prev, side: v.side || '' };
     });
-    var groups = pop.population ? E.buildRows(inputs, pop.population, DATA.screen, pop.ageBand, E.parseInput(s.meta.mass)) : [];
+    var groups = pop.population ? E.buildRows(inputs, pop.population, N, pop.ageBand, massNow) : [];
     var byName = {};
     E.flatten(groups).forEach(function (r) { byName[r.name] = r; });
     var opts = E.radarOptions(groups);
@@ -268,10 +284,137 @@
   }
   function compute() { return computeFor(state.tool); }
   function computeFor(t) {                             // v19: any report tool's results (the builder makes the linked report too)
-    if (t === 'screen') return computeScreen();
+    if (SL(t)) return computeScreen(t);
     if (t === 'str') return computeStrength();
     return computeRehab(t);
   }
+
+  // ------------------------------------------------------------------ v36: the Custom battery
+  // Matthew (5 Oct): "a CUSTOM option - this is where we can quickly build a custom screening battery. It would also need to
+  // link with the photo mode where the practitioner can write down what they have done - take a pic - then like the exercise
+  // builder it links to the tests and norms that are available (it would ask the practitioner to select the population
+  // before beginning)." A battery is a list of items: { k: 'screen', key } (a Performance screen metric), { k: 'str', id }
+  // (an LL Strength test, each leg scored against its body-weight target) or { k: 'own', id, name, unit, dir, green, amber }
+  // (one of the clinic's own tests, rated only when a target is typed). customSet() turns the battery into a norms set in the
+  // Performance screen's shape, so E.buildRows, the rows, the summary, the report, the records and the AI work as they do
+  // there. setOf(t) is the norms set any report tool scores against.
+  var OWN_ID = /^o-[a-z0-9]{1,40}$/;
+  var STR_CALC = { xBW: 'XBW', pctBW: 'PCTBW', Nkg: 'PERKG', xBWf: 'PERBW' };
+  var STR_UNIT = { xBW: '× BW', xBWf: '× BW', pctBW: '% BW', Nkg: 'N/kg', reps: 'reps' };
+  var STR_GROUP = 'LOWER-LIMB STRENGTH & CAPACITY', OWN_GROUP = 'THE CLINIC\u2019S OWN TESTS';
+  var customMemo = null;                                // the set for the battery as last built (keyed by its JSON)
+  function setOf(t) { return t === 'custom' ? customSet() : DATA[t]; }
+  function screenMetric(key) {                         // a Performance screen metric by name (never the DSI, which is worked out)
+    var hit = null;
+    DATA.screen.groups.forEach(function (g) { g.metrics.forEach(function (m) { if (!hit && m.calc !== 'DSI' && m.name === key) hit = m; }); });
+    return hit;
+  }
+  function strTest(id) {                               // an LL Strength test by id (never the hip ratio, which is worked out)
+    var hit = null;
+    DATA.str.tests.forEach(function (tt) { if (!hit && tt.input !== 'calc' && tt.id === id) hit = tt; });
+    return hit;
+  }
+  function strSideName(tt, side) { return tt.name + ' \u2014 ' + side; }
+  function ownNum(v) { var n = E.parseInput(v == null ? '' : String(v)); return n === null ? null : n; }
+  function tidyOwn(o) {
+    if (!o || typeof o !== 'object' || typeof o.id !== 'string' || !OWN_ID.test(o.id)) return null;
+    var name = cap(o.name, 80);
+    if (!name) return null;
+    var green = ownNum(o.green), amber = ownNum(o.amber), dir = o.dir === 'Lower' ? 'Lower' : 'Higher';
+    if (green === null) amber = null;
+    if (amber !== null && (dir === 'Higher' ? amber > green : amber < green)) amber = green;   // Close can't sit beyond the target
+    return { k: 'own', id: o.id, name: name, unit: cap(o.unit, 12), dir: dir, green: green, amber: amber };
+  }
+  // a battery as stored or shipped: known items only, each once; an own test may not take a catalogue test's name
+  function tidyBattery(list) {
+    var out = [], seen = {};
+    (Array.isArray(list) ? list : []).forEach(function (it) {
+      if (!it || typeof it !== 'object') return;
+      var key;
+      if (it.k === 'screen') { if (!screenMetric(it.key)) return; key = 'screen|' + it.key; it = { k: 'screen', key: it.key }; }
+      else if (it.k === 'str') { if (!strTest(it.id)) return; key = 'str|' + it.id; it = { k: 'str', id: it.id }; }
+      else if (it.k === 'own') { it = tidyOwn(it); if (!it || catalogueByName(it.name)) return; key = 'own|' + it.id; }
+      else return;
+      if (seen[key]) return;
+      seen[key] = 1;
+      out.push(it);
+    });
+    return out;
+  }
+  function batteryKey(it) { return it.k === 'screen' ? 'screen|' + it.key : it.k === 'str' ? 'str|' + it.id : 'own|' + it.id; }
+  function batteryHas(key) { return state.custom.battery.some(function (it) { return batteryKey(it) === key; }); }
+  // the tests a battery can hold, in the order the Choose tests list shows them: the Performance screen's metrics by device
+  // group, then the LL Strength tests; each { key, k, name, unit, group, def }
+  function catalogue() {
+    var out = [];
+    DATA.screen.groups.forEach(function (g) {
+      g.metrics.forEach(function (m) { if (m.calc !== 'DSI') out.push({ key: 'screen|' + m.name, k: 'screen', name: m.name, unit: m.unit, group: g.title, def: m }); });
+    });
+    DATA.str.tests.forEach(function (tt) {
+      if (tt.input !== 'calc') out.push({ key: 'str|' + tt.id, k: 'str', name: tt.name, unit: INPUT_WORD[tt.input], group: STR_GROUP, def: tt, detail: tt.detail || '' });
+    });
+    return out;
+  }
+  // a catalogue test (or an LL Strength test's side) with this name, matched ignoring case and spaces; failing that, the
+  // name without its bracketed detail ('Split squat' for 'Split squat (rear leg)') when only one test has it
+  function catalogueByName(name) {
+    var k = E.libKey(name), hit = null, loose = [];
+    if (!k) return null;
+    function bare(s) { return E.libKey(String(s).replace(/\s*\([^)]*\)/g, ' ')); }
+    var kb = bare(name);
+    catalogue().forEach(function (c) {
+      if (hit) return;
+      if (E.libKey(c.name) === k) hit = c;
+      else if (c.k === 'str' && (E.libKey(strSideName(c.def, 'Left')) === k || E.libKey(strSideName(c.def, 'Right')) === k)) hit = c;
+      else if (kb && (bare(c.name) === kb || (c.k === 'str' && (bare(strSideName(c.def, 'Left')) === kb || bare(strSideName(c.def, 'Right')) === kb)))) loose.push(c);
+    });
+    return hit || (loose.length === 1 ? loose[0] : null);
+  }
+  // the battery's items as a norms set: the Performance screen's groups cut to the battery (the DSI once both its forces are
+  // in), one group of LL Strength tests (a metric per leg, scored like the screen's force-per-mass metrics, the target as the
+  // clinic writes it, Close within amber_pct of it) and one of the clinic's own tests; the screen's populations and age bands
+  function customSet() {
+    var s = state && state.custom, b = s ? s.battery : [], sig = JSON.stringify(b);
+    if (customMemo && customMemo.sig === sig) return customMemo.set;
+    var keys = {}, strIds = [], own = [];
+    b.forEach(function (it) { if (it.k === 'screen') keys[it.key] = 1; else if (it.k === 'str') strIds.push(it.id); else own.push(it); });
+    var groups = [];
+    DATA.screen.groups.forEach(function (g) {
+      var ms = g.metrics.filter(function (m) { return m.calc === 'DSI' ? !!(keys['CMJ Peak Force'] && keys['IMTP Peak Force']) : !!keys[m.name]; });
+      if (ms.length) groups.push({ title: g.title, metrics: ms });
+    });
+    var strMetrics = [], extra = {}, pct = DATA.str.amber_pct == null ? 5 : DATA.str.amber_pct;
+    strIds.forEach(function (id) {
+      var tt = strTest(id);
+      if (!tt) return;
+      var norm = E.strengthNorm(tt, pct);
+      norm.label = tt.target_text || ''; norm.source = '\u2605\u2605\u2606 Clinic target (LL Strength) \u00b7 relative to body weight';
+      ['Left', 'Right'].forEach(function (side) {
+        var name = strSideName(tt, side);
+        strMetrics.push({ name: name, unit: STR_UNIT[tt.score] || '', calc: STR_CALC[tt.score] || null, dir: 'Higher', thr: tt.green ? tt.green * 0.05 : null,
+          range: tt.range || null, xkey: tt.id, input: tt.input, detail: tt.detail || '', str: id, side: side });
+        extra[name] = norm;
+      });
+    });
+    if (strMetrics.length) groups.push({ title: STR_GROUP, metrics: strMetrics });
+    var ownMetrics = [];
+    own.forEach(function (o) {
+      ownMetrics.push({ name: o.name, unit: o.unit, calc: null, dir: o.dir, thr: null, range: null, own: o.id, xkey: o.id });
+      if (o.green !== null) extra[o.name] = { dir: o.dir, green: o.green, amber: o.amber === null ? o.green : o.amber, source: '\u2605\u2606\u2606 Clinic target, typed with the test' };
+    });
+    if (ownMetrics.length) groups.push({ title: OWN_GROUP, metrics: ownMetrics });
+    var pops = {}, N = DATA.screen;
+    Object.keys(N.populations || {}).forEach(function (p) { pops[p] = Object.assign({}, N.populations[p], extra); });
+    var set = { population_order: N.population_order, groups: groups, populations: pops, age_bands: N.age_bands, age_norms: N.age_norms };
+    customMemo = { sig: sig, set: set };
+    return set;
+  }
+  function explainKey(t, name) {                       // the explainer key for a row: an LL Strength test's id inside a custom battery, else the metric's name
+    var hit = name;
+    if (t === 'custom') customSet().groups.forEach(function (g) { g.metrics.forEach(function (m) { if (m.name === name && m.xkey) hit = m.xkey; }); });
+    return hit;
+  }
+  function batteryCount() { return state.custom.battery.length; }   // tests (a strength test counts once, though it draws a row per leg)
 
   // ------------------------------------------------------------------ rendering: entry column
   var HEAD = {
@@ -279,6 +422,7 @@
     str: ['Lower-limb strength & capacity', 'Enter each leg\u2019s load, force or reps. Blank tests are left out.'],
     ham: ['Hamstring rehab & return to play', 'Injured-limb results against the targets for the chosen phase.'],
     acl: ['ACL rehab & return to play', 'Injured-limb and symmetry results against ACLR norms for the chosen phase and sex.'],
+    custom: ['Custom screening battery', 'Choose the population, then pick the tests or photograph your notes. Results are scored against the norms available.'],   // v36
     ex: ['Program builder', 'Add exercises from the library, type them, or scan a handwritten page (no patient name on it).']
   };
   // v15: the Exercises tab's three pages, chosen from its heading (the same picker as Screening's tools)
@@ -411,6 +555,14 @@
         field(t, 'notes', 'Notes', { cls: 'full' });
       var pops = [['general', 'General population (auto by age & sex)']].concat(E.sportPopulations(DATA.screen).map(function (p) { return [p, p]; }));
       out += select('screen-pop', 'Compare against', pops, s.pop, 'data-choice="pop"', 'wide');
+    } else if (t === 'custom') {                       // v36: the screen's details; the population was chosen first (changeable here)
+      out += field(t, 'name', Person(t) + ' name', { cls: 'wide', words: true }) + field(t, 'date', 'Test date', { type: 'date' }) +
+        seg(t, 'sex', 'Sex', ['Male', 'Female']) +
+        field(t, 'age', 'Age (years)', { mode: 'decimal' }) + field(t, 'mass', 'Mass (kg)', { mode: 'decimal' }) +
+        field(t, 'sport', 'Sport', { words: true }) + field(t, 'tester', 'Clinician', { words: true }) +
+        field(t, 'notes', 'Notes', { cls: 'full' });
+      var cpops = [['general', 'General population (auto by age & sex)']].concat(E.sportPopulations(DATA.screen).map(function (p) { return [p, p]; }));
+      out += select('custom-pop', 'Compare against', cpops, s.pop || 'general', 'data-choice="pop"', 'wide');
     } else if (t === 'str') {
       out += field(t, 'name', Person(t) + ' name', { cls: 'wide', words: true }) + field(t, 'date', 'Test date', { type: 'date' }) +
         field(t, 'mass', 'Body mass (kg)', { mode: 'decimal' }) +
@@ -448,16 +600,17 @@
     var m = state[t].meta;
     if (blank(m.name)) return false;
     if (t === 'screen') return !!m.sex;
+    if (t === 'custom') return state.custom.pop !== null && (state.custom.pop !== 'general' || !!m.sex);   // v36: the population, and sex for the general norms
     if (t === 'str') return !blank(m.mass);
     if (t === 'ham' || t === 'acl') return !!m.injured && !rehabNeed(t);   // v18: and the phase (and norm set) chosen
     return true;
   }
   function stripHtml(t) {
     var open = state[t].cardOpen !== false;
-    return '<div class="strip" id="athleteStrip" role="group" aria-label="' + (t === 'screen' ? 'Athlete' : 'Patient') + '"' + (open ? ' hidden' : '') + '>' +
+    return '<div class="strip" id="athleteStrip" role="group" aria-label="' + Person(t) + '"' + (open ? ' hidden' : '') + '>' +
       '<div class="strip-text" id="stripText"></div>' +
       '<label class="strip-scan file-btn scan-btn" id="stripScan" for="scanFiles" title="' + (t === 'ex' ? 'Scan exercise page' : 'Scan notes') + '">' + CAMERA + (open ? '' : scanInputHtml(t)) + '</label>' +
-      '<button type="button" class="ghost strip-edit" data-action="edit-athlete" aria-label="Edit ' + (t === 'screen' ? 'athlete' : 'patient') + ' details">Edit</button></div>';
+      '<button type="button" class="ghost strip-edit" data-action="edit-athlete" aria-label="Edit ' + person(t) + ' details">Edit</button></div>';
   }
   // 'General Clinical — Male · 20-30 yr' -> 'General Clinical M 20–30' (sport populations as they are)
   function shortPop(label) {
@@ -468,12 +621,13 @@
     var s = state[t], m = s.meta, out = [];
     function add(v) { v = clean1(v); if (v) out.push(v); }
     var date = m.date ? E.displayIso(m.date) : '';
-    if (t === 'screen') {
+    if (SL(t)) {                                       // v36: the Custom battery shows the same, and the battery it came from
       add(m.sex === 'Male' ? 'M' : (m.sex === 'Female' ? 'F' : ''));
       if (!blank(m.age)) add(clean1(m.age) + ' y');
       if (!blank(m.mass)) add(clean1(m.mass) + ' kg');
       add(m.sport); add(date);
       if (c && c.pop && c.pop.label) add('vs ' + shortPop(c.pop.label));
+      if (t === 'custom' && s.batName) add(s.batName);
     } else if (t === 'str') {
       if (!blank(m.mass)) add(clean1(m.mass) + ' kg');
       add(m.sport); add(date);
@@ -618,14 +772,18 @@
   }
   function metricRow(tool, m, gi, mi) {
     var v = val(tool, m.name), id = tool + '-' + gi + '-' + mi, nm = esc(m.name);
-    var asym = tool === 'screen' && E.isAsym(m.name);
+    var asym = SL(tool) && E.isAsym(m.name);
     var hint = '<span class="m-unit">' + esc(m.unit) + '</span>';
     if (m.calc === 'PERKG' || m.calc === 'PERBW') hint = '<span class="m-unit">enter force in N · scored as ' + esc(m.unit) + ' using mass</span>';
+    if (m.calc === 'XBW' || m.calc === 'PCTBW') hint = '<span class="m-unit">' + esc((m.detail ? m.detail + ' · ' : '') + 'enter load in kg · scored as ' + m.unit + ' using mass') + '</span>';   // v36: LL Strength tests in a custom battery
+    else if (m.str && m.input === 'N') hint = '<span class="m-unit">' + esc((m.detail ? m.detail + ' · ' : '') + 'enter force in N · scored as ' + m.unit + ' using mass') + '</span>';
+    else if (m.str) hint = '<span class="m-unit">' + esc((m.detail ? m.detail + ' · ' : '') + 'reps') + '</span>';
+    else if (m.own) hint = '<span class="m-unit">' + esc(m.unit || 'your own test') + '</span>';
     if (m.calc === 'LSI') hint = '<span class="m-unit">enter left & right · LSI = injured ÷ other side</span>';
     // the same words as the column headings: Result (Injured on the hamstring tab) and Previous; Left and Right for an LSI
     var labels = m.calc === 'DSI' ? '' : (m.calc === 'LSI' ? boxLabels('Left', 'Right') : boxLabels(tool === 'ham' ? 'Injured' : 'Result', 'Previous'));
     var html = '<div class="metric' + (asym ? ' has-side' : '') + (labels ? ' has-bl' : '') + (m.calc === 'LSI' ? ' lsi' : '') + '" data-metric="' + nm + '" data-status="" id="' + id + '">' +
-      '<div class="m-label">' + nameHtml(tool, m.name, m.name, id) + '<div class="m-hint">' + hint +
+      '<div class="m-label">' + nameHtml(tool, m.xkey || m.name, m.name, id) + '<div class="m-hint">' + hint +
       '<span class="m-target"></span><span class="m-calc"></span><span class="m-prevnote"></span><span class="m-spark"></span></div><div class="m-meter"></div></div>' + labels;
     function input(fieldName, cls, ph, label) { return metricInput(id, nm, v, fieldName, cls, ph, label); }
     if (m.calc === 'DSI') {
@@ -644,7 +802,7 @@
   }
 
   function groupsHtml(tool) {
-    var S = DATA[tool], s = state[tool], on = testsShown(tool);
+    var S = setOf(tool), s = state[tool], on = testsShown(tool);
     return S.groups.map(function (g, gi) {
       if (!on[gi]) return '';                          // left out under Tests today (v11): not drawn at all
       var collapsed = !!s.collapsed[gi];
@@ -712,7 +870,7 @@
       });
       return out;
     }
-    return DATA[t].groups.map(function (g, gi) {
+    return setOf(t).groups.map(function (g, gi) {
       var has = g.metrics.some(function (m) {
         // the DSI is worked out, never typed: it counts once both its forces are in (or a previous DSI was loaded)
         if (m.calc === 'DSI') return (any('CMJ Peak Force', ['result']) && any('IMTP Peak Force', ['result'])) || any(m.name, ['previous']);
@@ -791,13 +949,337 @@
     testsDirty = true;
   }
 
+  // ------------------------------------------------------------------ v36: the Custom battery's page
+  // The population comes first (Matthew: "it would ask the practitioner to select the population before beginning"): a card
+  // of choices and nothing else until one is tapped. Then the details card (as the Performance screen's, with Compare against
+  // to change the choice), the battery bar (Choose tests, Saved batteries, the count, + Add previous results), the battery's
+  // rows by group, and the empty state while the battery has nothing in it.
+  function popStepHtml() {
+    var N = DATA.screen, sports = E.sportPopulations(N);
+    function choice(key, title, sub) {
+      return '<button type="button" class="pop-choice" data-pop="' + esc(key) + '"><span class="pc-text"><b>' + esc(title) + '</b><small>' + esc(sub) + '</small></span>' + HOME_ICON.go + '</button>';
+    }
+    var html = '<section class="card pop-step" id="popStep" aria-labelledby="popStepH"><h2 id="popStepH">Compare against</h2>' +
+      '<p class="pop-lead">The norms this battery is scored against. Pick first; the tests come next. It can be changed later in the athlete card.</p><div class="pop-choices">' +
+      choice('general', 'General population', 'By sex and age band (VALD norms and the clinic’s own). Sex is asked for next.');
+    sports.forEach(function (p) { html += choice(p, p, Object.keys(N.populations[p] || {}).length + ' metrics with norms · all ages'); });
+    return html + '</div></section>';
+  }
+  function choosePopulation(p) {
+    var s = state.custom, pops = E.sportPopulations(DATA.screen);
+    if (p !== 'general' && pops.indexOf(p) < 0) return;
+    s.pop = p;
+    render();
+    var first = els.entry.querySelector('#custom-name');
+    if (first) focusQuiet(first);                      // the name box next (no keyboard until it is tapped)
+  }
+  function batteryLine() {
+    var n = batteryCount(), s = state.custom;
+    return (n ? n + (n === 1 ? ' test' : ' tests') : 'No tests yet') + (s.batName ? ' · ' + s.batName : '');
+  }
+  function batteryBarHtml() {
+    return '<div class="tests-bar bat-bar" id="batBar">' +
+      '<button type="button" class="ghost tests-btn" data-action="bat-choose" aria-haspopup="dialog">Choose tests<span class="chev-s" aria-hidden="true"></span></button>' +
+      '<button type="button" class="ghost bat-saved" data-action="bat-saved" aria-haspopup="dialog">Saved batteries</button>' +
+      '<span class="tests-hidden bat-count" id="batCount">' + esc(batteryLine()) + '</span>' +
+      '<button type="button" class="quiet add-prev" id="addPrev" data-action="add-prev"' + (prevShown('custom') ? ' hidden' : '') + '>+ Add previous results</button></div>';
+  }
+  function batteryEmptyHtml() {
+    return '<section class="card bat-empty" id="batEmpty" aria-labelledby="batEmptyH"' + (state.custom.battery.length ? ' hidden' : '') + '>' +
+      '<h2 id="batEmptyH">Build the battery</h2>' +
+      '<p>Choose tests from the catalogue (the Performance screen’s and LL Strength’s, or your own), start from a saved battery, or photograph your handwritten results with <b>Scan notes</b> in the athlete card: the app matches what you wrote to the tests it knows and fills the results in.</p>' +
+      '<div class="bat-empty-acts"><button type="button" class="primary" data-action="bat-choose" aria-haspopup="dialog">Choose tests</button>' +
+      '<button type="button" class="ghost" data-action="bat-saved" aria-haspopup="dialog">Saved batteries</button></div></section>';
+  }
+  function refreshBattery() {
+    var cnt = $('batCount'), empty = $('batEmpty');
+    if (cnt) cnt.textContent = batteryLine();
+    if (empty) empty.hidden = state.custom.battery.length > 0;
+  }
+  // the battery replaced (Choose tests' Done, a saved battery, a client's last battery): values of tests no longer in it go;
+  // Undo puts back the battery, its name and the values
+  function setBattery(items, name, msg) {
+    var s = state.custom, before = { battery: JSON.parse(JSON.stringify(s.battery)), batName: s.batName, values: JSON.parse(JSON.stringify(s.values)) };
+    s.battery = tidyBattery(items);
+    s.batName = name == null ? s.batName : name;
+    var keep = {};
+    customSet().groups.forEach(function (g) { g.metrics.forEach(function (m) { keep[m.name] = 1; }); });
+    Object.keys(s.values).forEach(function (k) { if (!keep[k]) delete s.values[k]; });
+    Object.keys(s.scanned || {}).forEach(function (mk) { if (!keep[mk.slice(0, mk.lastIndexOf('|'))] && mk.indexOf('meta|') !== 0) delete s.scanned[mk]; });
+    fillCustomPrevious();                              // a loaded client's earlier results for the tests now in the battery
+    retest.tool = null;
+    if (state.tool === 'custom') render();
+    saveDraft();
+    if (msg) toast(msg, { label: 'Undo', run: function () {
+      if (state.custom !== s) return;
+      s.battery = before.battery; s.batName = before.batName; s.values = before.values;
+      retest.tool = null;
+      if (state.tool === 'custom') render();
+      saveDraft();
+    } });
+  }
+  // a test the scan matched (or the clinician's own test it read): into the battery if it isn't there, without a redraw
+  function batteryAdd(item) {
+    var it = tidyBattery([item])[0];
+    if (!it || batteryHas(batteryKey(it))) return false;
+    state.custom.battery.push(it);
+    return true;
+  }
+
+  // ---- Choose tests (#catDialog): the catalogue by device group with a tick per test, a search box, and a form for one of
+  // the clinic's own tests (name, unit, which way is better, an optional target and Close value). Done applies the ticks.
+  var catPick = null;                                  // { on: { key: true }, own: [own items] } while the dialog is open
+  var ownDir = 'Higher';
+  function catErr(msg) { var p = $('ownErr'); p.textContent = msg || ''; p.hidden = !msg; }
+  function openCatDialog() {
+    if (state.tool !== 'custom') return;
+    var s = state.custom;
+    catPick = { on: {}, own: [] };
+    s.battery.forEach(function (it) { catPick.on[batteryKey(it)] = true; if (it.k === 'own') catPick.own.push(JSON.parse(JSON.stringify(it))); });
+    $('catSearch').value = '';
+    ['ownName', 'ownUnit', 'ownGreen', 'ownAmber'].forEach(function (id) { $(id).value = ''; });
+    setOwnDir('Higher');
+    setOwnOpen(false);
+    $('ownOk').textContent = '';
+    catErr('');
+    var c = computeScreen('custom');
+    $('catLead').textContent = c.pop.label ? 'Targets shown are for ' + c.pop.label + '. Tests with results stay ticked unless you untick them (their results go).'
+      : 'Tick the tests in this battery. Targets show once the sex (or a sport population) is chosen.';
+    renderCatList();
+    openModal(els.catDialog, $('catSearch'), function (restore) { catPick = null; if (restore) focusQuiet(els.entry.querySelector('[data-action="bat-choose"]')); return true; });
+  }
+  function catMatches(name, q) {
+    var k = E.libKey(q);
+    if (!k) return true;
+    var nk = E.libKey(name);
+    return nk.indexOf(k) >= 0 || nk.split(' ').some(function (w) { return k.split(' ').every(function (qw) { return nk.indexOf(qw) >= 0; }) && w.indexOf(k.split(' ')[0]) === 0; });
+  }
+  function catTargetText(c, pop) {                     // what the row says under the name: the unit and the target for this population
+    if (c.k === 'str') return (c.detail ? c.detail + ' · ' : '') + c.unit + ' each leg · target ' + (c.def.target_text || '');
+    var norm = pop.population ? screenNorm(c.name, pop, 'screen') : null;
+    var unit = c.unit && c.unit !== 'AU' ? c.unit : (c.unit === 'AU' ? 'score' : '');
+    if (!pop.population) return unit;
+    return (unit ? unit + ' · ' : '') + (norm ? (norm.dir === 'Guide' ? 'guides training' : 'target ' + E.targetStr(norm)) : 'no target for this population');
+  }
+  function renderCatList() {
+    if (!catPick) return;
+    var q = $('catSearch').value, s = state.custom, pop = computeScreen('custom').pop, html = '', lastGroup = null, shown = 0;
+    var has = {};
+    Object.keys(s.values).forEach(function (k) { var v = s.values[k]; if (v && ['result', 'previous', 'side'].some(function (f) { return !blank(v[f]); })) has[k] = 1; });
+    function row(key, name, sub, hasRes) {
+      var on = !!catPick.on[key];
+      return '<li><label class="tests-row cat-row"><input type="checkbox" data-cat="' + esc(key) + '"' + (on ? ' checked' : '') + '>' +
+        '<span class="tr-main"><span class="tr-t">' + esc(name) + '</span><span class="tr-n">' + esc(sub) + (hasRes ? ' · has results' : '') + '</span></span></label></li>';
+    }
+    catalogue().forEach(function (c) {
+      if (!catMatches(c.name, q)) return;
+      if (c.group !== lastGroup) { html += '<li class="cat-group" aria-hidden="true">' + esc(groupTitle(c.group)) + '</li>'; lastGroup = c.group; }
+      var hasRes = c.k === 'str' ? !!(has[strSideName(c.def, 'Left')] || has[strSideName(c.def, 'Right')]) : !!has[c.name];
+      html += row(c.key, c.name, catTargetText(c, pop), hasRes);
+      shown++;
+    });
+    var own = catPick.own.filter(function (o) { return catMatches(o.name, q); });
+    if (own.length) {
+      html += '<li class="cat-group" aria-hidden="true">' + esc(groupTitle(OWN_GROUP)) + '</li>';
+      own.forEach(function (o) {
+        var sub = (o.unit ? o.unit + ' · ' : '') + (o.green === null ? 'no target' : 'target ' + (o.dir === 'Lower' ? '≤ ' : '≥ ') + E.fmt(o.green) + (o.amber !== null && o.amber !== o.green ? ' · close ' + (o.dir === 'Lower' ? '≤ ' : '≥ ') + E.fmt(o.amber) : ''));
+        html += row('own|' + o.id, o.name, sub, !!has[o.name]);
+        shown++;
+      });
+    }
+    if (!shown) html = '<li class="cat-none">No tests match “' + esc(clean1(q)) + '”. Add it below as your own test.</li>';
+    $('catList').innerHTML = html;
+    var n = Object.keys(catPick.on).filter(function (k) { return catPick.on[k]; }).length;
+    $('catDone').textContent = n ? 'Done · ' + n + (n === 1 ? ' test' : ' tests') : 'Done';
+  }
+  function catToggle(key, on) { if (catPick) { if (on) catPick.on[key] = true; else delete catPick.on[key]; renderCatList(); } }
+  function catClear() { if (catPick) { catPick.on = {}; renderCatList(); } }
+  function setOwnOpen(open) {                        // the own-test form, folded behind + Your own test
+    $('catOwnForm').hidden = !open;
+    $('ownOpen').setAttribute('aria-expanded', String(open));
+    if (open) { $('ownOk').textContent = ''; $('ownName').focus(); }
+  }
+  function setOwnDir(d) {
+    ownDir = d === 'Lower' ? 'Lower' : 'Higher';
+    els.catDialog.querySelectorAll('[data-own-dir]').forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.ownDir === ownDir)); });
+  }
+  function ownAdd() {
+    if (!catPick) return;
+    var name = cap($('ownName').value, 80), unit = cap($('ownUnit').value, 12);
+    var green = ownNum($('ownGreen').value), amber = ownNum($('ownAmber').value);
+    if (!name) { catErr('Give the test a name.'); $('ownName').focus(); return; }
+    var inCat = catalogueByName(name);
+    if (inCat) { catPick.on[inCat.key] = true; renderCatList(); catErr(''); setOwnOpen(false); $('ownOk').textContent = inCat.name + ' is in the catalogue: ticked above.'; $('ownName').value = ''; focusQuiet($('ownOpen')); return; }
+    var k = E.libKey(name);
+    if (catPick.own.some(function (o) { return E.libKey(o.name) === k; })) { catErr('There is already an own test called that.'); $('ownName').focus(); return; }
+    if (!blank($('ownGreen').value) && green === null) { catErr('The target should be a number.'); $('ownGreen').focus(); return; }
+    if (!blank($('ownAmber').value) && amber === null) { catErr('The Close value should be a number.'); $('ownAmber').focus(); return; }
+    if (green === null && amber !== null) { catErr('Add the target too, or leave both blank.'); $('ownGreen').focus(); return; }
+    var o = tidyOwn({ id: newId('o-'), name: name, unit: unit, dir: ownDir, green: green, amber: amber });
+    if (!o) { catErr('That test couldn’t be added.'); return; }
+    catPick.own.push(o);
+    catPick.on['own|' + o.id] = true;
+    ['ownName', 'ownUnit', 'ownGreen', 'ownAmber'].forEach(function (id) { $(id).value = ''; });
+    setOwnDir('Higher');
+    catErr('');
+    renderCatList();
+    setOwnOpen(false);
+    $('ownOk').textContent = 'Added ' + o.name + ' (ticked above).';
+    focusQuiet($('ownOpen'));
+  }
+  function catApply() {
+    if (!catPick) return;
+    var on = catPick.on, items = [];
+    catalogue().forEach(function (c) { if (on[c.key]) items.push(c.k === 'screen' ? { k: 'screen', key: c.name } : { k: 'str', id: c.def.id }); });
+    catPick.own.forEach(function (o) { if (on['own|' + o.id]) items.push(o); });
+    var was = JSON.stringify(state.custom.battery), old = {};
+    state.custom.battery.forEach(function (it) { old[batteryKey(it)] = 1; });
+    closeModal();
+    if (JSON.stringify(tidyBattery(items)) === was) return;
+    // a saved battery's name stays while some of its tests do (a tweak); a battery with none of them left has no name
+    var keepName = tidyBattery(items).some(function (it) { return old[batteryKey(it)]; });
+    setBattery(items, keepName ? null : '', 'Battery: ' + (items.length ? batteryLineFor(items) : 'no tests'));
+  }
+  function batteryLineFor(items) { var n = items.length; return n + (n === 1 ? ' test' : ' tests'); }
+
+  // ---- Saved batteries (#batDialog): the clinic's named batteries (the clinic store's `batteries` collection in cloud mode,
+  // this device in local mode), as program templates are kept. Save this battery as (the same name replaces, second tap),
+  // Use (replaces the battery on the page, Undo), Delete (two taps, Undo).
+  var BAT_STORE = 'bh-athlete-report-batteries-v1', BAT_ID = /^b-[a-z0-9]{1,40}$/, localBat = { v: 1, items: {} }, batMemo = null, batArmed = '', batDelTimer = null;
+  function tidyBat(o) {
+    if (!o || typeof o !== 'object' || Array.isArray(o) || typeof o.id !== 'string' || !BAT_ID.test(o.id)) return null;
+    var name = cap(o.name, 80);
+    if (!name) return null;
+    var items = tidyBattery(o.items);
+    if (!items.length) return null;
+    return { id: o.id, name: name, items: items, pop: typeof o.pop === 'string' ? o.pop.slice(0, 80) : '', updatedBy: cap(o.updatedBy, 120), updatedAt: typeof o.updatedAt === 'string' ? o.updatedAt.slice(0, 40) : '' };
+  }
+  function batAll() {
+    var src = storedItems('batteries');
+    if (batMemo && batMemo.ver === libVer && batMemo.src === src) return batMemo;
+    var byId = {};
+    Object.keys(src).forEach(function (id) {
+      var o = src[id];
+      if (!BAT_ID.test(id) || !o || typeof o !== 'object' || o.deleted === true) return;
+      var b = tidyBat(o);
+      if (b && b.id === id) byId[id] = b;
+    });
+    batMemo = { ver: libVer, src: src, byId: byId, list: Object.keys(byId).map(function (k) { return byId[k]; }).sort(nameOrder) };
+    return batMemo;
+  }
+  function batList() { return batAll().list; }
+  function batGet(id) { return id && BAT_ID.test(id) ? batAll().byId[id] || null : null; }
+  function batErr(msg) { var p = $('batErr'); p.textContent = msg || ''; p.hidden = !msg; }
+  function openBatDialog() {
+    if (state.tool !== 'custom') return;
+    if (CLOUD) CLOUD.sync({ throttle: true });         // another device may have saved one
+    batArmed = '';
+    $('batName').value = state.custom.batName || '';
+    $('batSaveGo').textContent = 'Save';
+    $('batSaveRow').hidden = !state.custom.battery.length;
+    batErr('');
+    $('batLead').textContent = (CLOUD ? 'Shared by every signed-in device. ' : 'Saved on this device. ') + (state.custom.battery.length ? 'Save the tests on the page as a battery to start from next time, or use a saved one.' : 'Use a saved battery to fill the page with its tests.');
+    renderBatList();
+    openModal(els.batDialog, state.custom.battery.length ? $('batName') : (els.batDialog.querySelector('[data-action="bat-use"]') || $('batClose')),
+      function (restore) { if (restore) focusQuiet(els.entry.querySelector('[data-action="bat-saved"]')); return true; });
+  }
+  function renderBatList() {
+    var box = $('batList'), list = batList();
+    if (!box) return;
+    if (!list.length) { box.innerHTML = '<p class="client-none">No saved batteries yet. Choose tests, then save them here with a name.</p>'; return; }
+    box.innerHTML = '<div class="tpl-list bat-list">' + list.map(function (b) {
+      var nm = esc(b.name), upd = tplUpdLine(b), sub = batteryLineFor(b.items) + (b.pop ? ' · ' + (b.pop === 'general' ? 'general population' : b.pop) : '');
+      return '<div class="tpl-row" data-bat="' + esc(b.id) + '"><div class="tpl-main"><b>' + nm + '</b><span>' + esc(sub) + '</span>' + (upd ? '<span class="tpl-upd">' + esc(upd) + '</span>' : '') + '</div>' +
+        '<div class="tpl-acts"><button type="button" class="ghost" data-action="bat-use">Use<span class="vh"> ' + nm + '</span></button>' +
+        '<button type="button" class="quiet tpl-del bat-del" data-action="bat-del">Delete<span class="vh"> ' + nm + '</span></button></div></div>';
+    }).join('') + '</div>';
+  }
+  function afterBatChange() { if (openModalEl === els.batDialog) renderBatList(); }
+  function batSaveGo() {
+    var s = state.custom, name = cap($('batName').value, 80);
+    if (!name) { batErr('Give the battery a name.'); $('batName').focus(); return; }
+    if (!s.battery.length) { batErr('Choose some tests first.'); return; }
+    var k = E.libKey(name), dup = batList().filter(function (b) { return E.libKey(b.name) === k; })[0];
+    if (dup && batArmed !== dup.id) {
+      batArmed = dup.id;
+      $('batSaveGo').textContent = 'Replace ' + dup.name;
+      batErr('A battery is already called that. Tap Replace to save over it.');
+      return;
+    }
+    var b = { id: dup ? dup.id : newId('b-'), name: name, items: tidyBattery(s.battery), pop: s.pop || '', updatedBy: CLOUD ? userName() : '', updatedAt: new Date().toISOString() };
+    var ok = writeItem('batteries', b.id, b);
+    s.batName = name;
+    saveDraft();
+    refreshBattery();
+    syncCard(compute());
+    closeModal();
+    toast(ok ? 'Saved battery ' + name : 'This device wouldn’t save the battery (storage is full or blocked).');
+  }
+  function batUse(id) {
+    var b = batGet(id);
+    if (!b) return;
+    closeModal(false);
+    setBattery(b.items, b.name, 'Started from ' + b.name);
+    focusQuiet(els.entry.querySelector('[data-action="bat-saved"]'));
+  }
+  function batDeleteTap(btn, id) {
+    var b = batGet(id);
+    if (!b) return;
+    if (!btn.classList.contains('armed')) {
+      els.batDialog.querySelectorAll('.bat-del.armed').forEach(function (x) { x.classList.remove('armed'); if (x._html) x.innerHTML = x._html; });
+      btn._html = btn.innerHTML;
+      btn.classList.add('armed');
+      btn.textContent = 'Tap again to delete';
+      clearTimeout(batDelTimer);
+      batDelTimer = setTimeout(function () { if (btn.classList.contains('armed')) { btn.classList.remove('armed'); btn.innerHTML = btn._html; } }, 4000);
+      return;
+    }
+    clearTimeout(batDelTimer);
+    writeItem('batteries', id, null);
+    afterBatChange();
+    toast('Deleted ' + b.name, { label: 'Undo', run: function () { writeItem('batteries', id, b); afterBatChange(); } });
+  }
+  function wireCustomDialogs() {
+    els.catDialog = $('catDialog'); els.batDialog = $('batDialog');
+    $('catSearch').addEventListener('input', renderCatList);
+    $('catList').addEventListener('change', function (e) { if (e.target.matches('input[data-cat]')) catToggle(e.target.dataset.cat, e.target.checked); });
+    $('catNone').addEventListener('click', catClear);
+    els.catDialog.addEventListener('click', function (e) {
+      var b = e.target.closest('button');
+      if (e.target === els.catDialog) { closeModal(); return; }
+      if (!b) return;
+      if (b.dataset.ownDir) setOwnDir(b.dataset.ownDir);
+      else if (b.id === 'ownOpen') setOwnOpen($('catOwnForm').hidden);
+      else if (b.id === 'ownAdd') ownAdd();
+      else if (b.id === 'catDone') catApply();
+      else if (b.id === 'catCancel') closeModal();
+    });
+    ['ownName', 'ownUnit', 'ownGreen', 'ownAmber'].forEach(function (id) {
+      $(id).addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); ownAdd(); } });
+      $(id).addEventListener('input', function () { catErr(''); });
+    });
+    els.batDialog.addEventListener('click', function (e) {
+      var b = e.target.closest('button');
+      if (e.target === els.batDialog) { closeModal(); return; }
+      if (!b) return;
+      var row = b.closest('[data-bat]');
+      if (b.id === 'batSaveGo') batSaveGo();
+      else if (b.id === 'batClose') closeModal();
+      else if (b.dataset.action === 'bat-use' && row) batUse(row.dataset.bat);
+      else if (b.dataset.action === 'bat-del' && row) batDeleteTap(b, row.dataset.bat);
+    });
+    $('batName').addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); batSaveGo(); } });
+    $('batName').addEventListener('input', function () { batErr(''); batArmed = ''; $('batSaveGo').textContent = 'Save'; });
+  }
+
   // v14: the two tabs in the bar (Screening holds the four tools, Exercises the program builder); inside Screening the
   // page heading is the tool picker: a menu button listing the tools, the current one ticked
   var TOOL_BLURB = {
     screen: 'ForceDecks, NordBord, ForceFrame, DynaMo and SmartSpeed results against the norms for age & sex or sport.',
     str: 'Each leg\u2019s load, force or reps: asymmetry and capacity against the targets.',
     ham: 'Injured-limb results against the targets for the chosen rehab phase.',
-    acl: 'Injured-limb and symmetry results against ACLR norms for the phase and sex.'
+    acl: 'Injured-limb and symmetry results against ACLR norms for the phase and sex.',
+    custom: 'Any mix of the screen\u2019s and LL Strength\u2019s tests (or your own), built by hand or from a photo of your notes.'   // v36
   };
   // v15: the Exercises tab's heading is the same picker, listing its three pages (data-page on the button; the items
   // are #pick-ex-<page> with data-pick-page). Only one picker is ever on screen, so the ids are shared.
@@ -824,8 +1306,15 @@
     syncTabs();
     followReport();                                    // v19: a linked program shows the report's name and date
     if (t === 'ex') { renderExPage(); return; }
-    els.entry.innerHTML = '<div class="pagehead">' + pickHtml(t) + '<p>' + esc(HEAD[t][1]) + '</p></div>' + athleteCard() + testsBarHtml(t) +
-      (t === 'str' ? strengthGroupHtml() : groupsHtml(t)) + (t === 'acl' ? rtsCardHtml() : '') + coachCardHtml() + interpCardHtml() +
+    if (t === 'custom' && state.custom.pop === null) {   // v36: the population first, nothing else until it is chosen
+      els.entry.innerHTML = '<div class="pagehead">' + pickHtml(t) + '<p>' + esc(HEAD[t][1]) + '</p></div>' + popStepHtml();
+      document.documentElement.classList.remove('has-strip');
+      renderSummary(compute());
+      saveDraft();
+      return;
+    }
+    els.entry.innerHTML = '<div class="pagehead">' + pickHtml(t) + '<p>' + esc(HEAD[t][1]) + '</p></div>' + athleteCard() + (t === 'custom' ? batteryBarHtml() : testsBarHtml(t)) +
+      (t === 'str' ? strengthGroupHtml() : groupsHtml(t)) + (t === 'custom' ? batteryEmptyHtml() : '') + (t === 'acl' ? rtsCardHtml() : '') + coachCardHtml() + interpCardHtml() +
       '<span id="explainHint" hidden>Shows what this test measures.</span>';
     if (t === 'screen' && state.screen.importLog) showImportLog(state.screen.importLog);
     retest.tool = null;                                // work out afresh which rows "Only last time's tests" shows
@@ -923,16 +1412,18 @@
     els.entry.classList.toggle('no-prev', !showPrev);
     if (ap) ap.hidden = showPrev;
     if (t === 'str') { refreshStrength(c); showTypo(typoFlags(t, c)); renderSummary(c); renderInterpState(c); saveDraft(); return; }
-    var S = DATA[t];
+    var S = setOf(t);
+    if (t === 'custom') refreshBattery(c);              // v36: the battery bar's count and the empty state
     // context note under the athlete card
     var note = $('ctxNote');
-    if (t === 'screen') {
+    if (SL(t)) {
       note.hidden = false;
       note.className = 'note' + (c.pop.level === 'warn' ? ' warn' : '');
       // one short line (v11): the general norms say which band was picked ('Norms: Male, 20–30 yr.'); IMTP and DSI have no bands
       var gen = !!c.pop.population && c.pop.population.indexOf('General Clinical') === 0;
       note.textContent = (gen ? c.pop.note.replace(/^Auto-selected: /, 'Norms: ').replace(/(\d)-(\d)/g, '$1–$2') : c.pop.note).replace(/([^.])$/, '$1.') +
-        (gen && c.pop.ageBand !== 'All ages' ? ' IMTP and DSI use all-ages norms.' : '');
+        (gen && c.pop.ageBand !== 'All ages' ? ' IMTP and DSI use all-ages norms.' : '') +
+        (t === 'custom' && c.pop.population && S.groups.some(function (g) { return g.title === STR_GROUP; }) ? ' Strength tests are scored relative to body mass.' : '');
     } else if (rehabNeed(t)) {
       var since = sinceText(t), unit = t === 'ham' ? (since === '1' ? ' week since injury.' : ' weeks since injury.') : (since === '1' ? ' month since surgery.' : ' months since surgery.');
       note.hidden = false; note.className = 'note warn';
@@ -952,11 +1443,11 @@
       var gi = +gel.dataset.group, g = S.groups[gi], entered = 0;
       gel.querySelectorAll('.metric').forEach(function (el, mi) {
         var m = g.metrics[mi], row = c.byName[m.name], out = el.querySelector('.m-out');
-        var norm = t === 'screen' ? screenNorm(m.name, c.pop) : (c.pnorms[m.name] || null);
+        var norm = SL(t) ? screenNorm(m.name, c.pop, t) : (c.pnorms[m.name] || null);
         var target = el.querySelector('.m-target'), calc = el.querySelector('.m-calc'), meter = el.querySelector('.m-meter');
         // v18: the target when there is one, else nothing (no 'choose sex for targets' / 'no norm' on every row: the
         // details card asks for sex or the phase once, and a result's 'No target' pill says the rest)
-        target.textContent = norm && (t !== 'screen' || c.pop.population) ? (norm.dir === 'Guide' ? 'not rated · guides training: ' : t === 'screen' ? 'target ' : 'phase target ') + E.targetStr(norm) : '';   // v28: the DSI's bands
+        target.textContent = norm && (!SL(t) || c.pop.population) ? (norm.dir === 'Guide' ? 'not rated · guides training: ' : SL(t) ? 'target ' : 'phase target ') + E.targetStr(norm) : '';   // v28: the DSI's bands
         calc.textContent = '';
         var v = state[t].values[m.name] || {};
         var typed = m.calc === 'LSI' ? (!blank(v.left) || !blank(v.right)) : !blank(v.result);
@@ -964,8 +1455,8 @@
           var auto = el.querySelector('[data-auto]');
           auto.innerHTML = row ? 'CMJ ÷ IMTP =<b>' + esc(E.fmt(row.result)) + '</b>' : 'Auto: CMJ Peak Force ÷ IMTP Peak Force';
         }
-        if ((m.calc === 'PERBW' || m.calc === 'PERKG') && typed) {
-          calc.textContent = row ? '= ' + E.fmt(row.result) + ' ' + m.unit : (E.parseInput(state.screen.meta.mass) ? '' : 'add mass to score');
+        if ((m.calc === 'PERBW' || m.calc === 'PERKG' || m.calc === 'XBW' || m.calc === 'PCTBW') && typed) {   // v36: + the strength kinds
+          calc.textContent = row ? '= ' + E.fmt(row.result) + ' ' + m.unit : (E.parseInput(state[t].meta.mass) ? '' : 'add mass to score');
         }
         if (m.calc === 'LSI' && typed) {
           // the chip carries the status word. v18: worked out from the two boxes (c.inputs), so it shows before the
@@ -987,7 +1478,7 @@
         } else {
           el.dataset.status = '';
           meter.innerHTML = '';
-          out.innerHTML = typed && E.parseInput(v.result) === null && m.calc !== 'LSI' && m.calc !== 'PERBW' ? '<span class="m-wait">not a number</span>' : '';
+          out.innerHTML = typed && E.parseInput(v.result) === null && m.calc !== 'LSI' && m.calc !== 'PERBW' && m.calc !== 'XBW' && m.calc !== 'PCTBW' ? '<span class="m-wait">not a number</span>' : '';
         }
         seen[m.name] = 1;
       });
@@ -1034,7 +1525,7 @@
       });
       return out;
     }
-    DATA[t].groups.forEach(function (g) {
+    setOf(t).groups.forEach(function (g) {
       g.metrics.forEach(function (m) {
         var v = s.values[m.name] || {};
         if (m.calc === 'DSI') return;                   // worked out, never typed (its two inputs are checked)
@@ -1047,7 +1538,7 @@
         }
         var cur = E.parseInput(v.result);
         if (cur === null) return;
-        var unit = m.calc === 'PERBW' || m.calc === 'PERKG' ? 'N' : m.unit;   // force is typed in N
+        var unit = m.calc === 'PERBW' || m.calc === 'PERKG' ? 'N' : (m.calc === 'XBW' || m.calc === 'PCTBW' ? 'kg' : (m.str ? 'reps' : m.unit));   // force is typed in N, a load in kg (v36)
         add(m.name, ['result'], E.typoCheck(cur, m.range, E.parseInput(v.previous), m.jump), raw(v.result), unit,
           raw(v.result) + '~' + raw(v.previous), v.prevDate, '');
       });
@@ -1148,7 +1639,7 @@
       DATA.str.tests.forEach(function (tt) { if (tt.input === 'calc' && (tt.from || []).some(function (f) { return keys[f]; })) keys[tt.id] = 1; });
     } else {
       var val0 = function (n) { return s.values[n] || {}; };
-      DATA[t].groups.forEach(function (g) {
+      setOf(t).groups.forEach(function (g) {
         g.metrics.forEach(function (m) {
           total++;
           var v = val0(m.name);
@@ -1238,10 +1729,10 @@
   function coachCardHtml() {
     var t = state.tool, co = state[t].coach, open = coachShown(t);
     return '<section class="card coach' + (open ? '' : ' folded') + '" id="coachCard" aria-labelledby="coachTitle">' +
-      '<div class="card-head"><div class="fold-t"><h2 id="coachTitle">' + (t === 'screen' ? 'For the coach' : 'Training status') + '</h2>' +
-      '<p class="coach-help">Optional: ' + (t === 'screen' ? 'training status' : 'status') + ', modifications and next retest, printed as a band at the top of the report.</p></div>' +
+      '<div class="card-head"><div class="fold-t"><h2 id="coachTitle">' + (SL(t) ? 'For the coach' : 'Training status') + '</h2>' +
+      '<p class="coach-help">Optional: ' + (SL(t) ? 'training status' : 'status') + ', modifications and next retest, printed as a band at the top of the report.</p></div>' +
       '<button type="button" class="ghost fold-add" data-action="coach-open" aria-expanded="' + open + '" aria-controls="coachFields">+ Add</button></div>' +
-      '<div class="coach-fields" id="coachFields"><div class="f coach-status"><span id="coachStatusL">' + (state.tool === 'screen' ? 'Training status' : 'Status') + '</span>' +
+      '<div class="coach-fields" id="coachFields"><div class="f coach-status"><span id="coachStatusL">' + (SL(state.tool) ? 'Training status' : 'Status') + '</span>' +
       '<div class="seg coach-seg" role="group" aria-labelledby="coachStatusL">' + COACH_STATUS.map(function (o) {
         return '<button type="button" data-coach-status="' + esc(o) + '" data-look="' + COACH_LOOK[o] + '" aria-pressed="' + (co.status === o) + '">' + esc(o) + '</button>';
       }).join('') + '</div></div>' +
@@ -1340,7 +1831,7 @@
     var s = state[t], h = s.hist, key = E.nameKey(s.meta.name);
     var cl = h && h.key === key ? clients.clients[key] : null, out = {};
     if (!cl) return out;
-    E.progress(cl.sessions, t, { date: s.meta.date || todayIso(), results: currentResults(t, c) }, 5).rows.forEach(function (r) {
+    E.progress(historySessions(t, cl), t, { date: s.meta.date || todayIso(), results: currentResults(t, c) }, 5).rows.forEach(function (r) {
       var v = r.values;
       if (v[v.length - 1] === null) return;                                     // not tested today
       if (v.slice(0, -1).filter(function (x) { return x !== null; }).length >= 2) out[r.metric] = r;
@@ -1374,8 +1865,10 @@
       if (c.rows.length) return '';
       return c.tests.length ? 'Add body mass (kg) to score these results.' : 'Enter at least one result to create the report.';
     }
-    var none = t === 'screen' ? 'Enter at least one result to create the report.' : 'Enter at least one result to create the rehab report.';
-    var need = t === 'screen' ? (c.pop.population ? '' : 'Choose Male or Female (or a sport population)') : rehabNeed(t);
+    var none = SL(t) ? 'Enter at least one result to create the report.' : 'Enter at least one result to create the rehab report.';
+    var need = SL(t) ? (c.pop.population ? '' : (t === 'custom' && state.custom.pop === null ? 'Choose the population' : 'Choose Male or Female (or a sport population)')) : rehabNeed(t);
+    if (t === 'custom' && state.custom.pop === null) return 'Choose the population to start.';   // v36
+    if (t === 'custom' && !state.custom.battery.length && !hasResults(t)) return 'Choose the tests (or scan your notes) to start.';
     if (!hasResults(t)) return none;                  // v18: until then the details card's prompt is the only one
     if (need) return need + ' to score the results.';
     if (!c.groups.length) return none;
@@ -1416,7 +1909,7 @@
     });
   }
   function renderSummary(c) {
-    var t = state.tool, labels = (t === 'screen' || t === 'str') ? TALLY.screen : TALLY.rehab;
+    var t = state.tool, labels = (SL(t) || t === 'str') ? TALLY.screen : TALLY.rehab;
     // the same heading on every report tab (v11). v18: no 'Compared against …' line: the details card sets it and the
     // strip shows it
     var head = '<h2>Summary</h2>';
@@ -1454,7 +1947,7 @@
       }).join('') + '</ol>';
     }
     var html = '<div class="sum"><div class="sum-scroll">' + head + tally + (t === 'acl' ? rtsSumHtml(c) : '') + '<h3>Top priorities <small>worst first</small></h3>' + list;
-    if (t === 'screen' && c.radarOptions.length) {
+    if (SL(t) && c.radarOptions.length) {              // v36: the Custom battery's profile chart too
       var full = c.radarPicked.length >= 6;
       html += '<h3>Profile chart <small>pick 3–6 for page 1</small></h3><div class="picks">' + c.radarOptions.map(function (o) {
         var on = c.radarPicked.indexOf(o[0]) >= 0;
@@ -1501,7 +1994,7 @@
     } else if (el.dataset.field) {
       var row = el.closest('.metric'), v = val(t, row.dataset.metric);
       v[el.dataset.field] = el.value;
-      if (el.dataset.field === 'previous') v.prevDate = '';     // typed by hand now, no longer the saved record's value
+      if (el.dataset.field === 'previous') { v.prevDate = ''; v.prevMass = ''; }   // typed by hand now, no longer the saved record's value (v36: nor its body mass)
       refresh();
       if (!blank(el.value)) foldNow(t, true);          // results arriving: the details card folds into the strip (v11)
     }
@@ -1509,7 +2002,7 @@
   }
   function onChange(e) {
     var el = e.target, t = state.tool;
-    if (el.dataset.choice === 'pop') { state.screen.pop = el.value; refresh(); }
+    if (el.dataset.choice === 'pop') { state[SL(t) ? t : 'screen'].pop = el.value; refresh(); }   // v36: the Custom battery's too
     else if (el.dataset.choice === 'phase') { state[t].phase = el.value || null; refresh(); }
     else if (el.id === 'valdFiles') importVald(el.files);
     else if (el.id === 'scanFiles') {
@@ -1536,6 +2029,9 @@
     if (b.dataset.action === 'choose-client') { openClientsDialog('pick'); return; }
     if (b.dataset.action === 'import-menu') { var im = importMenu(); setImportMenu(!!im && im.hidden, true); return; }   // v18
     if (b.dataset.action === 'tests-today') { openTestsDialog(); return; }
+    if (b.dataset.pop) { choosePopulation(b.dataset.pop); return; }          // v36: the Custom battery's population step
+    if (b.dataset.action === 'bat-choose') { openCatDialog(); return; }
+    if (b.dataset.action === 'bat-saved') { openBatDialog(); return; }
     if (b.dataset.action === 'add-program') { linkProgram(t); return; }          // v19: the report and the program together
     if (b.dataset.action === 'goto-program') { gotoProgram(); return; }
     if (b.dataset.action === 'back-to-report') { backToReport(); return; }
@@ -1670,6 +2166,16 @@
         'Nordic Peak Force — Left': ['365', '340'], 'Nordic Peak Force — Right': ['318', '322'], 'Nordic L/R Imbalance': ['12.9', '', 'L'],
         'Adductor Peak Force': ['402', ''], 'Abductor Peak Force': ['371', ''], '10 m sprint': ['1.78', '1.81'], '20 m sprint': ['3.02', ''] };
       Object.keys(ex).forEach(function (k) { var v = val('screen', k); v.result = ex[k][0]; v.previous = ex[k][1]; v.side = ex[k][2] || ''; });
+    } else if (t === 'custom') {                       // v36: a short pre-season battery
+      Object.assign(s.meta, { name: 'Example Athlete', sex: 'Female', age: '21', mass: '64', sport: 'Netball', notes: 'Example data — not a real athlete' });
+      s.pop = 'general';
+      s.battery = tidyBattery([{ k: 'screen', key: 'Jump Height' }, { k: 'screen', key: 'RSI-modified' }, { k: 'screen', key: 'IMTP Relative Force' },
+        { k: 'screen', key: 'Nordic Peak Force — Left' }, { k: 'screen', key: 'Nordic Peak Force — Right' }, { k: 'str', id: 'split_squat' }, { k: 'str', id: 'sl_calf_raise_reps' },
+        { k: 'own', id: 'o-example1', name: 'Y-balance anterior reach', unit: 'cm', dir: 'Higher', green: 65, amber: 60 }]);
+      s.batName = '';
+      var cx = { 'Jump Height': ['27.4', '26.1'], 'RSI-modified': ['0.41', ''], 'IMTP Relative Force': ['31.5', '29.8'], 'Nordic Peak Force — Left': ['262', '241'], 'Nordic Peak Force — Right': ['288', ''],
+        'Split squat (rear leg) — Left': ['22', ''], 'Split squat (rear leg) — Right': ['20', ''], 'Single-leg calf raise — Left': ['27', '24'], 'Single-leg calf raise — Right': ['22', ''], 'Y-balance anterior reach': ['63', '61'] };
+      Object.keys(cx).forEach(function (k) { var v = val('custom', k); v.result = cx[k][0]; v.previous = cx[k][1]; });
     } else if (t === 'ham') {
       Object.assign(s.meta, { name: 'Example Patient', injured: 'Left', sport: 'Soccer', notes: 'Example data — not a real patient' });
       s.phase = 'Return to Play';                      // v18: chosen here, as the clinician would
@@ -1733,14 +2239,15 @@
         })
       };
     }
-    if (t === 'screen') {
+    if (SL(t)) {
       var labels = {};
       c.radarOptions.forEach(function (o) { labels[o[0]] = o[1]; });
       return {
-        file: fileName('_report.pdf', t),
+        file: fileName(t === 'custom' ? '_battery.pdf' : '_report.pdf', t),
         rep: window.BHReport.screening({
+          kind: t, battery: t === 'custom' ? (state.custom.batName || '') : '',   // v36: the Custom battery (its saved name, if any)
           meta: { name: m.name, date: E.displayIso(m.date), sport: m.sport, tester: m.tester, age: m.age, sex: m.sex, mass: m.mass, notes: m.notes },
-          popLabel: c.pop.label, groups: c.groups, counts: c.counts, prios: explained(c.prios, function (r) { return r.name; }),
+          popLabel: c.pop.label, groups: c.groups, counts: c.counts, prios: explained(c.prios, function (r) { return explainKey(t, r.name); }),
           radarKeys: c.radarPicked.map(function (k) { return [k, labels[k]]; }), interp: interp, progress: progress, coach: coachData(t)
         })
       };
@@ -2062,7 +2569,10 @@
     }
     var keep = {}, f = NAME_FIELDS[t];
     if (f && !blank(state[t].meta[f])) keep[f] = state[t].meta[f];
+    // v36: the Custom battery's population and tests are the clinic's set-up for the session, not the client's: they stay
+    var cu = t === 'custom' ? { pop: state.custom.pop, battery: state.custom.battery, batName: state.custom.batName } : null;
     state[t] = freshTool(t, keep);
+    if (cu) Object.assign(state[t], cu);
   }
   // v18: a clean page on this tool for another client (New client, or a different client chosen while the page holds
   // someone's entries), as Return home does for every tool: the practitioner's name stays. Gives back the Undo.
@@ -2198,6 +2708,7 @@
     str: homeSvg('<path d="M6.5 6.5v11M17.5 6.5v11M3.5 9.5v5M20.5 9.5v5M6.5 12h11"/>'),                                  // a dumbbell
     ham: homeSvg('<circle cx="15" cy="4.2" r="1.9"/><path d="M13.6 7.6 10.8 13l3.6 2.4-1.6 5.6"/><path d="M10.8 13 7 15.2 4.5 14"/><path d="M13.6 7.6 17 9.6l2.4-1.8"/><path d="M13.6 7.6 10 8.4 8.4 11"/>'),   // a sprinter: back to running
     acl: homeSvg('<path d="M9.5 3v5.8a2.6 2.6 0 0 0 5.2 0V3"/><path d="M9.5 21v-4.8a2.6 2.6 0 0 1 5.2 0V21"/><circle cx="18" cy="12.2" r="1.7"/><path d="M11 10.8l2.4 2.6"/>'),   // a knee: the bone ends, the kneecap and the ligament
+    custom: homeSvg('<path d="M4 6.5h2.5M4 12h2.5M4 17.5h2.5"/><path d="M10 6.5h10M10 12h10M10 17.5h10"/><path d="M7.2 5.2 5.4 7.6 4.3 6.6"/><path d="M7.2 10.7 5.4 13.1 4.3 12.1"/>'),   // v36: a list with ticks: the tests chosen
     photo: homeSvg('<path d="M4 8h3l2-3h6l2 3h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="3.5"/>'),
     builder: homeSvg('<rect x="5" y="4.5" width="14" height="16.5" rx="2"/><path d="M9 3h6v3H9zM8.5 11h7M8.5 15h4.5"/>'),
     library: homeSvg('<path d="M3 5.5c3-1 6-1 9 1 3-2 6-2 9-1v13c-3-1-6-1-9 1-3-2-6-2-9-1z"/><path d="M12 6.5v13"/>'),
@@ -2210,6 +2721,7 @@
     str: 'Each leg’s load, force or reps: asymmetry and capacity.',
     ham: 'Injured-limb results against the targets for the rehab phase.',
     acl: 'Injured-limb and symmetry results against ACLR norms for the phase.',
+    custom: 'Pick any tests, or photograph your notes, and score them against the norms.',   // v36
     photo: 'Photograph a handwritten program and get a neat, printable handout.',
     builder: 'Pick from the library, type exercises or start from a template.',
     library: 'The clinic’s exercises: doses, handout cues and video links.'
@@ -2697,7 +3209,10 @@
     openModal(els.clearDialog, els.clearCancel);
   }
   function clearAllData() {
+    // v36: the Custom battery's population and tests are set-up, like Tests today: kept (Choose tests › Untick all empties it)
+    var cu = { pop: state.custom.pop, battery: state.custom.battery, batName: state.custom.batName };
     TOOLS.forEach(function (t) { state[t] = freshTool(t); });
+    Object.assign(state.custom, cu);
     state.ex = freshEx();                              // v15: the draft program only; the library, templates and records stay
     tidyState();
     exLoaded = null;
@@ -2788,9 +3303,10 @@
     var totals = 'Totals: ' + (rehab
       ? c.counts.Green + ' on target, ' + c.counts.Amber + ' close, ' + c.counts.Red + ' behind.'
       : c.counts.Green + ' on target, ' + c.counts.Amber + ' close, ' + c.counts.Red + ' off target.');
-    if (t === 'screen') {
+    if (SL(t)) {
       L.push('Readers: the athlete and their coach. Refer to the person as \u2018the athlete\u2019.');
-      L.push('Report: athlete performance and readiness screen (VALD force plate and related tests).');
+      L.push(t === 'custom' ? 'Report: a custom screening battery chosen by the clinician (VALD force plate and related tests, lower-limb strength tests scored relative to body weight, and the clinic\u2019s own tests, which have a target only when the clinician typed one).'   // v36
+        : 'Report: athlete performance and readiness screen (VALD force plate and related tests).');
       L.push('Compared against: ' + clean1(c.pop.label) + '.');
       var who = joinBits([clean1(m.sex), blank(m.age) ? '' : clean1(m.age) + ' years', blank(m.mass) ? '' : clean1(m.mass) + ' kg', blank(m.sport) ? '' : 'sport: ' + clean1(m.sport)]);
       if (who) L.push('Athlete: ' + who + '.');
@@ -2848,7 +3364,7 @@
     var t = state.tool, it = state[t].interp;
     return '<section class="card interp' + (interpShown(t) ? '' : ' folded') + '" id="interpCard" aria-labelledby="interpTitle">' +
       '<div class="card-head"><div class="fold-t"><h2 id="interpTitle">Interpretation</h2>' +
-      '<p class="interp-help">Optional: a short summary for the ' + (t === 'screen' ? 'athlete and coach' : 'patient') + ', printed near the top of the report.</p></div>' +
+      '<p class="interp-help">Optional: a short summary for the ' + (SL(t) ? 'athlete and coach' : 'patient') + ', printed near the top of the report.</p></div>' +
       '<div class="interp-bar"><button type="button" class="ghost ai-draft" data-action="ai-draft">' + SPARKLE + '<span data-label>Draft with AI</span></button>' +
       '<button type="button" class="quiet interp-own" data-action="interp-own" aria-controls="interpText">Write my own</button></div></div>' +
       '<span class="interp-status" id="interpStatus" role="status" aria-live="polite"></span>' +
@@ -3144,12 +3660,22 @@
     if (/(\u2014 injured|\(injured\))$/.test(m.name)) w += ', injured side only';
     else if (CALCULATED.test(m.name) && m.calc !== 'PERBW' && m.calc !== 'PERKG') w += ', only if this number itself is written';
     if (m.dir === 'Lower') w += ', lower is better';
-    if (t === 'screen' && E.isAsym(m.name)) w += '; side = the higher side, L or R';
+    if (SL(t) && E.isAsym(m.name)) w += '; side = the higher side, L or R';
     return w;
   }
   // the tests Claude may fill on this tab: id t1..tN -> the app's own metric key and fields
   function scanList(t) {
     var list = [], n = 0;
+    if (t === 'custom') {                              // v36: the whole catalogue (the clinician chose the tests themselves), plus the battery's own tests
+      catalogue().forEach(function (c) {
+        if (c.k === 'screen') list.push({ id: 't' + (++n), key: c.name, name: c.name, what: scanWhat('screen', c.def), fields: E.isAsym(c.name) ? ['result', 'side'] : ['result'] });
+        else list.push({ id: 't' + (++n), key: c.def.id, name: c.name, what: INPUT_WORD[c.def.input] + (c.detail ? ' (' + c.detail + ')' : '') + ' for each leg', fields: ['left', 'right'], str: c.def });
+      });
+      state.custom.battery.forEach(function (o) {
+        if (o.k === 'own') list.push({ id: 't' + (++n), key: o.name, name: o.name, what: (o.unit ? 'in ' + o.unit : 'number') + (o.dir === 'Lower' ? ', lower is better' : ''), fields: ['result'], own: true });
+      });
+      return list;
+    }
     if (t === 'str') {
       DATA.str.tests.forEach(function (tt) {
         if (tt.input === 'calc') return;
@@ -3168,6 +3694,7 @@
   }
   function scanPrompt(t, list) {
     var L = ['Section of the app: ' + TOOL_NAMES[t] + '.'];
+    if (t === 'custom') L.push('The clinician chose the tests themselves, so the paper may hold any of the tests listed below, and tests of the clinic\u2019s own that are not listed.');   // v36
     if (t === 'ham' || t === 'acl') {
       var inj = state[t].meta.injured;
       L.push(inj ? 'Injured side: ' + inj + '. Where a test asks for the injured side and both sides are written, use the ' + inj.toLowerCase() + ' value.'
@@ -3177,10 +3704,11 @@
     list.forEach(function (x) { L.push(x.id + ': ' + x.name + ' — ' + x.what + ' — ' + x.fields.join(', ')); });
     L.push('');
     L.push('Return every reading you can match. Use field "result" for a single value, "left" and "right" for each side, and "side" with the value L or R for the higher side (asymmetry tests only). Leave out tests that are not on the paper or screen.');
+    if (t === 'custom') L.push('Any other test written on the paper that is not in the list goes in others, one entry per value: its name as written (a clear shorthand written out, for example "Y-balance anterior reach"), its unit if written (else an empty string) and the value as written. Where such a test was written for left and right, give two entries named "<test> \u2014 Left" and "<test> \u2014 Right". Never put a listed test in others, and never put a name or personal detail there.');   // v36
     return L.join('\n');
   }
-  function scanSchema(list) {
-    return {
+  function scanSchema(list, t) {
+    var sch = {
       type: 'object',
       properties: {
         test_date: { type: 'string' },
@@ -3203,6 +3731,11 @@
       required: ['test_date', 'body_mass_kg', 'readings', 'unclear'],
       additionalProperties: false
     };
+    if (t === 'custom') {                              // v36: tests of the clinic's own, written on the paper but not in the list
+      sch.properties.others = { type: 'array', items: { type: 'object', properties: { name: { type: 'string' }, unit: { type: 'string' }, value: { type: 'string' } }, required: ['name', 'unit', 'value'], additionalProperties: false } };
+      sch.required.push('others');
+    }
+    return sch;
   }
   // shrink a photo on the device (JPEG, long edge <= maxEdge) and return it as base64
   function prepareImage(file, maxEdge) {
@@ -3270,7 +3803,7 @@
       var body = {
         model: cfg.model, max_tokens: cfg.max_tokens || 8000, system: [].concat(cfg.system || []).join('\n'),
         messages: [{ role: 'user', content: content }],
-        output_config: { format: { type: 'json_schema', schema: exm ? exScanSchema() : scanSchema(list) } }
+        output_config: { format: { type: 'json_schema', schema: exm ? exScanSchema() : scanSchema(list, t) } }
       };
       if (cfg.effort) body.output_config.effort = cfg.effort;
       return claudeRequest(aiKey(), body, cfg.endpoint, cfg.timeout_s || 120, 'read the photo');
@@ -3333,6 +3866,9 @@
       undo.put[mk] = v;
       marks[mk] = true;
     }
+    var added = [];                                    // v36: tests the photo put into the Custom battery (their keys in undo.added, for Undo)
+    undo.added = [];
+    function join(item, label) { if (t === 'custom' && batteryAdd(item)) { added.push(label); undo.added.push(batteryKey(tidyBattery([item])[0])); } }
     (out && Array.isArray(out.readings) ? out.readings : []).forEach(function (r) {
       var def = r && byId[r.test];
       if (!def || def.fields.indexOf(r.field) < 0) return;
@@ -3344,14 +3880,36 @@
         v = raw.replace(/,/g, '.').replace(/[^\d.\-]/g, '');
         if (E.parseInput(v) === null) { if (raw) notes.push(fieldLabel(def, r.field) + ': couldn’t use “' + raw.slice(0, 30) + '”.'); return; }
       }
-      put(def.key, r.field, v, fieldLabel(def, r.field));
+      var key = def.key, f = r.field;
+      if (t === 'custom') {                            // v36: an LL Strength test's leg is its own row here; the test joins the battery
+        if (def.str) { key = strSideName(def.str, f === 'left' ? 'Left' : 'Right'); f = 'result'; join({ k: 'str', id: def.str.id }, def.name); }
+        else if (!def.own) join({ k: 'screen', key: def.key }, def.name);
+      }
+      put(key, f, v, fieldLabel(def, r.field));
     });
+    if (t === 'custom') {                              // v36: tests of the clinic's own, read from the paper
+      (out && Array.isArray(out.others) ? out.others : []).forEach(function (o) {
+        var name = cap(o && o.name, 80), raw = String(o && o.value == null ? '' : o.value).trim(), v = raw.replace(/,/g, '.').replace(/[^\d.\-]/g, '');
+        if (!name) return;
+        if (E.parseInput(v) === null) { if (raw) notes.push(name + ': couldn’t use “' + raw.slice(0, 30) + '”.'); return; }
+        var hit = catalogueByName(name);
+        if (hit) {                                     // a catalogue test after all
+          if (hit.k === 'screen') { join({ k: 'screen', key: hit.name }, hit.name); put(hit.name, 'result', v, hit.name); }
+          else notes.push(name + ' is an LL Strength test: tick it under Choose tests and type each leg (' + v + ').');
+          return;
+        }
+        var k = E.libKey(name), own = state.custom.battery.filter(function (it) { return it.k === 'own' && E.libKey(it.name) === k; })[0];
+        if (!own) { own = tidyOwn({ id: newId('o-'), name: name, unit: cap(o.unit, 12), dir: 'Higher', green: null, amber: null }); if (!own) return; join(own, own.name + ' (your own test, no target)'); }
+        put(own.name, 'result', v, own.name);
+      });
+    }
     var d = String((out && out.test_date) || '').trim();
     if (/^\d{4}-\d{2}-\d{2}$/.test(d) && E.parseDate(d, ['Y-m-d'])) put('meta', 'date', d, 'Test date');
     var mass = String((out && out.body_mass_kg) || '').replace(/,/g, '.').replace(/[^\d.]/g, ''), mv = E.parseInput(mass);
     if ('mass' in s.meta && mv !== null && mv >= 20 && mv <= 300) put('meta', 'mass', mass, 'Body mass');
     var keys = Object.keys(undo.put), n = keys.filter(function (k) { return k.indexOf('meta|') !== 0; }).length;
     var unclear = (out && Array.isArray(out.unclear) ? out.unclear : []).map(function (x) { return String(x).trim(); }).filter(Boolean).concat(notes);
+    if (added.length) { unclear.unshift('Added to the battery: ' + added.join(', ') + '.'); fillCustomPrevious(); }   // v36: and their previous results, for a loaded client
     scanInfo = {
       tool: t, kind: n ? 'done' : 'empty', n: n, unclear: unclear.slice(0, 12), undo: keys.length ? undo : null,
       date: 'meta|date' in undo.put, mass: 'meta|mass' in undo.put
@@ -3370,6 +3928,14 @@
       if (key === 'meta') s.meta[f] = u.was[mk]; else val(t, key)[f] = u.was[mk];
       if (u.had[mk]) s.scanned[mk] = true; else delete s.scanned[mk];
     });
+    // v36: tests the scan put into the Custom battery go again, unless a box of theirs holds something now
+    if (t === 'custom' && Array.isArray(u.added) && u.added.length) {
+      var held = {};
+      customSet().groups.forEach(function (g) { g.metrics.forEach(function (m) {
+        var v = s.values[m.name]; if (v && ['result', 'previous', 'side'].some(function (f) { return !blank(v[f]); })) held[m.str ? 'str|' + m.str : m.own ? 'own|' + m.own : 'screen|' + m.name] = 1;
+      }); });
+      s.battery = s.battery.filter(function (it) { var k = batteryKey(it); return u.added.indexOf(k) < 0 || held[k]; });
+    }
     scanInfo = null;
     render();
     toast(kept ? 'Scan undone. ' + kept + (kept === 1 ? ' box you changed was' : ' boxes you changed were') + ' kept.' : 'Scan undone');
@@ -3458,8 +4024,8 @@
       : '<span class="scan-msg"><b>' + (info.added ? 'Added ' : 'Filled ') + info.n + (info.n === 1 ? ' exercise' : ' exercises') + ' from your notes' + (info.added ? ', after the ones already there' : '') + '.</b> Check them against the page before creating the handout.' +
         (info.matched ? ' ' + info.matched + ' matched your library.' : '') + askNote(info) + '</span>')
       : info.kind === 'empty'
-      ? '<span class="scan-msg">Nothing on the photo matched the ' + esc(TOOL_NAMES[t]) + ' tests' + (extra.length ? ' (only the ' + extra.join(' and ') + ')' : '') + '. Check you’re on the right tab, or try a clearer photo.</span>'
-      : '<span class="scan-msg"><b>Filled ' + info.n + (info.n === 1 ? ' result' : ' results') + (extra.length ? ' and the ' + extra.join(' and ') : '') + ' from your notes.</b> Check the highlighted boxes against the paper or screenshot before creating the report.</span>');
+      ? '<span class="scan-msg">Nothing on the photo matched ' + (t === 'custom' ? 'any test the app knows' : 'the ' + esc(TOOL_NAMES[t]) + ' tests') + (extra.length ? ' (only the ' + extra.join(' and ') + ')' : '') + '. ' + (t === 'custom' ? 'Try a clearer photo, or choose the tests and type the results.' : 'Check you’re on the right tab, or try a clearer photo.') + '</span>'
+      : '<span class="scan-msg"><b>Filled ' + info.n + (info.n === 1 ? ' result' : ' results') + (extra.length ? ' and the ' + extra.join(' and ') : '') + ' from your notes.</b> Check the highlighted boxes against the paper or screenshot before creating the report.' + (t === 'custom' ? ' Tests the photo held were added to the battery.' : '') + '</span>');
     if (info.undo) html += '<button type="button" class="quiet scan-undo" data-action="scan-undo">Undo</button>';
     html += close;
     if (info.unclear && info.unclear.length) {
@@ -4614,7 +5180,7 @@
   // v25 (Matthew: "the AI needs to consider how one might affect the other"): with a condition, Claude reads the report as a whole,
   // sorts the findings into those the condition explains and those that are separate, names the sections Rehab / Performance /
   // Keep up, says what leads the block, and writes a rationale for the physiotherapist that stays with the program (never printed).
-  var SUGGEST_TOOLS = ['screen', 'str', 'ham', 'acl'];
+  var SUGGEST_TOOLS = ['screen', 'str', 'ham', 'acl', 'custom'];   // v36: + the Custom battery
   var EX_SUGGEST_DEFAULT = {
     effort: 'high', max_tokens: 32000, timeout_s: 480, max_per_day: 5, cache: '1h',   // v26: the cap is per training day; v28: room for a three-day program; v29: high effort (the JSON answer leaves Claude only its hidden thinking to reason in, which medium effort often skips), room for that thinking, and the reference documents cached for an hour
     system: [
@@ -5027,7 +5593,7 @@
   }
   function storedItems(coll) {                         // { id: entry | { id, deleted: true } }
     if (storeOn()) { var c = CLOUD.cache, m = c && c[coll]; return m && typeof m === 'object' && !Array.isArray(m) ? m : NONE; }
-    return (coll === 'library' ? localLib : localTpl).items;
+    return (coll === 'library' ? localLib : coll === 'batteries' ? localBat : localTpl).items;   // v36: + batteries
   }
   // a full write of one entry or template, or (obj null) its tombstone; false when this device couldn't store it
   function writeItem(coll, id, obj) {
@@ -5036,9 +5602,9 @@
       if (obj) CLOUD.putDoc(coll, id, obj); else CLOUD.deleteDoc(coll, id);
       CLOUD.sync();
     } else {
-      var box = coll === 'library' ? localLib : localTpl;
+      var box = coll === 'library' ? localLib : coll === 'batteries' ? localBat : localTpl;   // v36: + batteries
       box.items[id] = obj || { id: id, deleted: true };
-      try { localStorage.setItem(coll === 'library' ? LIB_STORE : TPL_STORE, JSON.stringify(box)); } catch (e) { ok = false; }
+      try { localStorage.setItem(coll === 'library' ? LIB_STORE : coll === 'batteries' ? BAT_STORE : TPL_STORE, JSON.stringify(box)); } catch (e) { ok = false; }
     }
     libVer++;
     return ok;
@@ -6411,7 +6977,7 @@
   var HIST = 'bh-athlete-report-clients-v1';
   var clients = { v: 1, clients: {} };
   var SCORE_UNITS = { xBW: '× BW', xBWf: '× BW', pctBW: '% BW', Nkg: 'N/kg', reps: 'reps', ratio: '' };
-  var PREFILL = { screen: ['sex', 'age', 'sport', 'tester'], str: ['sport', 'tester'], ham: ['injured', 'doi', 'clinician', 'sport'], acl: ['injured', 'dos', 'graft', 'surgeon', 'sport'] };
+  var PREFILL = { screen: ['sex', 'age', 'sport', 'tester'], str: ['sport', 'tester'], ham: ['injured', 'doi', 'clinician', 'sport'], acl: ['injured', 'dos', 'graft', 'surgeon', 'sport'], custom: ['sex', 'age', 'sport', 'tester'] };   // v36
   var SAME_TOOL_ONLY = { injured: true, doi: true, dos: true, graft: true, surgeon: true, clinician: true };
   function loadLocalClients() {                        // the records kept on this device (local mode; before v13 in cloud mode)
     try {
@@ -6458,13 +7024,14 @@
     if (!key) return null;
     var date = m.date || todayIso(), meta = {};
     Object.keys(m).forEach(function (k) { if (k !== 'name' && !blank(m[k])) meta[k] = String(m[k]).trim(); });
-    if (t === 'screen') meta.pop = state.screen.pop;
+    if (SL(t)) meta.pop = state[t].pop;              // v36: the Custom battery's too
     if (t === 'ham' || t === 'acl') meta.phase = state[t].phase;
     if (t === 'acl') meta.normSex = state.acl.sex;
     var co = state[t].coach;                          // kept with the session, never filled back in from records
     if (coachSet(co)) meta.coach = { status: co.status, mods: String(co.mods || '').trim(), retest: co.retest };
     var sess = { tool: t, date: date, savedAt: new Date().toISOString(), meta: meta, values: compactValues(t), results: currentResults(t, c),
       mass: E.parseInput(m.mass), interp: blank(state[t].interp.text) ? '' : String(state[t].interp.text).trim() };
+    if (t === 'custom') { sess.battery = tidyBattery(state.custom.battery); if (state.custom.batName) sess.batName = state.custom.batName; }   // v36: the tests done
     if (userName()) sess.savedBy = userName();         // v13: who saved it (the practitioner's name on this device)
     return storeSession(key, name, sess);
   }
@@ -6564,12 +7131,60 @@
       bar.innerHTML = '<b>' + esc(cl.name) + '</b> has a ' + recordWord() + '; no programs yet.';
     }
   }
-  function earlierCount(cl, t, date) {
-    return cl ? cl.sessions.filter(function (x) { return x.tool === t && x.date < date; }).length : 0;
+  function earlierCount(cl, t, date) {               // v36: the Custom battery counts the screen and strength sessions it can read too
+    return cl ? historySessions(t, cl).filter(function (x) { return x.tool === t && x.date < date; }).length : 0;
   }
   // fill Previous results (and unchanging details) from the client's record. picked: chosen in Choose client (v11), which
   // folds the details card once the essentials are in; otherwise it folds when earlier results were loaded (never under a
   // box being typed in, e.g. a name suggestion tapped)
+  // v36: the sessions a tool's previous results, trends and Progress table are read from. The Custom battery also reads
+  // the client's Performance screen sessions (the same metric names) and LL Strength sessions (each leg mapped to the
+  // battery's row), cut to the battery's metrics, each as if it were a Custom session
+  function historySessions(t, cl) {
+    if (t !== 'custom' || !cl) return cl ? cl.sessions : [];
+    var names = {}, strOf = {};
+    customSet().groups.forEach(function (g) { g.metrics.forEach(function (m) { names[m.name] = 1; if (m.str) strOf[m.str + '|' + (m.side === 'Left' ? 'L' : 'R')] = m.name; }); });
+    var out = [];
+    cl.sessions.forEach(function (x) {
+      if (!x || !x.results) return;
+      if (x.tool === 'custom') { out.push(x); return; }
+      if (x.tool !== 'screen' && x.tool !== 'str') return;
+      var res = {}, vals = {}, any = false;
+      Object.keys(x.results).forEach(function (k) {
+        var name = x.tool === 'str' ? strOf[k] : (names[k] ? k : '');
+        if (!name) return;
+        res[name] = x.results[k]; any = true;
+        if (x.tool === 'str') { var id = k.split('|')[0], sd = k.split('|')[1] === 'L' ? 'left' : 'right', raw = x.values && x.values[id]; if (raw && !blank(raw[sd])) vals[name] = { result: raw[sd] }; }
+        else if (x.values && x.values[k]) vals[name] = x.values[k];
+      });
+      if (any) out.push({ tool: 'custom', date: x.date, savedAt: x.savedAt, meta: x.meta, values: vals, results: res, mass: x.mass, from: x.tool });
+    });
+    return E.sortSessions(out);
+  }
+  // v36: tests added to a Custom battery after the client's record was loaded (Choose tests, a saved battery, Scan notes) get
+  // their previous results too: only boxes with no previous of their own; the client bar's count and dates follow
+  function fillCustomPrevious() {
+    var s = state.custom, h = s.hist, key = E.nameKey(s.meta.name), cl = h && h.key === key ? clients.clients[key] : null;
+    if (!cl) return 0;
+    var hs = historySessions('custom', cl), date = s.meta.date || todayIso(), n = 0, dates = {}, have = 0;
+    customSet().groups.forEach(function (g) {
+      g.metrics.forEach(function (mm) {
+        if (mm.calc === 'DSI') return;
+        var v = val('custom', mm.name);
+        if (v.prevDate && !blank(v.previous)) { have++; dates[v.prevDate] = 1; }
+        if (!blank(v.previous)) return;
+        var src = /^(XBW|PCTBW|PERKG|PERBW)$/.test(mm.calc || '') ? hs.filter(function (x) { return x.values && x.values[mm.name] && !blank(x.values[mm.name].result); }) : hs;
+        var p = E.previousFor(src, 'custom', mm.name, date);
+        if (!p) return;
+        var raw = p.session.values && p.session.values[mm.name];
+        v.previous = raw && !blank(raw.result) ? raw.result : String(p.value);
+        v.prevDate = p.date; v.prevEdit = false; v.prevMass = p.mass == null ? '' : String(p.mass);
+        dates[p.date] = 1; n++;
+      });
+    });
+    h.n = have + n; h.dates = Object.keys(dates).sort();   // what the battery on the page has from the record now
+    return n;
+  }
   function loadHistory(t, key, picked, undo, was) {
     var cl = clients.clients[key];
     if (!cl) return;
@@ -6580,9 +7195,12 @@
       var ms = all[j].meta || {};
       if (all[j].tool !== t) continue;
       if (t === 'acl' && ms.normSex && DATA.acl.sexes.indexOf(ms.normSex) >= 0) s.sex = ms.normSex;
-      if (t === 'screen' && ms.pop) s.pop = ms.pop;
+      if (SL(t) && ms.pop) s.pop = ms.pop;
+      // v36: an empty Custom battery takes the tests done last time
+      if (t === 'custom' && !s.battery.length && Array.isArray(all[j].battery)) { s.battery = tidyBattery(all[j].battery); s.batName = typeof all[j].batName === 'string' ? all[j].batName : ''; }
       break;
     }
+    var hs = historySessions(t, cl);
     PREFILL[t].forEach(function (f) {
       if (!blank(m[f])) return;
       for (var i = all.length - 1; i >= 0; i--) {
@@ -6600,7 +7218,7 @@
         var v = val('str', tt.id), got = false;
         v.prevLeft = ''; v.prevRight = ''; v.prevMass = ''; v.prevDate = '';
         [['left', 'L', 'prevLeft'], ['right', 'R', 'prevRight']].forEach(function (sd) {
-          var p = E.previousFor(cl.sessions, 'str', tt.id + '|' + sd[1], date);
+          var p = E.previousFor(hs, 'str', tt.id + '|' + sd[1], date);
           var raw = p && p.session.values && p.session.values[tt.id];
           if (!p || !raw || blank(raw[sd[0]])) return;
           v[sd[2]] = raw[sd[0]]; v.prevMass = p.mass == null ? '' : String(p.mass); v.prevDate = p.date;
@@ -6609,9 +7227,11 @@
         if (got) n++;
       });
     } else {
-      DATA[t].groups.forEach(function (g) {
+      setOf(t).groups.forEach(function (g) {
         g.metrics.forEach(function (mm) {
-          var v = val(t, mm.name), p = E.previousFor(cl.sessions, t, mm.name, date);
+          // v36: a load or force needs the value as typed (the record's result is the score): only sessions that kept it
+          var src = t === 'custom' && /^(XBW|PCTBW|PERKG|PERBW)$/.test(mm.calc || '') ? hs.filter(function (x) { return x.values && x.values[mm.name] && !blank(x.values[mm.name].result); }) : hs;
+          var v = val(t, mm.name), p = E.previousFor(src, t, mm.name, date);
           v.prevEdit = false;
           if (!p) {
             if (v.prevDate) v.previous = '';           // a value from an earlier load (e.g. another client) goes; typed ones stay
@@ -6621,11 +7241,13 @@
           var raw = p.session.values && p.session.values[mm.name];
           v.previous = raw && !blank(raw.result) ? raw.result : String(p.value);
           v.prevDate = p.date; n++; dates[p.date] = 1;
+          if (t === 'custom') v.prevMass = p.mass == null ? '' : String(p.mass);   // v36: the mass a previous load was scored with
         });
       });
     }
     // v18: a returning client starts on "Only last time's tests" (one tap shows them all); the same client reloaded keeps the choice
-    if (!s.hist || s.hist.key !== key) s.onlyPrev = n > 0;
+    // (v36: not on the Custom battery, where the battery is already the tests chosen for today: one added would hide)
+    if (!s.hist || s.hist.key !== key) s.onlyPrev = n > 0 && t !== 'custom';
     s.hist = { key: key, name: cl.name, n: n, dates: Object.keys(dates).sort(), date: date };
     hideSuggest();
     if (picked || n) foldBeforeRender(t);
@@ -6671,7 +7293,7 @@
       var on = retest.on && retest.tool === t;
       bar.innerHTML = '<b>' + esc(cl.name) + '</b>' + (h.n
         ? ' — previous results loaded from ' + esc(h.dates.map(E.displayIso).join(', ')) + ' (' + h.n + (h.n === 1 ? ' test' : ' tests') + ')'
-        : ' — no earlier ' + TOOL_NAMES[t] + ' sessions; details filled in') +
+        : ' — no earlier ' + (t === 'custom' ? 'results this battery can use' : TOOL_NAMES[t] + ' sessions') + '; details filled in') +
         (h.date !== date ? ' <button type="button" class="quiet" data-action="reload-history">Reload for this date</button>' : '') +
         (h.n ? ' <button type="button" class="quiet retest" data-action="retest">' + (on ? 'Show all tests' : 'Only last time’s tests') + '</button>' +
           (on ? '<span class="retest-n">Showing ' + retest.n + ' of ' + retest.total + ' tests</span>' : '') : '');
@@ -6679,7 +7301,7 @@
       var earlier = earlierCount(cl, t, date), total = cl.sessions.length;
       bar.hidden = false; bar.className = 'client-bar';
       bar.innerHTML = '<b>' + esc(cl.name) + '</b> has ' + total + (total === 1 ? ' saved session' : ' saved sessions') +
-        (earlier ? ', ' + earlier + ' earlier ' + TOOL_NAMES[t] + '. ' : ', none earlier for ' + TOOL_NAMES[t] + '. ') +
+        (earlier ? ', ' + earlier + ' earlier ' + (t === 'custom' ? 'with results this battery can use' : TOOL_NAMES[t]) + '. ' : ', none earlier ' + (t === 'custom' ? 'with results this battery can use' : 'for ' + TOOL_NAMES[t]) + '. ') +
         '<button type="button" class="quiet" data-action="load-history" data-client="' + esc(key) + '">' + (earlier ? 'Load previous results' : 'Fill in details') + '</button>';
     } else { bar.hidden = true; bar.innerHTML = ''; }
   }
@@ -6696,7 +7318,7 @@
   function progressData(t, c) {
     var m = state[t].meta, cl = clientFor(m.name);
     if (!cl) return null;
-    var p = E.progress(cl.sessions, t, { date: m.date || todayIso(), results: currentResults(t, c) }, 5);
+    var p = E.progress(historySessions(t, cl), t, { date: m.date || todayIso(), results: currentResults(t, c) }, 5);
     if (!p.rows.length) return null;
     var label = {}, unit = {}, dir = {};
     if (t === 'str') {
@@ -6704,7 +7326,7 @@
         ['L', 'R'].forEach(function (k) { var id = tt.id + '|' + k; label[id] = tt.name + ' — ' + (k === 'L' ? 'Left' : 'Right'); unit[id] = SCORE_UNITS[tt.score] || ''; dir[id] = tt.dir || 'Higher'; });
       });
     } else {
-      DATA[t].groups.forEach(function (g) { g.metrics.forEach(function (mm) { label[mm.name] = mm.name; unit[mm.name] = mm.unit || ''; dir[mm.name] = mm.dir || ''; }); });
+      setOf(t).groups.forEach(function (g) { g.metrics.forEach(function (mm) { label[mm.name] = mm.name; unit[mm.name] = mm.unit || ''; dir[mm.name] = mm.dir || ''; }); });
     }
     return {
       dates: p.dates.map(E.displayIso), sessions: p.sessions,
@@ -7069,10 +7691,10 @@
       toast('Uploaded ' + evt.n + (evt.n === 1 ? ' waiting result' : ' waiting results'));
     } else if (evt.kind === 'settings') {
       applyCloudKey(evt.key);
-    } else if (evt.kind === 'library' || evt.kind === 'templates') {   // v15: another device changed the library or a template
+    } else if (evt.kind === 'library' || evt.kind === 'templates' || evt.kind === 'batteries') {   // v15: another device changed the library or a template; v36: or a battery
       libVer++;
       if (!state) return;
-      if (evt.kind === 'library') afterLibChange(); else afterTplChange();
+      if (evt.kind === 'library') afterLibChange(); else if (evt.kind === 'batteries') afterBatChange(); else afterTplChange();
     } else if (evt.kind === 'synced') {
       libVer++;                                        // (the merged library is rebuilt from the cache on next use)
       if (state) maybeLegacyPrompt();
@@ -7145,6 +7767,7 @@
       DATA.explain = r[5] && r[5].metrics && typeof r[5].metrics === 'object' ? r[5] : { metrics: {} };
       localLib = loadItems(LIB_STORE);                 // v15: local mode's library and templates (cloud mode reads the store's cache)
       localTpl = loadItems(TPL_STORE);
+      localBat = loadItems(BAT_STORE);                 // v36: local mode's saved batteries
       setStarter(r[6]);
       clients = loadClients();
       testsPref = loadTestsPref();
@@ -7252,6 +7875,7 @@
         if (box && !box.hidden) { e.preventDefault(); e.stopPropagation(); box.hidden = true; box.innerHTML = ''; }
       });
       wireExDialogs();                                 // v15: the library editor, + From library, the video player, templates
+      wireCustomDialogs();                             // v36: Choose tests and Saved batteries
       els.back.addEventListener('click', closeReport);
       els.sheetExBtn.addEventListener('click', addProgramFromReport);   // v20
       $('sheetPhone').addEventListener('click', function (e) {          // v35: the program on the client's phone
