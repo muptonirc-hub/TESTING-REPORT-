@@ -13,7 +13,33 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black">
 <link rel="apple-touch-icon" href="../athlete-report-app/apple-touch-icon.png">
 <link rel="icon" href="../athlete-report-app/icon-192.png">
-<link rel="manifest" href="manifest.webmanifest">
+<script>
+/* v2 (5 Oct): the home-screen icon opens this person's program. On an iPhone or iPad the home-screen app keeps its own
+   storage, apart from Safari's, and opens the manifest's start_url: with the plain manifest ("./") it opened without the
+   key and asked for the link again (Matthew: "if I close it then reopen it comes up with ... I want it to go straight to
+   the program"). So there, while the page has a key, it links a manifest made here whose start_url carries the key (after
+   #, so it still never reaches a server); should Safari pass over that, it saves the page's own address, which carries the
+   key too. Other browsers keep the plain manifest: their installed app shares the browser's storage, which remembers the
+   last key opened. program.js calls bhManifestFor(key) again when a link with another key is opened. */
+(function () {
+  var IOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  var KEY = /^[A-Za-z0-9]{20,64}$/, link = document.createElement('link');
+  link.rel = 'manifest';
+  function abs(u) { return new URL(u, location.href).href; }
+  window.bhManifestFor = function (key) {
+    if (!IOS || !KEY.test(key || '')) { if (link.getAttribute('href') !== 'manifest.webmanifest') link.href = 'manifest.webmanifest'; return; }
+    var page = location.href.split('#')[0];
+    var m = { name: 'My BASE exercise program', short_name: 'My program', start_url: page + '#' + key, scope: abs('./'),
+      display: 'standalone', background_color: '#ECF0F1', theme_color: '#1E1F21',
+      icons: [{ src: abs('../athlete-report-app/icon-192.png'), sizes: '192x192', type: 'image/png' }, { src: abs('../athlete-report-app/icon-512.png'), sizes: '512x512', type: 'image/png' }] };
+    link.href = 'data:application/manifest+json;charset=utf-8,' + encodeURIComponent(JSON.stringify(m));
+  };
+  var h = String(location.hash || '').replace(/^#/, ''), km = /(?:^|&)k=([A-Za-z0-9]+)/.exec(h), key = km ? km[1] : h;
+  if (!KEY.test(key)) { try { key = JSON.parse(localStorage.getItem('bh-program-key')) || ''; } catch (e) { key = ''; } }
+  window.bhManifestFor(key);
+  document.head.appendChild(link);
+})();
+</script>
 <!--
   v35: a client's exercise program on their phone (Matthew, 4 Oct: "The exercises prescribed would also be even better
   if it showed up on an app the patient COULD download or use via HTML like we are now"; his choices: a private link and

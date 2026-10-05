@@ -134,8 +134,14 @@
   // ---- start: the key from the link (or the last one opened on this phone), the saved copy at once, then the store's
   function start() {
     var key = keyFromUrl() || (KEY_RE.test(String(getJson(LAST) || '')) ? getJson(LAST) : '');
-    if (!key) { problem('Open the link or scan the QR code on your handout from BASE Health Noosa to see your program here.'); return; }
+    if (!key) {
+      // v2: an icon added to an iPhone's home screen before this version opens without its key (and its own storage is empty)
+      problem(standalone() ? 'This icon doesn’t know which program to open. Delete it, open the link or scan the QR code on your handout from BASE Health Noosa in your browser, then add it to your Home Screen again: from then on it opens your program straight away.'
+        : 'Open the link or scan the QR code on your handout from BASE Health Noosa to see your program here.');
+      return;
+    }
     setJson(LAST, key);
+    if (window.bhManifestFor) window.bhManifestFor(key);   // v2: Add to Home Screen keeps this program (iPhone, iPad)
     if (location.hash.replace(/^#/, '') !== key) { try { history.replaceState(null, '', location.pathname + location.search + '#' + key); } catch (e) { /* fine */ } }
     var saved = getJson(COPY + key);
     if (saved && (expired(saved.expires) || !saved.program)) { setJson(COPY + key, null); saved = null; }

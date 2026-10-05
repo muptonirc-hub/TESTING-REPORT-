@@ -2,7 +2,8 @@
    asks the server first (an update shows straight away); offline, or when the network takes more than 4 seconds, it
    uses the saved copy. The clinic store and the photos and videos are on other origins: never cached or intercepted
    here (the page keeps its own copy of the program; the browser's cache keeps the pictures). */
-var CACHE = 'bh-program-v1';
+// v2: the home-screen icon on an iPhone opens the program (index.html links a manifest whose start_url carries the key)
+var CACHE = 'bh-program-v2';
 var FILES = ['./', 'index.html', 'program.js', 'manifest.webmanifest', '../athlete-report-app/cloud-config.js',
   '../athlete-report-app/rajdhani-700.woff2', '../athlete-report-app/icon-192.png', '../athlete-report-app/apple-touch-icon.png'];
 self.addEventListener('install', function (event) {
