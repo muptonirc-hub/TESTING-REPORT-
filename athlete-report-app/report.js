@@ -379,6 +379,8 @@
     for (var i = 0; i < cards.length; i += perLine) lines.push(cards.slice(i, i + perLine));
     // domain, then the worst status in it (symbol and word), then how many of its metrics are on target
     var cardH = px(1 + 5 + 4 + 1 + 1 + 7) + lineH(sz.domain) + lineH(sz.status) + lineH(sz.count);
+    var subH = cards.some(function (c) { return c.sub != null; }) ? lineH(sz.count) : 0;   // v38: a Custom battery's region line
+    cardH += subH;
     doc.y += px(2);
     lines.forEach(function (line) {
       doc.ensure(cardH);
@@ -389,7 +391,8 @@
         doc.rect(x + px(0.5), top + px(0.5), px(w - 1), px(5.5), { r: [px(4.5), px(4.5), 0, 0], fill: col });
         var bt = top + px(1 + 5 + 4), lx = x + px(1 + 8);
         doc.text(c.domain, lx, baseline(bt, sz.domain), { style: 'bold', size: fs(sz.domain), color: C.BLACK });
-        var st = bt + lineH(sz.domain) + px(1), iw = iconW(sz.status);
+        if (c.sub) doc.text(c.sub, lx, baseline(bt + lineH(sz.domain), sz.count), { style: 'regular', size: fs(sz.count), color: C.MUTE });
+        var st = bt + lineH(sz.domain) + subH + px(1), iw = iconW(sz.status);
         statusIcon(doc, c.worst, lx + iw / 2, st + lineH(sz.status) / 2, px(sz.status), ink);
         doc.text(E.statusWord(c.worst, 'target'), lx + iw + px(3), baseline(st, sz.status), { style: 'bold', size: fs(sz.status), color: ink });
         doc.text(c.green + '/' + c.total + ' on target', lx, baseline(st + lineH(sz.status) + px(1), sz.count), { style: 'regular', size: fs(sz.count), color: C.MUTE });

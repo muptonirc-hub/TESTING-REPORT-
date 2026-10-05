@@ -8,9 +8,10 @@
    the small pictures the handout prints in a cache of its own (bh-media-v1), which an update leaves alone.
    v35: the client's phone page (../my-program/) is a separate little app with its own offline copy; nothing here.
    v36: the Custom battery (nothing new to cache: its dialogs are in index.html).
-   v37: the hip ratio and the Hamstring and ACL rehab tests in the Custom battery (no new files). */
-var CACHE = 'bh-athlete-report-v37';
-var FILES = ['./', 'index.html', 'app.js?v=37', 'engine.js?v=37', 'qrcode.js?v=37', 'report.js?v=37', 'report-fonts.js?v=37', 'jspdf.umd.min.js?v=37', 'cloud-config.js?v=37', 'cloud.js?v=37',
+   v37: the hip ratio and the Hamstring and ACL rehab tests in the Custom battery (no new files).
+   v38: the Custom battery's tests by category, type then region (no new files). */
+var CACHE = 'bh-athlete-report-v38';
+var FILES = ['./', 'index.html', 'app.js?v=38', 'engine.js?v=38', 'qrcode.js?v=38', 'report.js?v=38', 'report-fonts.js?v=38', 'jspdf.umd.min.js?v=38', 'cloud-config.js?v=38', 'cloud.js?v=38',
   'norms.json', 'strength_norms.json', 'hamstring_norms.json', 'acl_norms.json', 'interpretation.json', 'explainers.json', 'exercise_library.json', 'programming_guide.md', 'manifest.webmanifest',
   'guides/index.json', 'guides/training-variables.md', 'guides/rehab-principles.md', 'guides/muscle-strains.md', 'guides/acl.md', 'guides/tendinopathy.md', 'guides/ankle-sprain.md',
   'guides/groin-pain.md', 'guides/rotator-cuff.md', 'guides/pfp-oa.md', 'guides/low-back-pain.md', 'guides/performance-tests.md', 'guides/rehab-performance.md', 'guides/block-design.md',

@@ -448,7 +448,19 @@
   function titleCase(s) {
     return s.replace(/[A-Za-z]+/g, function (w) { return w.charAt(0).toUpperCase() + w.slice(1).toLowerCase(); });
   }
+  // v38: the Custom battery's categories ('ISOMETRIC STRENGTH · LOWER LIMB'): the type's short name, and the region apart
+  var CAT_SHORT = { 'ISOMETRIC STRENGTH': 'Isometric', 'ECCENTRIC STRENGTH': 'Eccentric', 'ISOKINETIC STRENGTH': 'Isokinetic', 'DYNAMIC STRENGTH (RM)': 'Dynamic (RM)',
+    'JUMP & POWER': 'Jump & power', 'REACTIVE': 'Reactive', 'HOP & FUNCTIONAL': 'Hop & functional', 'SPEED & AGILITY': 'Speed & agility', 'RANGE OF MOTION': 'Range of motion',
+    'BALANCE': 'Balance', 'QUESTIONNAIRES & CLINICAL': 'Questionnaires', 'OTHER TESTS': 'Other tests' };
+  var CAT_REGION = { 'LOWER LIMB': 'Lower limb', 'UPPER LIMB': 'Upper limb', 'TRUNK': 'Trunk', 'WHOLE BODY': 'Whole body' };
+  function catParts(title) {                         // [type, region] for a category's title, else null
+    var p = String(title).split(' \u00b7 ');
+    if (!CAT_SHORT[p[0]] || p.length > 2 || (p.length === 2 && !CAT_REGION[p[1]])) return null;
+    return [CAT_SHORT[p[0]], p.length === 2 ? CAT_REGION[p[1]] : ''];
+  }
   function shortDomain(title) {
+    var cp = catParts(title);
+    if (cp) return cp[0] + (cp[1] ? ' \u00b7 ' + cp[1] : '');
     for (var i = 0; i < DOMAIN_MAP.length; i++) if (title.indexOf(DOMAIN_MAP[i][0]) >= 0) return DOMAIN_MAP[i][1];
     return titleCase(title);
   }
@@ -459,7 +471,9 @@
       if (!sts.length) return;
       var worst = sts.reduce(function (w, s) { return WORST_RANK[s] > WORST_RANK[w] ? s : w; });
       var green = sts.filter(function (s) { return s === 'Green'; }).length;
-      cards.push({ domain: shortDomain(gp.title), worst: worst, green: green, total: sts.length });
+      var cp = catParts(gp.title), card = { domain: cp ? cp[0] : shortDomain(gp.title), worst: worst, green: green, total: sts.length };
+      if (cp) card.sub = cp[1];                        // v38: a category's region, under its type on the card
+      cards.push(card);
     });
     return cards;
   }

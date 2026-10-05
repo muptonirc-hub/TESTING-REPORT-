@@ -726,7 +726,9 @@ html:not(.home-on) .home, html.signed-out .home { display: none !important; }
 .cat-own-fields .f.wide { grid-column: 1 / -1; }
 .cat-own-fields .seg button { font-size: 14px; }
 .cat-own .ghost { margin: 10px 6px 6px; min-height: 42px; }
-@media (max-width: 419px) { .cat-own-fields { grid-template-columns: minmax(0, 1fr); } }
+/* v38: Type and Region (the own test's category) side by side across the form (the type the wider); stacked on a phone */
+.cat-own-pair { grid-column: 1 / -1; display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 10px; }
+@media (max-width: 419px) { .cat-own-fields { grid-template-columns: minmax(0, 1fr); } .cat-own-pair { grid-template-columns: minmax(0, 1fr); } }
 .bat-save { display: flex; align-items: flex-end; gap: 8px; margin-top: 14px; }
 .bat-save .name-field { flex: 1; margin-top: 0; }
 .bat-save .ghost { min-height: 44px; flex: none; }
@@ -1866,10 +1868,12 @@ html.row-dragging, html.row-dragging * { cursor: grabbing !important; user-selec
     <div class="cat-own" id="catOwn">
       <div class="cat-own-head"><button type="button" class="quiet" id="ownOpen" aria-expanded="false" aria-controls="catOwnForm">+ Your own test</button><span class="cat-own-ok" id="ownOk" role="status"></span></div>
       <div id="catOwnForm" hidden>
-      <p class="cat-own-lead">A test that isn’t in the catalogue. It is tracked over time and rated only if you give it a target.</p>
+      <p class="cat-own-lead">A test that isn’t in the catalogue. It is tracked over time, rated only if you give it a target, and listed under its type and region.</p>
       <div class="cat-own-fields">
         <label class="f" for="ownName"><span>Name</span><input id="ownName" type="text" maxlength="80" autocapitalize="sentences" autocomplete="off" placeholder="e.g. Y-balance anterior reach" enterkeyhint="next"></label>
         <label class="f" for="ownUnit"><span>Unit</span><input id="ownUnit" type="text" maxlength="12" autocapitalize="none" autocomplete="off" placeholder="cm, s, reps…" enterkeyhint="next"></label>
+        <div class="cat-own-pair"><label class="f" for="ownType"><span>Type</span><select id="ownType"></select></label>
+        <label class="f" for="ownRegion"><span>Region</span><select id="ownRegion"></select></label></div>
         <div class="f"><span id="ownDirL">Better</span><div class="seg" role="group" aria-labelledby="ownDirL"><button type="button" data-own-dir="Higher" aria-pressed="true">Higher</button><button type="button" data-own-dir="Lower" aria-pressed="false">Lower</button></div></div>
         <label class="f" for="ownGreen"><span>Target (optional)</span><input id="ownGreen" type="text" inputmode="decimal" autocomplete="off" placeholder="On target from" enterkeyhint="next"></label>
         <label class="f" for="ownAmber"><span>Close (optional)</span><input id="ownAmber" type="text" inputmode="decimal" autocomplete="off" placeholder="Close from" enterkeyhint="done"></label>
@@ -1915,13 +1919,13 @@ html.row-dragging, html.row-dragging * { cursor: grabbing !important; user-selec
 
 <div class="toast" id="toast" role="status" hidden></div>
 
-<script src="engine.js?v=37" defer></script>
-<script src="report-fonts.js?v=37" defer></script>
-<script src="jspdf.umd.min.js?v=37" defer></script>
-<script src="qrcode.js?v=37" defer></script>
-<script src="report.js?v=37" defer></script>
-<script src="cloud-config.js?v=37" defer></script>
-<script src="cloud.js?v=37" defer></script>
-<script src="app.js?v=37" defer></script>
+<script src="engine.js?v=38" defer></script>
+<script src="report-fonts.js?v=38" defer></script>
+<script src="jspdf.umd.min.js?v=38" defer></script>
+<script src="qrcode.js?v=38" defer></script>
+<script src="report.js?v=38" defer></script>
+<script src="cloud-config.js?v=38" defer></script>
+<script src="cloud.js?v=38" defer></script>
+<script src="app.js?v=38" defer></script>
 </body>
 </html>

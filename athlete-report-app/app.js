@@ -381,6 +381,49 @@
     return { injured: s.meta.injured || '', ham: has.ham ? s.hamPhase || '' : null, acl: has.acl ? (s.aclPhase ? s.aclPhase + (DATA.acl.sexes.indexOf(s.meta.sex) >= 0 ? ' (' + s.meta.sex.toLowerCase() + ' norms)' : '') : '') : null, notes: notes };
   }
   function strSideName(tt, side) { return tt.name + ' \u2014 ' + side; }
+  // v38: the Custom battery's categories (Matthew, 5 Oct: "I don't like how we list the battery exercises. They are simply
+  // categories based on pre existing batteries. They need to be put in new categories. For example. ISOMETRIC, FUNCTIONAL -
+  // then into region, e.g. lower limb, upper limb etc."; his choices: the detailed types, the same categories on the page and
+  // in the report, and a type and region for the clinic's own tests). The type first, then the body region; in a category
+  // the tests run in CAT_DEF's order (hip, knee, then ankle; the Performance screen's, LL Strength's, then the rehab tools').
+  // A test missing here (a metric added to a norms file later) goes under Other tests.
+  var CAT_TYPES = [['iso', 'Isometric strength'], ['ecc', 'Eccentric strength'], ['isok', 'Isokinetic strength'], ['dyn', 'Dynamic strength (RM)'],
+    ['jump', 'Jump & power'], ['react', 'Reactive'], ['hop', 'Hop & functional'], ['speed', 'Speed & agility'], ['rom', 'Range of motion'],
+    ['bal', 'Balance'], ['pro', 'Questionnaires & clinical']];
+  var CAT_REGIONS = [['ll', 'Lower limb'], ['ul', 'Upper limb'], ['trunk', 'Trunk'], ['wb', 'Whole body']];
+  var CAT_DEF = [
+    ["iso", "ll", ["screen|Adductor Peak Force", "screen|Abductor Peak Force", "screen|Adduction Asymmetry", "screen|Add : Abd Ratio", "str|hip_abduction", "str|hip_adduction", "str|hip_add_abd_ratio", "screen|Quad ISO @ 60\u00b0 \u2014 Left", "screen|Quad ISO @ 60\u00b0 \u2014 Right", "str|sl_knee_extension", "str|prone_hamstring_curl", "ham|HHD 90\u00b0 knee-flex force \u2014 injured", "ham|HHD 90\u00b0 knee-flex % of uninjured", "ham|HHD 15\u00b0 knee-flex force \u2014 injured", "ham|HHD 45\u00b0 force \u2014 injured", "acl|Knee extension torque \u2014 injured", "acl|Knee flexion torque \u2014 injured", "acl|Knee extension LSI", "acl|Knee flexion LSI", "acl|Quadriceps LSI", "acl|Hamstring LSI", "acl|Quadriceps strength index (90\u00b0 ISO)", "str|sl_seated_calf_vald"]],
+    ["iso", "wb", ["screen|IMTP Peak Force", "screen|IMTP Relative Force", "screen|IMTP RFD 0\u2013200 ms"]],
+    ["iso", "", ["screen|Isometric Peak Force"]],
+    ["ecc", "ll", ["screen|Nordic Peak Force \u2014 Left", "screen|Nordic Peak Force \u2014 Right", "screen|Nordic L/R Imbalance", "screen|Nordic Relative Force", "ham|Nordic peak force \u2014 injured", "ham|Nordic peak-force imbalance"]],
+    ["isok", "ll", ["ham|Knee-flexor ECC peak torque @60\u00b0/s \u2014 injured", "ham|Knee-flexor CONC peak torque @60\u00b0/s diff %"]],
+    ["dyn", "ll", ["str|sl_bridge", "str|split_squat", "str|sl_seated_calf_smith", "str|sl_calf_raise_reps", "str|sl_calf_raise_loaded"]],
+    ["jump", "ll", ["screen|Jump Height", "screen|Peak Power", "screen|CMJ Peak Force", "screen|RSI-modified", "screen|Concentric Asymmetry", "screen|Landing Asymmetry", "screen|DSI (CMJ \u00f7 IMTP)", "acl|CMJ \u2014 Jump height", "acl|CMJ \u2014 Peak power", "acl|CMJ \u2014 Concentric impulse", "acl|CMJ \u2014 Concentric peak force", "acl|CMJ \u2014 Eccentric impulse", "acl|CMJ \u2014 Take-off impulse", "acl|SJ \u2014 P1 concentric impulse", "acl|SJ \u2014 P2 concentric impulse", "acl|SJ \u2014 Peak power", "acl|SLCMJ \u2014 Jump height (injured)", "acl|SLCMJ \u2014 Power/BW (injured)"]],
+    ["react", "ll", ["screen|Hop RSI (best)", "screen|Hop Contact Time", "screen|Hop Jump Height", "screen|Reactive Asymmetry", "acl|SL Drop Jump 15cm \u2014 RSI (injured)", "acl|SL Drop Jump 15cm \u2014 Jump height (injured)", "acl|SL Drop Jump 15cm \u2014 Ground contact time (injured)"]],
+    ["hop", "ll", ["acl|Single hop LSI", "acl|Triple hop LSI", "acl|Crossover hop LSI", "acl|6 m timed hop LSI", "acl|Single-leg hop for distance (injured)", "acl|Side hop (injured)"]],
+    ["speed", "wb", ["screen|10 m sprint", "screen|20 m sprint", "screen|30 m sprint", "screen|5-10-5 (pro-agility)", "ham|5 m sprint time", "ham|10 m sprint time"]],
+    ["rom", "ll", ["ham|SLR % of uninjured side", "ham|MHFAKE % of uninjured side", "ham|AKET deficit vs uninjured", "ham|PKET deficit vs uninjured"]],
+    ["bal", "ll", ["acl|SEBT anterior reach composite (injured)"]],
+    ["pro", "ll", ["acl|IKDC", "acl|KOOS \u2014 ADL", "acl|KOOS \u2014 Pain", "acl|KOOS \u2014 QOL", "acl|KOOS \u2014 Sport & Rec", "acl|KOOS \u2014 Symptoms", "acl|ACL-RSI", "acl|Cincinnati Knee Score", "acl|GRS Perceived Function", "acl|Pedi-IKDC", "ham|HaOS score", "ham|Pain on palpation \u2014 length"]]
+  ];
+  var catIndex = null;
+  function catOf(key) {                                // { type, region, ord } for a catalogue key ('screen|…', 'str|…', 'ham|…', 'acl|…')
+    if (!catIndex) {
+      catIndex = {};
+      var o = 0;
+      CAT_DEF.forEach(function (d) { d[2].forEach(function (k) { catIndex[k] = { type: d[0], region: d[1], ord: ++o }; }); });
+    }
+    return catIndex[key] || { type: '', region: '', ord: 90000 };
+  }
+  function catKeyIndex(list, k) { for (var i = 0; i < list.length; i++) if (list[i][0] === k) return i; return -1; }
+  function catTypeLabel(t) { var i = catKeyIndex(CAT_TYPES, t); return i < 0 ? '' : CAT_TYPES[i][1]; }
+  function catRegionLabel(r) { var i = catKeyIndex(CAT_REGIONS, r); return i < 0 ? '' : CAT_REGIONS[i][1]; }
+  function catLabel(type, region) { return (catTypeLabel(type) || 'Other tests') + (catRegionLabel(region) ? ' \u00b7 ' + catRegionLabel(region) : ''); }
+  function catTitle(type, region) { return catLabel(type, region).toUpperCase(); }   // the section's name in the norms set, the PDF and for Claude
+  function catRank(type, region) {                     // the categories' order: by type, then region (Other tests and no region last)
+    var ti = catKeyIndex(CAT_TYPES, type), ri = catKeyIndex(CAT_REGIONS, region);
+    return (ti < 0 ? 99 : ti) * 10 + (ri < 0 ? 9 : ri);
+  }
   function ownNum(v) { var n = E.parseInput(v == null ? '' : String(v)); return n === null ? null : n; }
   function tidyOwn(o) {
     if (!o || typeof o !== 'object' || typeof o.id !== 'string' || !OWN_ID.test(o.id)) return null;
@@ -389,7 +432,10 @@
     var green = ownNum(o.green), amber = ownNum(o.amber), dir = o.dir === 'Lower' ? 'Lower' : 'Higher';
     if (green === null) amber = null;
     if (amber !== null && (dir === 'Higher' ? amber > green : amber < green)) amber = green;   // Close can't sit beyond the target
-    return { k: 'own', id: o.id, name: name, unit: cap(o.unit, 12), dir: dir, green: green, amber: amber };
+    var out = { k: 'own', id: o.id, name: name, unit: cap(o.unit, 12), dir: dir, green: green, amber: amber };
+    if (catKeyIndex(CAT_TYPES, o.type) >= 0) out.type = o.type;             // v38: its category (none: Other tests)
+    if (catKeyIndex(CAT_REGIONS, o.region) >= 0) out.region = o.region;
+    return out;
   }
   // a battery as stored or shipped: known items only, each once; an own test may not take a catalogue test's name
   function tidyBattery(list) {
@@ -425,9 +471,11 @@
   }
   function batteryKey(it) { return it.k === 'screen' ? 'screen|' + it.key : it.k === 'str' ? 'str|' + it.id : (it.k === 'ham' || it.k === 'acl') ? it.k + '|' + it.key : 'own|' + it.id; }
   function batteryHas(key) { return state.custom.battery.some(function (it) { return batteryKey(it) === key; }); }
-  // the tests a battery can hold, in the order the Choose tests list shows them: the Performance screen's metrics by device
-  // group, then the LL Strength tests; each { key, k, name, unit, group, def }
+  // the tests a battery can hold, in the order the Choose tests list shows them (v38: by category, type then region); each
+  // { key, k, name, unit, group (the category's title), glabel (its name on screen), type, region, rank, ord, def }
+  var catMemo = null;
   function catalogue() {
+    if (catMemo && catMemo.screen === DATA.screen && catMemo.str === DATA.str && catMemo.ham === DATA.ham && catMemo.acl === DATA.acl) return catMemo.list;
     var out = [];
     DATA.screen.groups.forEach(function (g) {
       g.metrics.forEach(function (m) { if (m.calc !== 'DSI') out.push({ key: 'screen|' + m.name, k: 'screen', name: m.name, unit: m.unit, group: g.title, def: m }); });
@@ -442,6 +490,13 @@
         g.metrics.forEach(function (m) { out.push({ key: rt + '|' + m.name, k: rt, name: m.name, unit: m.unit, group: REHAB_GROUP[rt] + ' \u2014 ' + g.title, glabel: label, def: m }); });
       });
     });
+    out.forEach(function (c, i) {                      // v38: each test's category
+      var cat = catOf(c.key);
+      c.type = cat.type; c.region = cat.region; c.ord = cat.ord + i / 1000; c.rank = catRank(cat.type, cat.region);
+      c.group = catTitle(cat.type, cat.region); c.glabel = catLabel(cat.type, cat.region);
+    });
+    out.sort(function (a, b) { return a.rank - b.rank || a.ord - b.ord; });
+    catMemo = { screen: DATA.screen, str: DATA.str, ham: DATA.ham, acl: DATA.acl, list: out };
     return out;
   }
   // a catalogue test (or an LL Strength test's side) with this name, matched ignoring case and spaces; failing that, the
@@ -459,9 +514,10 @@
     });
     return hit || (loose.length === 1 ? loose[0] : null);
   }
-  // the battery's items as a norms set: the Performance screen's groups cut to the battery (the DSI once both its forces are
-  // in), one group of LL Strength tests (a metric per leg, scored like the screen's force-per-mass metrics, the target as the
-  // clinic writes it, Close within amber_pct of it) and one of the clinic's own tests; the screen's populations and age bands
+  // the battery's items as a norms set: the Performance screen's metrics in the battery (the DSI once both its forces are
+  // in), the LL Strength tests (a metric per leg, scored like the screen's force-per-mass metrics, the target as the clinic
+  // writes it, Close within amber_pct of it), the rehab tests (the phase's targets) and the clinic's own tests; the screen's
+  // populations and age bands. v38: in sections by category (type, then region), as Choose tests lists them.
   function customSet() {
     var s = state && state.custom, b = s ? s.battery : [];
     // v37: the rehab tests' targets follow the phases chosen (and the ACL norms the sex)
@@ -469,12 +525,12 @@
     if (customMemo && customMemo.sig === sig) return customMemo.set;
     var keys = {}, strIds = [], own = [], reh = { ham: {}, acl: {} };
     b.forEach(function (it) { if (it.k === 'screen') keys[it.key] = 1; else if (it.k === 'str') strIds.push(it.id); else if (it.k === 'ham' || it.k === 'acl') reh[it.k][it.key] = 1; else own.push(it); });
-    var groups = [];
+    var items = [];                                    // v38: { m: the metric, type, region, ord }, sorted into the categories below
+    function put(m, key, sub) { var c = catOf(key); items.push({ m: m, type: c.type, region: c.region, ord: c.ord + (sub || 0) }); }
     DATA.screen.groups.forEach(function (g) {
-      var ms = g.metrics.filter(function (m) { return m.calc === 'DSI' ? !!(keys['CMJ Peak Force'] && keys['IMTP Peak Force']) : !!keys[m.name]; });
-      if (ms.length) groups.push({ title: g.title, metrics: ms });
+      g.metrics.forEach(function (m) { if (m.calc === 'DSI' ? !!(keys['CMJ Peak Force'] && keys['IMTP Peak Force']) : !!keys[m.name]) put(m, 'screen|' + m.name); });
     });
-    var strMetrics = [], extra = {}, pct = DATA.str.amber_pct == null ? 5 : DATA.str.amber_pct;
+    var strMetrics = { push: function (m) { put(m, 'str|' + (m.str || m.ratio), m.side === 'Right' ? 0.2 : 0.1); } }, extra = {}, pct = DATA.str.amber_pct == null ? 5 : DATA.str.amber_pct;
     strIds.forEach(function (id) {
       if (id === RATIO_ID) {                           // v37: the hip ratio, each leg worked out from that leg's two hip tests
         var rt = ratioTest();
@@ -500,24 +556,27 @@
         extra[name] = norm;
       });
     });
-    if (strMetrics.length) groups.push({ title: STR_GROUP, metrics: strMetrics });
-    REHAB_TOOLS.forEach(function (rt) {                // v37: a section per rehab tool, its tests in their usual order, the phase's targets
-      var pn = s ? (DATA[rt].norms || {})[rehabKeyFor(rt)] || {} : {}, ms = [];
+    REHAB_TOOLS.forEach(function (rt) {                // v37: the rehab tests, against the phase's targets
+      var pn = s ? (DATA[rt].norms || {})[rehabKeyFor(rt)] || {} : {};
       DATA[rt].groups.forEach(function (g) {
         g.metrics.forEach(function (m) {
           if (!reh[rt][m.name]) return;
-          ms.push(Object.assign({}, m, { rehab: rt }));
+          put(Object.assign({}, m, { rehab: rt }), rt + '|' + m.name);
           if (pn[m.name]) extra[m.name] = pn[m.name];
         });
       });
-      if (ms.length) groups.push({ title: REHAB_GROUP[rt], metrics: ms });
     });
-    var ownMetrics = [];
-    own.forEach(function (o) {
-      ownMetrics.push({ name: o.name, unit: o.unit, calc: null, dir: o.dir, thr: null, range: null, own: o.id, xkey: o.id });
+    own.forEach(function (o, i) {                      // the clinic's own tests, in their own category (v38; none: Other tests)
+      items.push({ m: { name: o.name, unit: o.unit, calc: null, dir: o.dir, thr: null, range: null, own: o.id, xkey: o.id }, type: o.type || '', region: o.region || '', ord: 100000 + i });
       if (o.green !== null) extra[o.name] = { dir: o.dir, green: o.green, amber: o.amber === null ? o.green : o.amber, source: '\u2605\u2606\u2606 Clinic target, typed with the test' };
     });
-    if (ownMetrics.length) groups.push({ title: OWN_GROUP, metrics: ownMetrics });
+    items.sort(function (a, b) { return catRank(a.type, a.region) - catRank(b.type, b.region) || a.ord - b.ord; });
+    var groups = [], byTitle = {};
+    items.forEach(function (it) {
+      var t = catTitle(it.type, it.region);
+      if (!byTitle[t]) { byTitle[t] = { title: t, metrics: [] }; groups.push(byTitle[t]); }
+      byTitle[t].metrics.push(it.m);
+    });
     var pops = {}, N = DATA.screen;
     Object.keys(N.populations || {}).forEach(function (p) { pops[p] = Object.assign({}, N.populations[p], extra); });
     var set = { population_order: N.population_order, groups: groups, populations: pops, age_bands: N.age_bands, age_norms: N.age_norms };
@@ -573,6 +632,8 @@
     'HOP TESTS (ForceDecks)': 'Hop tests (ForceDecks)',
     'BALANCE (Star Excursion / SEBT)': 'Balance (star excursion / SEBT)'
   };
+  // v38: the Custom battery's categories as they read on screen ('ISOMETRIC STRENGTH · LOWER LIMB' -> 'Isometric strength · Lower limb')
+  [['', '']].concat(CAT_TYPES).forEach(function (ty) { [['', '']].concat(CAT_REGIONS).forEach(function (re) { GROUP_TITLES[catTitle(ty[0], re[0])] = catLabel(ty[0], re[0]); }); });
   // names kept as written when a new group falls back to the generic rule (matched ignoring case)
   var TITLE_KEEP = {};
   ['CMJ', 'IMTP', 'RSI', 'DSI', 'RFD', 'ISO', 'LSI', 'ACL', 'ACLR', 'SEBT', 'PROMs', 'HHD', 'ROM', 'VALD', 'L/R', 'BW', 'RM',
@@ -1164,7 +1225,7 @@
     catPick = { on: {}, own: [] };
     s.battery.forEach(function (it) { catPick.on[batteryKey(it)] = true; if (it.k === 'own') catPick.own.push(JSON.parse(JSON.stringify(it))); });
     $('catSearch').value = '';
-    ['ownName', 'ownUnit', 'ownGreen', 'ownAmber'].forEach(function (id) { $(id).value = ''; });
+    ['ownName', 'ownUnit', 'ownGreen', 'ownAmber', 'ownType', 'ownRegion'].forEach(function (id) { $(id).value = ''; });   // v38: + the type and region
     setOwnDir('Higher');
     setOwnOpen(false);
     $('ownOk').textContent = '';
@@ -1183,7 +1244,7 @@
   }
   function catTargetText(c, pop) {                     // what the row says under the name: the unit and the target for this population
     if (c.ratio) return 'worked out from Hip adduction and Hip abduction (ticked with it) \u00b7 each leg \u00b7 target ' + (c.def.target_text || '');   // v37
-    if (c.k === 'ham' || c.k === 'acl') return rehabTargetText(c);   // v37
+    if (c.k === 'ham' || c.k === 'acl') return REHAB_LABEL[c.k] + ' \u00b7 ' + rehabTargetText(c);   // v37; v38: whose test it is (the categories mix them)
     if (c.k === 'str') return (c.detail ? c.detail + ' · ' : '') + c.unit + ' each leg · target ' + (c.def.target_text || '');
     var norm = pop.population ? screenNorm(c.name, pop, 'screen') : null;
     var unit = c.unit && c.unit !== 'AU' ? c.unit : (c.unit === 'AU' ? 'score' : '');
@@ -1200,22 +1261,25 @@
       return '<li><label class="tests-row cat-row"><input type="checkbox" data-cat="' + esc(key) + '"' + (on ? ' checked' : '') + '>' +
         '<span class="tr-main"><span class="tr-t">' + esc(name) + '</span><span class="tr-n">' + esc(sub) + (hasRes ? ' · has results' : '') + '</span></span></label></li>';
     }
-    catalogue().forEach(function (c) {
-      if (!catMatches(c.name, q)) return;
-      if (c.group !== lastGroup) { html += '<li class="cat-group" aria-hidden="true">' + esc(c.glabel || groupTitle(c.group)) + '</li>'; lastGroup = c.group; }   // v37: glabel, a rehab group's
-      var hasRes = c.k === 'str' ? !!(has[strSideName(c.def, 'Left')] || has[strSideName(c.def, 'Right')]) : !!has[c.name];
-      html += row(c.key, c.name, catTargetText(c, pop), hasRes);
+    // v38: the clinic's own tests sit in their category among the catalogue's (Other tests when they have none)
+    var list = catalogue().filter(function (c) { return catMatches(c.name, q); });
+    catPick.own.forEach(function (o, i) {
+      if (!catMatches(o.name, q)) return;
+      list.push({ key: 'own|' + o.id, k: 'own', name: o.name, own: o, group: catTitle(o.type, o.region), glabel: catLabel(o.type, o.region), rank: catRank(o.type, o.region), ord: 100000 + i });
+    });
+    list.sort(function (a, b) { return a.rank - b.rank || a.ord - b.ord; });
+    list.forEach(function (c) {
+      if (c.group !== lastGroup) { html += '<li class="cat-group" aria-hidden="true">' + esc(c.glabel || groupTitle(c.group)) + '</li>'; lastGroup = c.group; }
+      var o = c.own;
+      if (o) {
+        var sub = 'Your own test · ' + (o.unit ? o.unit + ' · ' : '') + (o.green === null ? 'no target' : 'target ' + (o.dir === 'Lower' ? '≤ ' : '≥ ') + E.fmt(o.green) + (o.amber !== null && o.amber !== o.green ? ' · close ' + (o.dir === 'Lower' ? '≤ ' : '≥ ') + E.fmt(o.amber) : ''));
+        html += row(c.key, o.name, sub, !!has[o.name]);
+      } else {
+        var hasRes = c.k === 'str' ? !!(has[strSideName(c.def, 'Left')] || has[strSideName(c.def, 'Right')]) : !!has[c.name];
+        html += row(c.key, c.name, catTargetText(c, pop), hasRes);
+      }
       shown++;
     });
-    var own = catPick.own.filter(function (o) { return catMatches(o.name, q); });
-    if (own.length) {
-      html += '<li class="cat-group" aria-hidden="true">' + esc(groupTitle(OWN_GROUP)) + '</li>';
-      own.forEach(function (o) {
-        var sub = (o.unit ? o.unit + ' · ' : '') + (o.green === null ? 'no target' : 'target ' + (o.dir === 'Lower' ? '≤ ' : '≥ ') + E.fmt(o.green) + (o.amber !== null && o.amber !== o.green ? ' · close ' + (o.dir === 'Lower' ? '≤ ' : '≥ ') + E.fmt(o.amber) : ''));
-        html += row('own|' + o.id, o.name, sub, !!has[o.name]);
-        shown++;
-      });
-    }
     if (!shown) html = '<li class="cat-none">No tests match “' + esc(clean1(q)) + '”. Add it below as your own test.</li>';
     $('catList').innerHTML = html;
     var n = Object.keys(catPick.on).filter(function (k) { return catPick.on[k]; }).length;
@@ -1263,16 +1327,16 @@
     if (!blank($('ownGreen').value) && green === null) { catErr('The target should be a number.'); $('ownGreen').focus(); return; }
     if (!blank($('ownAmber').value) && amber === null) { catErr('The Close value should be a number.'); $('ownAmber').focus(); return; }
     if (green === null && amber !== null) { catErr('Add the target too, or leave both blank.'); $('ownGreen').focus(); return; }
-    var o = tidyOwn({ id: newId('o-'), name: name, unit: unit, dir: ownDir, green: green, amber: amber });
+    var o = tidyOwn({ id: newId('o-'), name: name, unit: unit, dir: ownDir, green: green, amber: amber, type: $('ownType').value, region: $('ownRegion').value });   // v38: + its category
     if (!o) { catErr('That test couldn’t be added.'); return; }
     catPick.own.push(o);
     catPick.on['own|' + o.id] = true;
-    ['ownName', 'ownUnit', 'ownGreen', 'ownAmber'].forEach(function (id) { $(id).value = ''; });
+    ['ownName', 'ownUnit', 'ownGreen', 'ownAmber', 'ownType', 'ownRegion'].forEach(function (id) { $(id).value = ''; });
     setOwnDir('Higher');
     catErr('');
     renderCatList();
     setOwnOpen(false);
-    $('ownOk').textContent = 'Added ' + o.name + ' (ticked above).';
+    $('ownOk').textContent = 'Added ' + o.name + ' under ' + catLabel(o.type, o.region) + ' (ticked above).';
     focusQuiet($('ownOpen'));
   }
   function catApply() {
@@ -1389,6 +1453,9 @@
   }
   function wireCustomDialogs() {
     els.catDialog = $('catDialog'); els.batDialog = $('batDialog');
+    // v38: the own-test form's Type and Region menus (blank: Other tests, no region)
+    $('ownType').innerHTML = '<option value="">Other</option>' + CAT_TYPES.map(function (t) { return '<option value="' + t[0] + '">' + esc(t[1]) + '</option>'; }).join('');
+    $('ownRegion').innerHTML = '<option value="">Not set</option>' + CAT_REGIONS.map(function (r) { return '<option value="' + r[0] + '">' + esc(r[1]) + '</option>'; }).join('');
     $('catSearch').addEventListener('input', renderCatList);
     $('catList').addEventListener('change', function (e) { if (e.target.matches('input[data-cat]')) catToggle(e.target.dataset.cat, e.target.checked); });
     $('catNone').addEventListener('click', catClear);
@@ -1571,7 +1638,7 @@
       var gen = !!c.pop.population && c.pop.population.indexOf('General Clinical') === 0;
       note.textContent = (gen ? c.pop.note.replace(/^Auto-selected: /, 'Norms: ').replace(/(\d)-(\d)/g, '$1–$2') : c.pop.note).replace(/([^.])$/, '$1.') +
         (gen && c.pop.ageBand !== 'All ages' ? ' IMTP and DSI use all-ages norms.' : '') +
-        (t === 'custom' && c.pop.population && S.groups.some(function (g) { return g.title === STR_GROUP; }) ? ' Strength tests are scored relative to body mass.' : '');
+        (t === 'custom' && c.pop.population && S.groups.some(function (g) { return g.metrics.some(function (m) { return m.str; }); }) ? ' Strength tests are scored relative to body mass.' : '');   // v38: wherever they sit
       var rneed = t === 'custom' ? customRehabNeed() : '', rinfo = t === 'custom' ? customRehabInfo() : null;   // v37: the rehab tests
       if (rneed) { note.className = 'note warn'; note.textContent += ' ' + rneed + ' to score the rehab tests.'; }
       else if (rinfo) note.textContent += ' Rehab tests against the typical case at ' + andList([rinfo.ham ? 'the hamstring phase ' + rinfo.ham : '', rinfo.acl ? 'the ACL phase ' + rinfo.acl : ''].filter(Boolean)) + '.';
@@ -2327,7 +2394,7 @@
       s.pop = 'general';
       s.battery = tidyBattery([{ k: 'screen', key: 'Jump Height' }, { k: 'screen', key: 'RSI-modified' }, { k: 'screen', key: 'IMTP Relative Force' },
         { k: 'screen', key: 'Nordic Peak Force — Left' }, { k: 'screen', key: 'Nordic Peak Force — Right' }, { k: 'str', id: 'split_squat' }, { k: 'str', id: 'sl_calf_raise_reps' },
-        { k: 'own', id: 'o-example1', name: 'Y-balance anterior reach', unit: 'cm', dir: 'Higher', green: 65, amber: 60 }]);
+        { k: 'own', id: 'o-example1', name: 'Y-balance anterior reach', unit: 'cm', dir: 'Higher', green: 65, amber: 60, type: 'bal', region: 'll' }]);
       s.batName = '';
       var cx = { 'Jump Height': ['27.4', '26.1'], 'RSI-modified': ['0.41', ''], 'IMTP Relative Force': ['31.5', '29.8'], 'Nordic Peak Force — Left': ['262', '241'], 'Nordic Peak Force — Right': ['288', ''],
         'Split squat (rear leg) — Left': ['22', ''], 'Split squat (rear leg) — Right': ['20', ''], 'Single-leg calf raise — Left': ['27', '24'], 'Single-leg calf raise — Right': ['22', ''], 'Y-balance anterior reach': ['63', '61'] };
