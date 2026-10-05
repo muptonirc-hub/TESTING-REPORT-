@@ -441,7 +441,8 @@
   }
 
   // ---------------------------------------------------------------- scorecard (report_pdf.py)
-  var DOMAIN_MAP = [['COUNTERMOVEMENT', 'Jump / power'], ['MID-THIGH', 'Max strength'], ['HOP', 'Reactive'],
+  var DOMAIN_MAP = [['HAMSTRING REHAB', 'Hamstring rehab'], ['ACL REHAB', 'ACL rehab'],   // v37: the Custom battery's rehab sections
+    ['COUNTERMOVEMENT', 'Jump / power'], ['MID-THIGH', 'Max strength'], ['HOP', 'Reactive'],
     ['NORDIC', 'Hamstring'], ['HIP', 'Hip / groin'], ['DYNAMIC STRENGTH', 'DSI'], ['SPRINT', 'Speed'],
     ['SPEED', 'Speed'], ['DYNAMO', 'Isometric'], ['LOWER-LIMB', 'LL strength'], ['OWN TESTS', 'Own tests']];   // v36: the Custom battery's two groups
   function titleCase(s) {

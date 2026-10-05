@@ -130,7 +130,8 @@
     keep = keep || {};
     if (tool === 'screen') return { meta: { name: '', date: todayIso(), sex: '', age: '', sport: '', tester: keep.tester || userName(), mass: '', notes: '' }, pop: 'general', values: {}, radar: null, collapsed: {}, importLog: null, interp: freshInterp(), coach: freshCoach(), cardOpen: true };
     // v36: the Custom battery: the population is chosen first (pop null until then), the tests are the battery's items
-    if (tool === 'custom') return { meta: { name: '', date: todayIso(), sex: '', age: '', sport: '', tester: keep.tester || userName(), mass: '', notes: '' }, pop: null, battery: [], batName: '', values: {}, radar: null, collapsed: {}, interp: freshInterp(), coach: freshCoach(), cardOpen: true };
+    // v37: + the injured side and the hamstring and ACL phases, for rehab tests in the battery (the client's, so never kept)
+    if (tool === 'custom') return { meta: { name: '', date: todayIso(), sex: '', age: '', sport: '', tester: keep.tester || userName(), mass: '', notes: '', injured: '' }, pop: null, battery: [], batName: '', hamPhase: null, aclPhase: null, values: {}, radar: null, collapsed: {}, interp: freshInterp(), coach: freshCoach(), cardOpen: true };
     if (tool === 'ham') return { meta: { name: '', date: todayIso(), injured: '', clinician: keep.clinician || userName(), doi: '', weeks: '', sport: '', notes: '' }, phase: null, values: {}, collapsed: {}, interp: freshInterp(), coach: freshCoach(), cardOpen: true };
     if (tool === 'str') return { meta: { name: '', date: todayIso(), mass: '', sport: '', tester: keep.tester || userName(), notes: '' }, values: {}, collapsed: {}, interp: freshInterp(), coach: freshCoach(), cardOpen: true };
     return { meta: { name: '', date: todayIso(), injured: '', surgeon: keep.surgeon || '', graft: '', dos: '', months: '', sport: '', notes: '' }, phase: null, sex: null, values: {}, collapsed: {}, interp: freshInterp(), coach: freshCoach(), cardOpen: true };
@@ -182,6 +183,10 @@
     if (cu.pop !== null && cu.pop !== 'general' && pops.indexOf(cu.pop) < 0) cu.pop = null;
     cu.battery = tidyBattery(cu.battery);
     cu.batName = typeof cu.batName === 'string' ? cu.batName : '';
+    // v37: the rehab tests' phases and the injured side (drafts from v36 have none); chosen, never assumed
+    if (H.phases.indexOf(cu.hamPhase) < 0) cu.hamPhase = null;
+    if (A.phases.indexOf(cu.aclPhase) < 0) cu.aclPhase = null;
+    if (cu.meta.injured !== 'Left' && cu.meta.injured !== 'Right') cu.meta.injured = '';
     TOOLS.forEach(function (t) {                     // drafts saved before the interpretation box existed
       var it = state[t].interp;
       if (!it || typeof it !== 'object') state[t].interp = freshInterp();
@@ -243,13 +248,27 @@
       if (prev !== null && pm && massNow && pm > 0 && massNow > 0) prev = prev * massNow / pm;
       inputs[name] = { result: E.parseInput(v.result), previous: prev, side: v.side || '' };
     });
+    // v37: the Custom battery's worked-out rows: an ACL LSI from its Left and Right boxes and the injured side; the hip ratio,
+    // each leg, from that leg's adduction and abduction (the previous ratio from their previous results, as typed)
+    var lsiIn = {};
+    if (t === 'custom') N.groups.forEach(function (g) {
+      g.metrics.forEach(function (m) {
+        var v = s.values[m.name] || {};
+        if (m.calc === 'LSI') lsiIn[m.name] = inputs[m.name] = { result: E.lsi(E.parseInput(v.left), E.parseInput(v.right), s.meta.injured), previous: E.parseInput(v.previous), side: '' };
+        else if (m.calc === 'RATIO') {
+          var a = s.values[m.from[0]] || {}, b = s.values[m.from[1]] || {};
+          var ra = E.parseInput(a.result), rb = E.parseInput(b.result), pa = E.parseInput(a.previous), pb = E.parseInput(b.previous);
+          inputs[m.name] = { result: ra && rb ? E.pyRound(ra / rb, 2) : null, previous: pa && pb ? E.pyRound(pa / pb, 2) : null, side: '' };
+        }
+      });
+    });
     var groups = pop.population ? E.buildRows(inputs, pop.population, N, pop.ageBand, massNow) : [];
     var byName = {};
     E.flatten(groups).forEach(function (r) { byName[r.name] = r; });
     var opts = E.radarOptions(groups);
     var keys = opts.map(function (o) { return o[0]; });
     var picked = (s.radar || E.radarDefault(opts)).filter(function (k) { return keys.indexOf(k) >= 0; }).slice(0, 6);
-    return { pop: pop, groups: groups, byName: byName, counts: E.counts(groups), prios: E.priorities(groups), radarOptions: opts, radarPicked: picked };
+    return { pop: pop, groups: groups, byName: byName, counts: E.counts(groups), prios: E.priorities(groups), radarOptions: opts, radarPicked: picked, lsiIn: lsiIn };
   }
   function rehabKey(tool) {                            // v18: '' until the phase (and for ACL the norm set) is chosen
     var s = state[tool];
@@ -314,6 +333,53 @@
     DATA.str.tests.forEach(function (tt) { if (!hit && tt.input !== 'calc' && tt.id === id) hit = tt; });
     return hit;
   }
+  // v37: the hip adduction : abduction ratio can be in a battery: worked out for each leg from the two hip tests, which come with it
+  var RATIO_ID = 'hip_add_abd_ratio';
+  function ratioTest() {
+    var hit = null;
+    DATA.str.tests.forEach(function (tt) { if (!hit && tt.id === RATIO_ID && tt.input === 'calc' && Array.isArray(tt.from) && tt.from.length === 2 && strTest(tt.from[0]) && strTest(tt.from[1])) hit = tt; });
+    return hit;
+  }
+  // v37: the Hamstring and ACL rehab tests can be in a battery: { k: 'ham' | 'acl', key: the metric's name }, each scored against
+  // the typical case at the phase chosen on the page (the ACL norms also by sex)
+  var REHAB_TOOLS = ['ham', 'acl'], REHAB_GROUP = { ham: 'HAMSTRING REHAB', acl: 'ACL REHAB' }, REHAB_LABEL = { ham: 'Hamstring rehab', acl: 'ACL rehab' };
+  function rehabMetric(tool, name) {
+    var hit = null;
+    if (REHAB_TOOLS.indexOf(tool) < 0 || typeof name !== 'string') return null;
+    DATA[tool].groups.forEach(function (g) { g.metrics.forEach(function (m) { if (!hit && m.name === name) hit = m; }); });
+    return hit;
+  }
+  function rehabIn(b) {                                // which rehab tools a battery has tests from: { ham: true, acl: true }
+    var has = {};
+    (b || state.custom.battery).forEach(function (it) { if (it.k === 'ham' || it.k === 'acl') has[it.k] = true; });
+    return has;
+  }
+  function rehabKeyFor(tool) {                         // the norms set the battery's rehab tests use ('' until chosen)
+    var s = state.custom, ph = tool === 'ham' ? s.hamPhase : s.aclPhase;
+    if (!ph) return '';
+    if (tool === 'acl') return DATA.acl.sexes.indexOf(s.meta.sex) >= 0 ? ph + '|' + s.meta.sex : '';
+    return ph;
+  }
+  function andList(a) { return a.length > 1 ? a.slice(0, -1).join(', ') + ' and ' + a[a.length - 1] : (a[0] || ''); }
+  // what the battery's rehab tests still need before they can be scored ('' when nothing, or there are none)
+  function customRehabNeed() {
+    var s = state.custom, has = rehabIn(), need = [];
+    if (!has.ham && !has.acl) return '';
+    if (!s.meta.injured) need.push('the injured side');
+    if (has.ham && !s.hamPhase) need.push('the hamstring phase');
+    if (has.acl && !s.aclPhase) need.push('the ACL phase');
+    if (has.acl && DATA.acl.sexes.indexOf(s.meta.sex) < 0) need.push('Male or Female (the ACL norms are by sex)');
+    return need.length ? 'Choose ' + andList(need) : '';
+  }
+  // the rehab context for the report, the strip and Claude (null without rehab tests)
+  function customRehabInfo() {
+    var s = state.custom, has = rehabIn();
+    if (!has.ham && !has.acl) return null;
+    var notes = [];
+    if (has.ham && DATA.ham.disclaimer) notes.push(clean1(DATA.ham.disclaimer));
+    if (has.acl && DATA.acl.disclaimer) notes.push(clean1(DATA.acl.disclaimer));
+    return { injured: s.meta.injured || '', ham: has.ham ? s.hamPhase || '' : null, acl: has.acl ? (s.aclPhase ? s.aclPhase + (DATA.acl.sexes.indexOf(s.meta.sex) >= 0 ? ' (' + s.meta.sex.toLowerCase() + ' norms)' : '') : '') : null, notes: notes };
+  }
   function strSideName(tt, side) { return tt.name + ' \u2014 ' + side; }
   function ownNum(v) { var n = E.parseInput(v == null ? '' : String(v)); return n === null ? null : n; }
   function tidyOwn(o) {
@@ -332,16 +398,32 @@
       if (!it || typeof it !== 'object') return;
       var key;
       if (it.k === 'screen') { if (!screenMetric(it.key)) return; key = 'screen|' + it.key; it = { k: 'screen', key: it.key }; }
-      else if (it.k === 'str') { if (!strTest(it.id)) return; key = 'str|' + it.id; it = { k: 'str', id: it.id }; }
-      else if (it.k === 'own') { it = tidyOwn(it); if (!it || catalogueByName(it.name)) return; key = 'own|' + it.id; }
+      else if (it.k === 'str') { if (!strTest(it.id) && !(it.id === RATIO_ID && ratioTest())) return; key = 'str|' + it.id; it = { k: 'str', id: it.id }; }
+      else if (it.k === 'ham' || it.k === 'acl') { if (!rehabMetric(it.k, it.key)) return; key = it.k + '|' + it.key; it = { k: it.k, key: it.key }; }   // v37
+      else if (it.k === 'own') {
+        it = tidyOwn(it);
+        if (!it) return;
+        // an own test may not take a catalogue test's name: it becomes that test (v37: so an own test saved in v36 under a
+        // name the catalogue has since gained, e.g. IKDC, is kept as the catalogue's, its results under the same name)
+        var hit = catalogueByName(it.name);
+        it = !hit ? it : hit.k === 'screen' ? { k: 'screen', key: hit.name } : hit.k === 'str' ? { k: 'str', id: hit.def.id } : { k: hit.k, key: hit.name };
+        key = batteryKey(it);
+      }
       else return;
       if (seen[key]) return;
       seen[key] = 1;
       out.push(it);
     });
+    // v37: the hip ratio brings the two hip tests it is worked out from (just before it) when they aren't there
+    var ri = -1;
+    out.forEach(function (it, i) { if (it.k === 'str' && it.id === RATIO_ID) ri = i; });
+    if (ri >= 0) {
+      var need = ratioTest().from.filter(function (id) { return !seen['str|' + id]; }).map(function (id) { return { k: 'str', id: id }; });
+      if (need.length) out.splice.apply(out, [ri, 0].concat(need));
+    }
     return out;
   }
-  function batteryKey(it) { return it.k === 'screen' ? 'screen|' + it.key : it.k === 'str' ? 'str|' + it.id : 'own|' + it.id; }
+  function batteryKey(it) { return it.k === 'screen' ? 'screen|' + it.key : it.k === 'str' ? 'str|' + it.id : (it.k === 'ham' || it.k === 'acl') ? it.k + '|' + it.key : 'own|' + it.id; }
   function batteryHas(key) { return state.custom.battery.some(function (it) { return batteryKey(it) === key; }); }
   // the tests a battery can hold, in the order the Choose tests list shows them: the Performance screen's metrics by device
   // group, then the LL Strength tests; each { key, k, name, unit, group, def }
@@ -352,6 +434,13 @@
     });
     DATA.str.tests.forEach(function (tt) {
       if (tt.input !== 'calc') out.push({ key: 'str|' + tt.id, k: 'str', name: tt.name, unit: INPUT_WORD[tt.input], group: STR_GROUP, def: tt, detail: tt.detail || '' });
+      else if (tt.id === RATIO_ID && ratioTest()) out.push({ key: 'str|' + tt.id, k: 'str', name: tt.name, unit: 'ratio', group: STR_GROUP, def: tt, detail: '', ratio: true });   // v37
+    });
+    REHAB_TOOLS.forEach(function (rt) {                // v37: the Hamstring and ACL rehab tests, by their device groups
+      DATA[rt].groups.forEach(function (g) {
+        var label = REHAB_LABEL[rt] + ' \u00b7 ' + groupTitle(g.title).replace(/\s*\([^)]*\)/g, '');   // the device in brackets left out (the line stays short)
+        g.metrics.forEach(function (m) { out.push({ key: rt + '|' + m.name, k: rt, name: m.name, unit: m.unit, group: REHAB_GROUP[rt] + ' \u2014 ' + g.title, glabel: label, def: m }); });
+      });
     });
     return out;
   }
@@ -374,10 +463,12 @@
   // in), one group of LL Strength tests (a metric per leg, scored like the screen's force-per-mass metrics, the target as the
   // clinic writes it, Close within amber_pct of it) and one of the clinic's own tests; the screen's populations and age bands
   function customSet() {
-    var s = state && state.custom, b = s ? s.battery : [], sig = JSON.stringify(b);
+    var s = state && state.custom, b = s ? s.battery : [];
+    // v37: the rehab tests' targets follow the phases chosen (and the ACL norms the sex)
+    var sig = JSON.stringify([b, s ? s.hamPhase || '' : '', s ? s.aclPhase || '' : '', s ? s.meta.sex || '' : '']);
     if (customMemo && customMemo.sig === sig) return customMemo.set;
-    var keys = {}, strIds = [], own = [];
-    b.forEach(function (it) { if (it.k === 'screen') keys[it.key] = 1; else if (it.k === 'str') strIds.push(it.id); else own.push(it); });
+    var keys = {}, strIds = [], own = [], reh = { ham: {}, acl: {} };
+    b.forEach(function (it) { if (it.k === 'screen') keys[it.key] = 1; else if (it.k === 'str') strIds.push(it.id); else if (it.k === 'ham' || it.k === 'acl') reh[it.k][it.key] = 1; else own.push(it); });
     var groups = [];
     DATA.screen.groups.forEach(function (g) {
       var ms = g.metrics.filter(function (m) { return m.calc === 'DSI' ? !!(keys['CMJ Peak Force'] && keys['IMTP Peak Force']) : !!keys[m.name]; });
@@ -385,6 +476,19 @@
     });
     var strMetrics = [], extra = {}, pct = DATA.str.amber_pct == null ? 5 : DATA.str.amber_pct;
     strIds.forEach(function (id) {
+      if (id === RATIO_ID) {                           // v37: the hip ratio, each leg worked out from that leg's two hip tests
+        var rt = ratioTest();
+        if (!rt) return;
+        var rn = E.strengthNorm(rt, pct);
+        rn.label = rt.target_text || ''; rn.source = '\u2605\u2605\u2606 Clinic target (LL Strength) \u00b7 adduction \u00f7 abduction, each leg';
+        ['Left', 'Right'].forEach(function (side) {
+          var name = strSideName(rt, side);
+          strMetrics.push({ name: name, unit: 'ratio', calc: 'RATIO', dir: 'Band', thr: 0.05, range: null, jump: false, xkey: rt.id, ratio: rt.id, side: side,
+            from: [strSideName(strTest(rt.from[0]), side), strSideName(strTest(rt.from[1]), side)] });
+          extra[name] = rn;
+        });
+        return;
+      }
       var tt = strTest(id);
       if (!tt) return;
       var norm = E.strengthNorm(tt, pct);
@@ -397,6 +501,17 @@
       });
     });
     if (strMetrics.length) groups.push({ title: STR_GROUP, metrics: strMetrics });
+    REHAB_TOOLS.forEach(function (rt) {                // v37: a section per rehab tool, its tests in their usual order, the phase's targets
+      var pn = s ? (DATA[rt].norms || {})[rehabKeyFor(rt)] || {} : {}, ms = [];
+      DATA[rt].groups.forEach(function (g) {
+        g.metrics.forEach(function (m) {
+          if (!reh[rt][m.name]) return;
+          ms.push(Object.assign({}, m, { rehab: rt }));
+          if (pn[m.name]) extra[m.name] = pn[m.name];
+        });
+      });
+      if (ms.length) groups.push({ title: REHAB_GROUP[rt], metrics: ms });
+    });
     var ownMetrics = [];
     own.forEach(function (o) {
       ownMetrics.push({ name: o.name, unit: o.unit, calc: null, dir: o.dir, thr: null, range: null, own: o.id, xkey: o.id });
@@ -444,6 +559,7 @@
     'DYNAMO - ISOMETRIC STRENGTH (GENERIC SLOT)': 'DynaMo · Isometric strength',
     'SMARTSPEED - SPEED & AGILITY': 'SmartSpeed · Speed & agility',
     'LOWER-LIMB STRENGTH & CAPACITY': 'Lower-limb strength & capacity',
+    'HAMSTRING REHAB': 'Hamstring rehab', 'ACL REHAB': 'ACL rehab',   // v37: the Custom battery's rehab sections
     'RANGE OF MOTION / LENGTH (DynaMo)': 'Range of motion / length (DynaMo)',
     'STRENGTH - HAND-HELD / FIXED DYNAMOMETRY (DynaMo)': 'Strength · Hand-held / fixed dynamometry (DynaMo)',
     'ECCENTRIC STRENGTH (NordBord)': 'Eccentric strength (NordBord)',
@@ -563,6 +679,10 @@
         field(t, 'notes', 'Notes', { cls: 'full' });
       var cpops = [['general', 'General population (auto by age & sex)']].concat(E.sportPopulations(DATA.screen).map(function (p) { return [p, p]; }));
       out += select('custom-pop', 'Compare against', cpops, s.pop || 'general', 'data-choice="pop"', 'wide');
+      var rh = rehabIn();                              // v37: what the battery's rehab tests are scored against
+      if (rh.ham || rh.acl) out += seg(t, 'injured', 'Injured side', ['Left', 'Right']);
+      if (rh.ham) out += select('custom-hamPhase', 'Hamstring rehab phase', [['', 'Choose the phase\u2026']].concat(DATA.ham.phases.map(function (p) { return [p, p]; })), s.hamPhase || '', 'data-choice="hamPhase"', 'wide');
+      if (rh.acl) out += select('custom-aclPhase', 'ACL rehab phase', [['', 'Choose the phase\u2026']].concat(DATA.acl.phases.map(function (p) { return [p, p]; })), s.aclPhase || '', 'data-choice="aclPhase"', 'wide');
     } else if (t === 'str') {
       out += field(t, 'name', Person(t) + ' name', { cls: 'wide', words: true }) + field(t, 'date', 'Test date', { type: 'date' }) +
         field(t, 'mass', 'Body mass (kg)', { mode: 'decimal' }) +
@@ -600,7 +720,7 @@
     var m = state[t].meta;
     if (blank(m.name)) return false;
     if (t === 'screen') return !!m.sex;
-    if (t === 'custom') return state.custom.pop !== null && (state.custom.pop !== 'general' || !!m.sex);   // v36: the population, and sex for the general norms
+    if (t === 'custom') return state.custom.pop !== null && (state.custom.pop !== 'general' || !!m.sex) && !customRehabNeed();   // v36: the population, and sex for the general norms; v37: what rehab tests need
     if (t === 'str') return !blank(m.mass);
     if (t === 'ham' || t === 'acl') return !!m.injured && !rehabNeed(t);   // v18: and the phase (and norm set) chosen
     return true;
@@ -627,6 +747,10 @@
       if (!blank(m.mass)) add(clean1(m.mass) + ' kg');
       add(m.sport); add(date);
       if (c && c.pop && c.pop.label) add('vs ' + shortPop(c.pop.label));
+      if (t === 'custom') {                            // v37: the rehab context while the battery has rehab tests
+        var ri = customRehabInfo();
+        if (ri) { if (ri.injured) add(ri.injured + ' injured'); if (ri.ham) add('Hamstring ' + ri.ham); if (ri.acl) add('ACL ' + s.aclPhase); }
+      }
       if (t === 'custom' && s.batName) add(s.batName);
     } else if (t === 'str') {
       if (!blank(m.mass)) add(clean1(m.mass) + ' kg');
@@ -779,15 +903,18 @@
     else if (m.str && m.input === 'N') hint = '<span class="m-unit">' + esc((m.detail ? m.detail + ' · ' : '') + 'enter force in N · scored as ' + m.unit + ' using mass') + '</span>';
     else if (m.str) hint = '<span class="m-unit">' + esc((m.detail ? m.detail + ' · ' : '') + 'reps') + '</span>';
     else if (m.own) hint = '<span class="m-unit">' + esc(m.unit || 'your own test') + '</span>';
+    else if (m.ratio) hint = '<span class="m-unit">adduction \u00f7 abduction, ' + esc(String(m.side).toLowerCase()) + ' leg</span>';   // v37
     if (m.calc === 'LSI') hint = '<span class="m-unit">enter left & right · LSI = injured ÷ other side</span>';
     // the same words as the column headings: Result (Injured on the hamstring tab) and Previous; Left and Right for an LSI
-    var labels = m.calc === 'DSI' ? '' : (m.calc === 'LSI' ? boxLabels('Left', 'Right') : boxLabels(tool === 'ham' ? 'Injured' : 'Result', 'Previous'));
+    var labels = m.calc === 'DSI' || m.calc === 'RATIO' ? '' : (m.calc === 'LSI' ? boxLabels('Left', 'Right') : boxLabels(tool === 'ham' ? 'Injured' : 'Result', 'Previous'));
     var html = '<div class="metric' + (asym ? ' has-side' : '') + (labels ? ' has-bl' : '') + (m.calc === 'LSI' ? ' lsi' : '') + '" data-metric="' + nm + '" data-status="" id="' + id + '">' +
       '<div class="m-label">' + nameHtml(tool, m.xkey || m.name, m.name, id) + '<div class="m-hint">' + hint +
       '<span class="m-target"></span><span class="m-calc"></span><span class="m-prevnote"></span><span class="m-spark"></span></div><div class="m-meter"></div></div>' + labels;
     function input(fieldName, cls, ph, label) { return metricInput(id, nm, v, fieldName, cls, ph, label); }
     if (m.calc === 'DSI') {
       html += '<div class="m-auto" data-auto>CMJ Peak Force ÷ IMTP Peak Force</div>';
+    } else if (m.calc === 'RATIO') {                   // v37: the hip ratio in a custom battery
+      html += '<div class="m-auto" data-auto>Worked out: adduction \u00f7 abduction</div>';
     } else if (m.calc === 'LSI') {
       html += input('left', 'm-result m-in', 'Left', 'left') + input('right', 'm-prev m-in', 'Right', 'right');
     } else {
@@ -987,7 +1114,7 @@
   function batteryEmptyHtml() {
     return '<section class="card bat-empty" id="batEmpty" aria-labelledby="batEmptyH"' + (state.custom.battery.length ? ' hidden' : '') + '>' +
       '<h2 id="batEmptyH">Build the battery</h2>' +
-      '<p>Choose tests from the catalogue (the Performance screen’s and LL Strength’s, or your own), start from a saved battery, or photograph your handwritten results with <b>Scan notes</b> in the athlete card: the app matches what you wrote to the tests it knows and fills the results in.</p>' +
+      '<p>Choose tests from the catalogue (the Performance screen’s, LL Strength’s and the Hamstring and ACL rehab tests, or your own), start from a saved battery, or photograph your handwritten results with <b>Scan notes</b> in the athlete card: the app matches what you wrote to the tests it knows and fills the results in.</p>' +
       '<div class="bat-empty-acts"><button type="button" class="primary" data-action="bat-choose" aria-haspopup="dialog">Choose tests</button>' +
       '<button type="button" class="ghost" data-action="bat-saved" aria-haspopup="dialog">Saved batteries</button></div></section>';
   }
@@ -1043,8 +1170,8 @@
     $('ownOk').textContent = '';
     catErr('');
     var c = computeScreen('custom');
-    $('catLead').textContent = c.pop.label ? 'Targets shown are for ' + c.pop.label + '. Tests with results stay ticked unless you untick them (their results go).'
-      : 'Tick the tests in this battery. Targets show once the sex (or a sport population) is chosen.';
+    $('catLead').textContent = (c.pop.label ? 'Targets shown are for ' + c.pop.label + '. Tests with results stay ticked unless you untick them (their results go).'
+      : 'Tick the tests in this battery. Targets show once the sex (or a sport population) is chosen.') + ' Rehab tests are rated for the phase chosen in the details card.';   // v37
     renderCatList();
     openModal(els.catDialog, $('catSearch'), function (restore) { catPick = null; if (restore) focusQuiet(els.entry.querySelector('[data-action="bat-choose"]')); return true; });
   }
@@ -1055,6 +1182,8 @@
     return nk.indexOf(k) >= 0 || nk.split(' ').some(function (w) { return k.split(' ').every(function (qw) { return nk.indexOf(qw) >= 0; }) && w.indexOf(k.split(' ')[0]) === 0; });
   }
   function catTargetText(c, pop) {                     // what the row says under the name: the unit and the target for this population
+    if (c.ratio) return 'worked out from Hip adduction and Hip abduction (ticked with it) \u00b7 each leg \u00b7 target ' + (c.def.target_text || '');   // v37
+    if (c.k === 'ham' || c.k === 'acl') return rehabTargetText(c);   // v37
     if (c.k === 'str') return (c.detail ? c.detail + ' · ' : '') + c.unit + ' each leg · target ' + (c.def.target_text || '');
     var norm = pop.population ? screenNorm(c.name, pop, 'screen') : null;
     var unit = c.unit && c.unit !== 'AU' ? c.unit : (c.unit === 'AU' ? 'score' : '');
@@ -1065,7 +1194,7 @@
     if (!catPick) return;
     var q = $('catSearch').value, s = state.custom, pop = computeScreen('custom').pop, html = '', lastGroup = null, shown = 0;
     var has = {};
-    Object.keys(s.values).forEach(function (k) { var v = s.values[k]; if (v && ['result', 'previous', 'side'].some(function (f) { return !blank(v[f]); })) has[k] = 1; });
+    Object.keys(s.values).forEach(function (k) { var v = s.values[k]; if (v && ['result', 'previous', 'side', 'left', 'right'].some(function (f) { return !blank(v[f]); })) has[k] = 1; });
     function row(key, name, sub, hasRes) {
       var on = !!catPick.on[key];
       return '<li><label class="tests-row cat-row"><input type="checkbox" data-cat="' + esc(key) + '"' + (on ? ' checked' : '') + '>' +
@@ -1073,7 +1202,7 @@
     }
     catalogue().forEach(function (c) {
       if (!catMatches(c.name, q)) return;
-      if (c.group !== lastGroup) { html += '<li class="cat-group" aria-hidden="true">' + esc(groupTitle(c.group)) + '</li>'; lastGroup = c.group; }
+      if (c.group !== lastGroup) { html += '<li class="cat-group" aria-hidden="true">' + esc(c.glabel || groupTitle(c.group)) + '</li>'; lastGroup = c.group; }   // v37: glabel, a rehab group's
       var hasRes = c.k === 'str' ? !!(has[strSideName(c.def, 'Left')] || has[strSideName(c.def, 'Right')]) : !!has[c.name];
       html += row(c.key, c.name, catTargetText(c, pop), hasRes);
       shown++;
@@ -1092,7 +1221,26 @@
     var n = Object.keys(catPick.on).filter(function (k) { return catPick.on[k]; }).length;
     $('catDone').textContent = n ? 'Done · ' + n + (n === 1 ? ' test' : ' tests') : 'Done';
   }
-  function catToggle(key, on) { if (catPick) { if (on) catPick.on[key] = true; else delete catPick.on[key]; renderCatList(); } }
+  // v37: a rehab test's line in Choose tests: its unit and its target at the phase chosen (or how it will be rated)
+  function rehabTargetText(c) {
+    var unit = c.def.calc === 'LSI' ? 'left & right \u2192 LSI %' : c.unit && c.unit !== 'AU' ? c.unit : (c.unit === 'AU' ? 'score' : '');
+    var ph = c.k === 'ham' ? state.custom.hamPhase : state.custom.aclPhase, key = rehabKeyFor(c.k);
+    var norm = key ? ((DATA[c.k].norms || {})[key] || {})[c.name] : null;
+    var where = !ph ? 'targets by rehab phase' : !key ? 'targets by phase and sex' : norm ? 'phase target ' + E.targetStr(norm) + ' (' + ph + ')' : 'no target at ' + ph;
+    return (unit ? unit + ' \u00b7 ' : '') + where;
+  }
+  function catToggle(key, on) {
+    if (!catPick) return;
+    var rt = ratioTest(), rk = 'str|' + RATIO_ID;
+    if (on) {
+      catPick.on[key] = true;
+      if (key === rk && rt) rt.from.forEach(function (id) { catPick.on['str|' + id] = true; });   // v37: the hip ratio ticks the two hip tests
+    } else {
+      delete catPick.on[key];
+      if (rt && rt.from.some(function (id) { return key === 'str|' + id; })) delete catPick.on[rk];   // and goes without either of them
+    }
+    renderCatList();
+  }
   function catClear() { if (catPick) { catPick.on = {}; renderCatList(); } }
   function setOwnOpen(open) {                        // the own-test form, folded behind + Your own test
     $('catOwnForm').hidden = !open;
@@ -1130,7 +1278,7 @@
   function catApply() {
     if (!catPick) return;
     var on = catPick.on, items = [];
-    catalogue().forEach(function (c) { if (on[c.key]) items.push(c.k === 'screen' ? { k: 'screen', key: c.name } : { k: 'str', id: c.def.id }); });
+    catalogue().forEach(function (c) { if (on[c.key]) items.push(c.k === 'screen' ? { k: 'screen', key: c.name } : c.k === 'str' ? { k: 'str', id: c.def.id } : { k: c.k, key: c.name }); });   // v37: + rehab tests
     catPick.own.forEach(function (o) { if (on['own|' + o.id]) items.push(o); });
     var was = JSON.stringify(state.custom.battery), old = {};
     state.custom.battery.forEach(function (it) { old[batteryKey(it)] = 1; });
@@ -1279,7 +1427,7 @@
     str: 'Each leg\u2019s load, force or reps: asymmetry and capacity against the targets.',
     ham: 'Injured-limb results against the targets for the chosen rehab phase.',
     acl: 'Injured-limb and symmetry results against ACLR norms for the phase and sex.',
-    custom: 'Any mix of the screen\u2019s and LL Strength\u2019s tests (or your own), built by hand or from a photo of your notes.'   // v36
+    custom: 'Any mix of the screen, LL Strength and rehab tests (or your own), built by hand or from a photo of your notes.'   // v36; v37: the rehab tests too
   };
   // v15: the Exercises tab's heading is the same picker, listing its three pages (data-page on the button; the items
   // are #pick-ex-<page> with data-pick-page). Only one picker is ever on screen, so the ids are shared.
@@ -1424,6 +1572,9 @@
       note.textContent = (gen ? c.pop.note.replace(/^Auto-selected: /, 'Norms: ').replace(/(\d)-(\d)/g, '$1–$2') : c.pop.note).replace(/([^.])$/, '$1.') +
         (gen && c.pop.ageBand !== 'All ages' ? ' IMTP and DSI use all-ages norms.' : '') +
         (t === 'custom' && c.pop.population && S.groups.some(function (g) { return g.title === STR_GROUP; }) ? ' Strength tests are scored relative to body mass.' : '');
+      var rneed = t === 'custom' ? customRehabNeed() : '', rinfo = t === 'custom' ? customRehabInfo() : null;   // v37: the rehab tests
+      if (rneed) { note.className = 'note warn'; note.textContent += ' ' + rneed + ' to score the rehab tests.'; }
+      else if (rinfo) note.textContent += ' Rehab tests against the typical case at ' + andList([rinfo.ham ? 'the hamstring phase ' + rinfo.ham : '', rinfo.acl ? 'the ACL phase ' + rinfo.acl : ''].filter(Boolean)) + '.';
     } else if (rehabNeed(t)) {
       var since = sinceText(t), unit = t === 'ham' ? (since === '1' ? ' week since injury.' : ' weeks since injury.') : (since === '1' ? ' month since surgery.' : ' months since surgery.');
       note.hidden = false; note.className = 'note warn';
@@ -1447,7 +1598,7 @@
         var target = el.querySelector('.m-target'), calc = el.querySelector('.m-calc'), meter = el.querySelector('.m-meter');
         // v18: the target when there is one, else nothing (no 'choose sex for targets' / 'no norm' on every row: the
         // details card asks for sex or the phase once, and a result's 'No target' pill says the rest)
-        target.textContent = norm && (!SL(t) || c.pop.population) ? (norm.dir === 'Guide' ? 'not rated · guides training: ' : SL(t) ? 'target ' : 'phase target ') + E.targetStr(norm) : '';   // v28: the DSI's bands
+        target.textContent = norm && (!SL(t) || c.pop.population) ? (norm.dir === 'Guide' ? 'not rated · guides training: ' : SL(t) && !m.rehab ? 'target ' : 'phase target ') + E.targetStr(norm) : '';   // v37: a rehab test's is its phase's   // v28: the DSI's bands
         calc.textContent = '';
         var v = state[t].values[m.name] || {};
         var typed = m.calc === 'LSI' ? (!blank(v.left) || !blank(v.right)) : !blank(v.result);
@@ -1455,19 +1606,23 @@
           var auto = el.querySelector('[data-auto]');
           auto.innerHTML = row ? 'CMJ ÷ IMTP =<b>' + esc(E.fmt(row.result)) + '</b>' : 'Auto: CMJ Peak Force ÷ IMTP Peak Force';
         }
+        if (m.calc === 'RATIO') {                      // v37: the hip ratio, this leg
+          el.querySelector('[data-auto]').innerHTML = row ? 'ADD ÷ ABD =<b>' + esc(E.fmt(row.result)) + '</b>' : 'Worked out: adduction \u00f7 abduction';
+        }
         if ((m.calc === 'PERBW' || m.calc === 'PERKG' || m.calc === 'XBW' || m.calc === 'PCTBW') && typed) {   // v36: + the strength kinds
           calc.textContent = row ? '= ' + E.fmt(row.result) + ' ' + m.unit : (E.parseInput(state[t].meta.mass) ? '' : 'add mass to score');
         }
         if (m.calc === 'LSI' && typed) {
           // the chip carries the status word. v18: worked out from the two boxes (c.inputs), so it shows before the
           // phase and norm set are chosen too
-          var lv = c.inputs && c.inputs[m.name] ? c.inputs[m.name].result : null;
-          calc.textContent = lv !== null && lv !== undefined ? '= ' + E.fmt(lv) + '%' : (state.acl.meta.injured ? 'enter both sides' : 'set the injured side');
+          var lsrc = c.inputs || c.lsiIn, lv = lsrc && lsrc[m.name] ? lsrc[m.name].result : null;   // v37: the Custom battery's LSI too
+          calc.textContent = lv !== null && lv !== undefined ? '= ' + E.fmt(lv) + '%' : (state[t].meta.injured ? 'enter both sides' : 'set the injured side');
         }
         var pn = el.querySelector('.m-prevnote');
         if (pn) pn.textContent = v.prevDate && !blank(v.previous) && (m.calc === 'LSI' || m.calc === 'DSI')
           ? 'prev ' + E.fmt(E.parseInput(v.previous)) + (m.calc === 'LSI' ? '%' : '') + ' (' + E.displayIso(v.prevDate) + ')'
           : '';
+        if (pn && m.calc === 'RATIO') pn.textContent = row && row.prev != null ? 'prev ' + E.fmt(row.prev) : '';   // v37: from the hip tests' previous results
         setSpark(el, tr[m.name] ? sparkSvg(tr[m.name], m.dir, '') : '');
         if (row) {
           entered++;
@@ -1483,7 +1638,7 @@
         seen[m.name] = 1;
       });
       var cnt = gel.querySelector('[data-count]');
-      cnt.textContent = entered ? entered + ' of ' + g.metrics.length + ' entered' : g.metrics.length + ' metrics';
+      cnt.textContent = entered ? entered + ' of ' + g.metrics.length + ' entered' : g.metrics.length + (g.metrics.length === 1 ? ' metric' : ' metrics');   // v37: 1 metric
     });
     if (t === 'acl') refreshRts(c);
     showTypo(typoFlags(t, c));
@@ -1528,10 +1683,10 @@
     setOf(t).groups.forEach(function (g) {
       g.metrics.forEach(function (m) {
         var v = s.values[m.name] || {};
-        if (m.calc === 'DSI') return;                   // worked out, never typed (its two inputs are checked)
+        if (m.calc === 'DSI' || m.calc === 'RATIO') return;   // worked out, never typed (its two inputs are checked; v37: the hip ratio too)
         if (m.calc === 'LSI') {                         // the LSI worked out from left and right
           // v18: from the two boxes (c.inputs), so it is checked before the phase and norm set are chosen too
-          var lv = c.inputs && c.inputs[m.name] ? c.inputs[m.name].result : null;
+          var lsrc = c.inputs || c.lsiIn, lv = lsrc && lsrc[m.name] ? lsrc[m.name].result : null;   // v37: the Custom battery's LSI too
           if (lv !== null && lv !== undefined) add(m.name, ['left', 'right'], E.typoCheck(lv, m.range, E.parseInput(v.previous), m.jump), E.fmt(lv), '%',
             raw(v.left) + '/' + raw(v.right) + '~' + raw(v.previous), v.prevDate, 'LSI ');
           return;
@@ -1866,7 +2021,7 @@
       return c.tests.length ? 'Add body mass (kg) to score these results.' : 'Enter at least one result to create the report.';
     }
     var none = SL(t) ? 'Enter at least one result to create the report.' : 'Enter at least one result to create the rehab report.';
-    var need = SL(t) ? (c.pop.population ? '' : (t === 'custom' && state.custom.pop === null ? 'Choose the population' : 'Choose Male or Female (or a sport population)')) : rehabNeed(t);
+    var need = SL(t) ? (c.pop.population ? (t === 'custom' ? customRehabNeed() : '') : (t === 'custom' && state.custom.pop === null ? 'Choose the population' : 'Choose Male or Female (or a sport population)')) : rehabNeed(t);   // v37: + what rehab tests need
     if (t === 'custom' && state.custom.pop === null) return 'Choose the population to start.';   // v36
     if (t === 'custom' && !state.custom.battery.length && !hasResults(t)) return 'Choose the tests (or scan your notes) to start.';
     if (!hasResults(t)) return none;                  // v18: until then the details card's prompt is the only one
@@ -2004,6 +2159,7 @@
     var el = e.target, t = state.tool;
     if (el.dataset.choice === 'pop') { state[SL(t) ? t : 'screen'].pop = el.value; refresh(); }   // v36: the Custom battery's too
     else if (el.dataset.choice === 'phase') { state[t].phase = el.value || null; refresh(); }
+    else if (el.dataset.choice === 'hamPhase' || el.dataset.choice === 'aclPhase') { state.custom[el.dataset.choice] = el.value || null; refresh(); }   // v37
     else if (el.id === 'valdFiles') importVald(el.files);
     else if (el.id === 'scanFiles') {
       var picked = Array.prototype.slice.call(el.files || []);
@@ -2246,6 +2402,7 @@
         file: fileName(t === 'custom' ? '_battery.pdf' : '_report.pdf', t),
         rep: window.BHReport.screening({
           kind: t, battery: t === 'custom' ? (state.custom.batName || '') : '',   // v36: the Custom battery (its saved name, if any)
+          rehab: t === 'custom' ? customRehabInfo() : null,   // v37: the injured side and the phases, while it has rehab tests
           meta: { name: m.name, date: E.displayIso(m.date), sport: m.sport, tester: m.tester, age: m.age, sex: m.sex, mass: m.mass, notes: m.notes },
           popLabel: c.pop.label, groups: c.groups, counts: c.counts, prios: explained(c.prios, function (r) { return explainKey(t, r.name); }),
           radarKeys: c.radarPicked.map(function (k) { return [k, labels[k]]; }), interp: interp, progress: progress, coach: coachData(t)
@@ -3308,6 +3465,7 @@
       L.push(t === 'custom' ? 'Report: a custom screening battery chosen by the clinician (VALD force plate and related tests, lower-limb strength tests scored relative to body weight, and the clinic\u2019s own tests, which have a target only when the clinician typed one).'   // v36
         : 'Report: athlete performance and readiness screen (VALD force plate and related tests).');
       L.push('Compared against: ' + clean1(c.pop.label) + '.');
+      if (t === 'custom') L = L.concat(customRehabLines());   // v37: rehab tests, against their phase
       var who = joinBits([clean1(m.sex), blank(m.age) ? '' : clean1(m.age) + ' years', blank(m.mass) ? '' : clean1(m.mass) + ' kg', blank(m.sport) ? '' : 'sport: ' + clean1(m.sport)]);
       if (who) L.push('Athlete: ' + who + '.');
       L.push('Status key: On target = meets the target; Close = close to the target; Off target = well short of the target. The DSI is not rated: it says which training emphasis the force profile points to.');   // v28
@@ -3354,6 +3512,15 @@
       if (rts) L.push(rtsLine(rts));
     }
     return L.join('\n');
+  }
+  // v37: what Claude is told about a Custom battery's rehab tests (nothing without them)
+  function customRehabLines() {
+    var ri = customRehabInfo();
+    if (!ri) return [];
+    var L = ['Rehab tests in this battery (the ' + andList([ri.ham !== null ? 'hamstring' : '', ri.acl !== null ? 'ACL' : ''].filter(Boolean)) + ' sections) are compared with research norms for the typical case at the rehab phase chosen, not with the population above: On target = at or ahead of the typical case; Close = up to 1 SD behind; Off target = more than 1 SD behind. The deficit, % of the uninjured side and LSI measures compare the injured side with the other.'];
+    L.push('Rehab context: ' + joinBits([ri.injured ? 'injured side: ' + ri.injured.toLowerCase() : '', ri.ham ? 'hamstring strain phase: ' + ri.ham : '', ri.acl ? 'ACL reconstruction phase: ' + ri.acl : '']) + '.');
+    ri.notes.forEach(function (x) { L.push('About the rehab norms: ' + x); });
+    return L;
   }
   function interpBasis(t, c) { return hashStr(interpPayload(t, c)); }
 
@@ -3668,7 +3835,9 @@
     var list = [], n = 0;
     if (t === 'custom') {                              // v36: the whole catalogue (the clinician chose the tests themselves), plus the battery's own tests
       catalogue().forEach(function (c) {
-        if (c.k === 'screen') list.push({ id: 't' + (++n), key: c.name, name: c.name, what: scanWhat('screen', c.def), fields: E.isAsym(c.name) ? ['result', 'side'] : ['result'] });
+        if (c.ratio) return;                           // v37: the hip ratio is worked out, never read
+        if (c.k === 'ham' || c.k === 'acl') list.push({ id: 't' + (++n), key: c.name, name: c.name, what: scanWhat(c.k, c.def), fields: c.def.calc === 'LSI' ? ['left', 'right'] : ['result'], rehab: c.k });   // v37
+        else if (c.k === 'screen') list.push({ id: 't' + (++n), key: c.name, name: c.name, what: scanWhat('screen', c.def), fields: E.isAsym(c.name) ? ['result', 'side'] : ['result'] });
         else list.push({ id: 't' + (++n), key: c.def.id, name: c.name, what: INPUT_WORD[c.def.input] + (c.detail ? ' (' + c.detail + ')' : '') + ' for each leg', fields: ['left', 'right'], str: c.def });
       });
       state.custom.battery.forEach(function (o) {
@@ -3695,7 +3864,7 @@
   function scanPrompt(t, list) {
     var L = ['Section of the app: ' + TOOL_NAMES[t] + '.'];
     if (t === 'custom') L.push('The clinician chose the tests themselves, so the paper may hold any of the tests listed below, and tests of the clinic\u2019s own that are not listed.');   // v36
-    if (t === 'ham' || t === 'acl') {
+    if (t === 'ham' || t === 'acl' || t === 'custom') {   // v37: the Custom battery's rehab tests too
       var inj = state[t].meta.injured;
       L.push(inj ? 'Injured side: ' + inj + '. Where a test asks for the injured side and both sides are written, use the ' + inj.toLowerCase() + ' value.'
         : 'Injured side: not chosen in the app yet. Where a test asks for the injured side, use it only if the notes make the injured side clear; otherwise leave it out and mention it in unclear.');
@@ -3883,6 +4052,7 @@
       var key = def.key, f = r.field;
       if (t === 'custom') {                            // v36: an LL Strength test's leg is its own row here; the test joins the battery
         if (def.str) { key = strSideName(def.str, f === 'left' ? 'Left' : 'Right'); f = 'result'; join({ k: 'str', id: def.str.id }, def.name); }
+        else if (def.rehab) join({ k: def.rehab, key: def.key }, def.name);   // v37: a rehab test (an LSI keeps its left and right)
         else if (!def.own) join({ k: 'screen', key: def.key }, def.name);
       }
       put(key, f, v, fieldLabel(def, r.field));
@@ -3895,7 +4065,10 @@
         var hit = catalogueByName(name);
         if (hit) {                                     // a catalogue test after all
           if (hit.k === 'screen') { join({ k: 'screen', key: hit.name }, hit.name); put(hit.name, 'result', v, hit.name); }
-          else notes.push(name + ' is an LL Strength test: tick it under Choose tests and type each leg (' + v + ').');
+          else if ((hit.k === 'ham' || hit.k === 'acl') && hit.def.calc !== 'LSI') { join({ k: hit.k, key: hit.name }, hit.name); put(hit.name, 'result', v, hit.name); }   // v37
+          else if (hit.ratio) notes.push(name + ': the hip ratio is worked out from Hip adduction and Hip abduction. Tick it under Choose tests and type each leg of both (' + v + ').');
+          else if (hit.k === 'str') notes.push(name + ' is an LL Strength test: tick it under Choose tests and type each leg (' + v + ').');
+          else notes.push(name + ' is worked out from left and right: tick it under Choose tests and type both sides (' + v + ').');   // v37: an LSI
           return;
         }
         var k = E.libKey(name), own = state.custom.battery.filter(function (it) { return it.k === 'own' && E.libKey(it.name) === k; })[0];
@@ -3932,7 +4105,7 @@
     if (t === 'custom' && Array.isArray(u.added) && u.added.length) {
       var held = {};
       customSet().groups.forEach(function (g) { g.metrics.forEach(function (m) {
-        var v = s.values[m.name]; if (v && ['result', 'previous', 'side'].some(function (f) { return !blank(v[f]); })) held[m.str ? 'str|' + m.str : m.own ? 'own|' + m.own : 'screen|' + m.name] = 1;
+        var v = s.values[m.name]; if (v && ['result', 'previous', 'side', 'left', 'right'].some(function (f) { return !blank(v[f]); })) held[m.str ? 'str|' + m.str : m.own ? 'own|' + m.own : m.rehab ? m.rehab + '|' + m.name : 'screen|' + m.name] = 1;   // v37: + rehab tests
       }); });
       s.battery = s.battery.filter(function (it) { var k = batteryKey(it); return u.added.indexOf(k) < 0 || held[k]; });
     }
@@ -6977,7 +7150,7 @@
   var HIST = 'bh-athlete-report-clients-v1';
   var clients = { v: 1, clients: {} };
   var SCORE_UNITS = { xBW: '× BW', xBWf: '× BW', pctBW: '% BW', Nkg: 'N/kg', reps: 'reps', ratio: '' };
-  var PREFILL = { screen: ['sex', 'age', 'sport', 'tester'], str: ['sport', 'tester'], ham: ['injured', 'doi', 'clinician', 'sport'], acl: ['injured', 'dos', 'graft', 'surgeon', 'sport'], custom: ['sex', 'age', 'sport', 'tester'] };   // v36
+  var PREFILL = { screen: ['sex', 'age', 'sport', 'tester'], str: ['sport', 'tester'], ham: ['injured', 'doi', 'clinician', 'sport'], acl: ['injured', 'dos', 'graft', 'surgeon', 'sport'], custom: ['sex', 'age', 'sport', 'tester', 'injured'] };   // v36; v37: the injured side (from Custom sessions only, as SAME_TOOL_ONLY says)
   var SAME_TOOL_ONLY = { injured: true, doi: true, dos: true, graft: true, surgeon: true, clinician: true };
   function loadLocalClients() {                        // the records kept on this device (local mode; before v13 in cloud mode)
     try {
@@ -7025,6 +7198,7 @@
     var date = m.date || todayIso(), meta = {};
     Object.keys(m).forEach(function (k) { if (k !== 'name' && !blank(m[k])) meta[k] = String(m[k]).trim(); });
     if (SL(t)) meta.pop = state[t].pop;              // v36: the Custom battery's too
+    if (t === 'custom') { if (state.custom.hamPhase) meta.hamPhase = state.custom.hamPhase; if (state.custom.aclPhase) meta.aclPhase = state.custom.aclPhase; }   // v37
     if (t === 'ham' || t === 'acl') meta.phase = state[t].phase;
     if (t === 'acl') meta.normSex = state.acl.sex;
     var co = state[t].coach;                          // kept with the session, never filled back in from records
@@ -7143,12 +7317,12 @@
   function historySessions(t, cl) {
     if (t !== 'custom' || !cl) return cl ? cl.sessions : [];
     var names = {}, strOf = {};
-    customSet().groups.forEach(function (g) { g.metrics.forEach(function (m) { names[m.name] = 1; if (m.str) strOf[m.str + '|' + (m.side === 'Left' ? 'L' : 'R')] = m.name; }); });
+    customSet().groups.forEach(function (g) { g.metrics.forEach(function (m) { names[m.name] = 1; if (m.str || m.ratio) strOf[(m.str || m.ratio) + '|' + (m.side === 'Left' ? 'L' : 'R')] = m.name; }); });   // v37: + the hip ratio
     var out = [];
     cl.sessions.forEach(function (x) {
       if (!x || !x.results) return;
       if (x.tool === 'custom') { out.push(x); return; }
-      if (x.tool !== 'screen' && x.tool !== 'str') return;
+      if (x.tool !== 'screen' && x.tool !== 'str' && x.tool !== 'ham' && x.tool !== 'acl') return;   // v37: + the rehab tools' sessions (same metric names)
       var res = {}, vals = {}, any = false;
       Object.keys(x.results).forEach(function (k) {
         var name = x.tool === 'str' ? strOf[k] : (names[k] ? k : '');
@@ -7169,7 +7343,7 @@
     var hs = historySessions('custom', cl), date = s.meta.date || todayIso(), n = 0, dates = {}, have = 0;
     customSet().groups.forEach(function (g) {
       g.metrics.forEach(function (mm) {
-        if (mm.calc === 'DSI') return;
+        if (mm.calc === 'DSI' || mm.calc === 'RATIO') return;   // v37: the hip ratio's previous comes from the hip tests'
         var v = val('custom', mm.name);
         if (v.prevDate && !blank(v.previous)) { have++; dates[v.prevDate] = 1; }
         if (!blank(v.previous)) return;
@@ -7229,6 +7403,7 @@
     } else {
       setOf(t).groups.forEach(function (g) {
         g.metrics.forEach(function (mm) {
+          if (mm.calc === 'RATIO') return;             // v37: worked out from the hip tests' previous results
           // v36: a load or force needs the value as typed (the record's result is the score): only sessions that kept it
           var src = t === 'custom' && /^(XBW|PCTBW|PERKG|PERBW)$/.test(mm.calc || '') ? hs.filter(function (x) { return x.values && x.values[mm.name] && !blank(x.values[mm.name].result); }) : hs;
           var v = val(t, mm.name), p = E.previousFor(src, t, mm.name, date);

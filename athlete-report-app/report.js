@@ -1035,8 +1035,10 @@
     var title = custom ? 'Custom Screening Battery' : 'Athlete Performance & Readiness Report';
     header(doc, title, custom ? (clean(d.battery).trim() ? clean(d.battery).trim() + ' • ' : '') + 'Tests chosen by the clinician • Normative screening with change-vs-previous'
       : 'VALD Testing • Normative screening with change-vs-previous');
+    var rh = custom && d.rehab ? d.rehab : null;      // v37: a Custom battery with rehab tests: the injured side and the phases
     meta(doc, [['Athlete', m.name], ['Date', m.date], ['Sport', m.sport], ['Clinician', m.tester], ['Age', m.age],
-      ['Sex', m.sex], ['Mass', clean(m.mass).trim() ? clean(m.mass).trim() + ' kg' : ''], ['Notes', m.notes]], P.meta);
+      ['Sex', m.sex], ['Mass', clean(m.mass).trim() ? clean(m.mass).trim() + ' kg' : '']].concat(rh ? [['Injured side', rh.injured]] : [],
+      rh && rh.ham != null ? [['Hamstring phase', rh.ham]] : [], rh && rh.acl != null ? [['ACL phase', rh.acl]] : [], [['Notes', m.notes]]), P.meta);
     coachBand(doc, d.coach);
     band(doc, 'Compared against', d.popLabel || '—', tallyChips('target', d.counts), P.band);
     interpretation(doc, d.interp, { size: P.interp, head: P.head });
@@ -1053,6 +1055,7 @@
     var foot = withNote('Confidence shown in grey (★★★ strong · ★★☆ moderate · ★☆☆ weak). ' +
       'Norms are population- and protocol-dependent; targets reflect the selected reference population only. ' +
       (custom ? 'Strength tests are scored relative to body weight against the clinic’s targets; the clinic’s own tests are rated only where a target was set. ' : '') +
+      (rh ? 'Rehab tests are compared with research norms for the typical case at the chosen phase (Close = up to 1 SD behind) and support, not replace, the return-to-play decision. ' : '') +   // v37
       'This report organises and displays testing data and is not medical advice.', rowsHavePrev(d.groups));
     results(doc, d.groups, [150, 52, 120], 'target', d.progress ? 0 : footerH(foot), 'target', { title: 'Full results', size: P.head });
     progressTable(doc, d.progress, P.head, footerH(foot));
