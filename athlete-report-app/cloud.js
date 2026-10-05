@@ -20,7 +20,11 @@
    when its link ends (expires); the store's rules let anyone holding the token read that one document until then and
    nobody list them. share() queues the write (it goes with the next sync, last); unshare() ends a link at once (the
    program removed, expires long past). A refusal of `shared` (no rule for it yet) is reported apart (status().shareDenied)
-   and never as the device being refused. */
+   and never as the device being refused.
+   v40: the client's training log. Their phone writes each session to shared/<token>/logs/<id> while the link works (the
+   rules check the shape); logs(token) reads a link's sessions with the clinic login. `checkins` (one document per link:
+   when the clinic last marked its check-in as seen) is a collection like the library's; a refusal of it (no rule yet)
+   is reported apart, as the links are. */
 (function () {
   'use strict';
   var cfg = window.BH_CLOUD || {};
@@ -37,8 +41,8 @@
   var MAX_WRITES = 400;                                // writes per commit (Firestore's limit is 500)
   // v15: the clinic's shared documents (cache[coll] = { <id>: entry | { id, deleted: true } }) and the push order: each
   // group goes in commits of its own, the results first
-  var DOC_COLLS = ['library', 'templates', 'batteries'];   // v36: + the saved screening batteries
-  var PUSH_ORDER = [['sessions', 'history'], ['library'], ['templates'], ['batteries'], ['shared']];   // v35: + the phone links, last
+  var DOC_COLLS = ['library', 'templates', 'batteries', 'checkins'];   // v36: + the saved screening batteries; v40: + check-ins seen
+  var PUSH_ORDER = [['sessions', 'history'], ['library'], ['templates'], ['batteries'], ['checkins'], ['shared']];   // v35: + the phone links, last
   var DOC_ID = /^[A-Za-z0-9][A-Za-z0-9_-]{0,149}$/;    // safe as a Firestore document id (no '/', never '__x__')
   // v34: the project's default bucket (since late 2024 a new one is <projectId>.firebasestorage.app; cloud-config.js may
   // name another as storageBucket) and the Firebase Storage REST address the SDK uses
@@ -47,6 +51,8 @@
   var MEDIA_PATH = /^library\/[A-Za-z0-9][A-Za-z0-9_-]{0,149}\/[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/;
   var SHARE_ID = /^[A-Za-z0-9]{20,64}$/;               // v35: a phone link's token (the document id in shared/)
   var SHARE_MAX = 900000;                              // characters of program JSON (a document holds 1 MiB)
+  var LOG_ID = /^[0-9]{8}-[A-Za-z0-9]{12}$/;           // v40: a session in a link's log (as the phone page names it)
+  var APART = ['shared', 'checkins'];                  // v40: refusals reported apart (never the device being refused)
 
   // ------------------------------------------------------------------ storage helpers
   function getJson(k) { try { return JSON.parse(localStorage.getItem(k)); } catch (e) { return null; } }
@@ -104,7 +110,7 @@
   function freshCursor() { return { at: '', name: '' }; }
   function freshCache(email) {
     return { v: 1, email: email || '', syncedAt: '', cursorName: '', clients: {}, legacy: 'pending',
-      library: {}, templates: {}, batteries: {}, cursors: { library: freshCursor(), templates: freshCursor(), batteries: freshCursor() } };   // v36: + batteries
+      library: {}, templates: {}, batteries: {}, checkins: {}, cursors: { library: freshCursor(), templates: freshCursor(), batteries: freshCursor(), checkins: freshCursor() } };   // v36: + batteries; v40: + checkins
   }
   function isMap(m) { return !!m && typeof m === 'object' && !Array.isArray(m); }
   function loadCache() {
@@ -343,7 +349,7 @@
   function settingPending() { return pending.some(function (x) { return x.kind === 'setting'; }); }
   function resultsWaiting() { return pending.filter(function (x) { return x.coll === 'sessions'; }).length; }
   function changesWaiting(coll) {                      // library / template writes in the queue (one collection or both)
-    return pending.filter(function (x) { return coll ? x.coll === coll : DOC_COLLS.indexOf(x.coll) >= 0; }).length;
+    return pending.filter(function (x) { return coll ? x.coll === coll : DOC_COLLS.indexOf(x.coll) >= 0 && x.coll !== 'checkins'; }).length;   // (v40: a check-in mark isn't a library change)
   }
   function dropPending(items) {
     pending = pending.filter(function (x) { return items.indexOf(x) < 0; });
@@ -426,6 +432,31 @@
     var waiting = pending.some(function (x) { return x.coll === 'shared' && x.sid === token; });
     if (!waiting) return 'sent';
     return status.deniedColls.indexOf('shared') >= 0 ? 'denied' : 'waiting';
+  }
+
+  // ------------------------------------------------------------------ v40: a link's training log (read with the clinic login)
+  // resolves { ok: true, logs: [{ id, day, at (when the store took it), log (the session) }] } or { ok: false, code }
+  // ('off': local mode or signed out; 'denied': the store refused, e.g. no rule for logs yet; 'http'; 'network')
+  function logs(token) {
+    if (!enabled || !auth || !SHARE_ID.test(String(token))) return Promise.resolve({ ok: false, code: 'off' });
+    var out = [];
+    function page(next) {
+      return fs('GET', '/shared/' + token + '/logs', undefined, 'pageSize=300' + (next ? '&pageToken=' + encodeURIComponent(next) : '')).then(function (r) {
+        if (r.status === 403) return { ok: false, code: 'denied' };
+        if (r.status !== 200) return { ok: false, code: 'http', status: r.status };
+        var j = r.json || {};
+        (Array.isArray(j.documents) ? j.documents : []).forEach(function (d) {
+          var id = String(d && d.name || '').split('/').pop(), f = (d && d.fields) || {}, obj = null;
+          if (!LOG_ID.test(id)) return;
+          try { obj = JSON.parse(str(f.data)); } catch (e) { obj = null; }
+          if (!isMap(obj)) return;
+          out.push({ id: id, day: str(f.day), at: String((f.updatedAt && f.updatedAt.timestampValue) || d.updateTime || ''), log: obj });
+        });
+        if (typeof j.nextPageToken === 'string' && j.nextPageToken && out.length < 3000) return page(j.nextPageToken);
+        return { ok: true, logs: out };
+      });
+    }
+    return page('').catch(function (e) { return { ok: false, code: (e && e.code) || 'network' }; });
   }
 
   // ------------------------------------------------------------------ push: the queue to Firestore
@@ -614,7 +645,7 @@
   // the collections refused in this sync (v13 showed any refusal as "denied"; deniedColls says which ones)
   function setDenied(round) {
     status.deniedColls = round.denied.slice();
-    status.denied = round.denied.filter(function (c) { return c !== 'shared'; }).length > 0;   // v35: the links are reported apart
+    status.denied = round.denied.filter(function (c) { return APART.indexOf(c) < 0; }).length > 0;   // v35: the links are reported apart; v40: and the check-ins
     status.error = status.denied ? String(round.message || '') : '';
     if (status.denied && resultsWaiting()) status.waited = true;
   }
@@ -689,10 +720,11 @@
     // pending: results waiting; changes: library + template writes waiting (changesBy per collection); denied: the store
     // refused something in the last sync, deniedColls: which collections ('sessions', 'history', 'library', 'templates', 'meta')
     status: function () {
-      return { pending: resultsWaiting(), changes: changesWaiting(), changesBy: { library: changesWaiting('library'), templates: changesWaiting('templates'), batteries: changesWaiting('batteries') },   // v36
+      return { pending: resultsWaiting(), changes: changesWaiting(), changesBy: { library: changesWaiting('library'), templates: changesWaiting('templates'), batteries: changesWaiting('batteries'), checkins: changesWaiting('checkins') },   // v36; v40
         queued: pending.length, offline: status.offline || navigator.onLine === false, failed: status.failed, denied: status.denied,
         deniedColls: status.deniedColls.slice(), error: status.error, syncing: !!syncing,
-        shares: pending.filter(function (x) { return x.coll === 'shared'; }).length, shareDenied: status.deniedColls.indexOf('shared') >= 0 };   // v35
+        shares: pending.filter(function (x) { return x.coll === 'shared'; }).length, shareDenied: status.deniedColls.indexOf('shared') >= 0,   // v35
+        checkinsDenied: status.deniedColls.indexOf('checkins') >= 0 };   // v40
     },
     sync: sync,
     onChange: function (fn) { if (typeof fn === 'function') listeners.push(fn); },
@@ -701,6 +733,7 @@
     share: share,
     unshare: unshare,
     shareState: shareState,
+    logs: logs,                                        // v40: a link's training log
     // v34: the library's photos and videos (Cloud Storage for Firebase, same login). ready(): signed in with a bucket;
     // base: the start of every file address in that bucket (to recognise ours)
     media: {

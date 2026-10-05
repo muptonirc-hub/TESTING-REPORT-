@@ -2991,6 +2991,7 @@
       '<input id="homeSearch" type="search" placeholder="Find a client" autocomplete="off" autocapitalize="words" autocorrect="off" spellcheck="false" enterkeyhint="search" aria-controls="homeSugg"></label>' +
       '<div class="suggest home-sugg" id="homeSugg" hidden></div></div></div>' +
       '<section class="home-cont" id="homeCont" aria-labelledby="homeContH" hidden></section>' +
+      '<section class="home-check" id="homeCheck" aria-labelledby="homeCheckH" hidden></section>' +   // v40: the check-ins
       '<section class="home-group" aria-labelledby="homeTestH"><h2 id="homeTestH">Testing</h2><div class="home-tiles" id="homeTests"></div></section>' +
       '<section class="home-group" aria-labelledby="homeExH"><h2 id="homeExH">Exercises</h2><div class="home-tiles" id="homeEx"></div></section>' +
       '<div class="cpage" id="cpage"></div>';           // v39: a client's page, drawn in place of the rest
@@ -3010,6 +3011,7 @@
     var a = document.activeElement, holder = a && a.closest && els.homeSec.contains(a) ? a.closest('[data-home]') : null, keep = holder ? holder.getAttribute('data-home') : null;   // focus kept across a redraw
     $('homeHello').textContent = homeHello();
     $('homeDate').textContent = homeDate();
+    renderCheckins();                                  // v40
     var cont = homeInProgress(), cs = $('homeCont');
     cs.hidden = !cont.length;
     cs.innerHTML = !cont.length ? '' : '<h2 id="homeContH">Continue where you left off</h2><div class="cont-list">' + cont.map(function (t) {
@@ -3151,6 +3153,9 @@
     var el = e.target.closest('[data-home]');
     if (!el || el.tagName === 'LABEL') return;           // the photo tile opens its picker by itself
     var k = el.dataset.home, part = k.split(':');
+    if (part[0] === 'check') { openClientPage(k.slice(6), 'log'); return; }   // v40: a check-in: their log
+    if (part[0] === 'seen') { markSeen(k.slice(5)); return; }
+    if (k === 'ckall') { ckAll = !ckAll; renderCheckins(); focusQuiet(els.homeSec.querySelector('[data-home="ckall"]')); return; }
     if (part[0] === 'cont') openTool(part[1], part[1] === 'ex' ? 'builder' : null);
     else if (part[0] === 'tool') homeOpen(part[1], null);
     else if (k === 'ex:builder') homeOpen('ex', 'builder');
@@ -3262,14 +3267,15 @@
   // results (to view, save or share; the app keeps no PDFs), and + New test starts one with last time's results to compare;
   // a program opens in the builder (to print again, change or send to their phone), the newest marked Current, with the
   // phone link's state. The page is drawn on Home in place of the rest; ‹ Home, the Home tab and the logo go back.
-  function openClientPage(key) {
+  function openClientPage(key, view) {                 // v40: view 'log': their training log
     if (!clients.clients[key]) return;
     if (!homeView) showHome(false);
     var box = $('homeSugg'), find = $('homeSearch');
     if (box) { box.hidden = true; box.innerHTML = ''; }
     if (find) find.value = '';                         // the name searched for has been found
-    clientPage = { key: key };
+    clientPage = { key: key, view: view === 'log' ? 'log' : '' };
     renderHome();
+    if (logsOn()) refreshLogs(clientTokens(key), 3000);   // v40: opened on purpose: their log read again now
     window.scrollTo(0, 0);
     focusQuiet($('cpName'));
   }
@@ -3292,6 +3298,8 @@
     return isFinite(t) ? new Date(t + 10 * 3600 * 1000).toISOString().slice(0, 10) : '';
   }
   function renderClientPage() {
+    if (logsOn()) refreshLogs(clientTokens(clientPage.key), LOG_FRESH_MS);   // v40: their training log, read again after a minute
+    if (clientPage.view === 'log') { renderClientLog(); return; }             // v40
     var page = $('cpage'), key = clientPage.key, cl = clients.clients[key];
     var a = document.activeElement, holder = a && page.contains(a) ? a.closest('[data-cp]') : null, keep = holder ? holder.getAttribute('data-cp') : (a && a.id === 'cpName' ? 'name' : null);
     var ISO = /^\d{4}-\d{2}-\d{2}$/;                     // (each row's address is its tool and date)
@@ -3339,6 +3347,7 @@
       (testRows ? '<div class="cp-list">' + testRows + '</div>' : '<p class="cp-empty">No screening saved yet. + New test starts one.</p>') + '</section>' +
       '<section class="cp-sec" aria-labelledby="cpProgsH"><div class="cp-sec-head"><h2 id="cpProgsH">Exercise programs</h2>' +
       '<button type="button" class="ghost cp-add" data-cp="newprog">+ New program</button></div>' +
+      (logsOn() && clientTokens(key).length ? '<div class="cp-list cp-loglist">' + logCardHtml(key) + '</div>' : '') +   // v40: their training log
       (progRows ? '<div class="cp-list">' + progRows + '</div>' : '<p class="cp-empty">No programs saved yet. + New program starts one.</p>') + '</section>' +
       '</div>';
     if (keep === 'name') focusQuiet($('cpName'));
@@ -3348,6 +3357,15 @@
     var key = clientPage && clientPage.key, cl = key ? clients.clients[key] : null;
     if (what === 'back' || !cl) { closeClientPage(); return; }
     var i = what.indexOf(':'), kind = i < 0 ? what : what.slice(0, i), arg = i < 0 ? '' : what.slice(i + 1);
+    if (kind === 'log' || kind === 'logback') {        // v40: their training log, and back to their page
+      clientPage.view = kind === 'log' ? 'log' : '';
+      renderHome();
+      if (kind === 'log' && logsOn()) refreshLogs(clientTokens(key), 3000);
+      window.scrollTo(0, 0);
+      focusQuiet(kind === 'log' ? $('cpName') : els.homeSec.querySelector('[data-cp="log"]'));
+      return;
+    }
+    if (kind === 'seen') { markSeen(arg); return; }    // v40
     if (kind === 'newtest') openHomeClient(key, '', true);
     else if (kind === 'newprog') homeClientGo('ex', { key: key, name: cl.name, blank: true });
     else if (kind === 'prog') homeClientGo('ex', { key: key, name: cl.name, prog: arg });
@@ -3454,6 +3472,341 @@
     els.home.hidden = true;
     els.sheetTitle.innerHTML = esc(built.rep.title) + '<small>' + esc(built.file) + ' · made again from the record of ' + esc(E.displayIso(date)) + '</small>';
     showSheet(built, '');
+  }
+
+  // ------------------------------------------------------------------ v40: the client's training log
+  // Matthew (6 Oct): "there needs to be a link from the patients program on their phone back to us - and by this i mean -
+  // they can log their workouts and it shows on our end - the load sets and reps need to be editable - think long term
+  // rehab or time between appointments - progressive overload is often needed for true rehab goals - clients track and
+  // put in their load. Again we can check in and see if they are completing their rehab." His choices: on the phone one tap
+  // marks an exercise (or the session) done and Change edits sets, reps or load, carried forward to next time; a pain score
+  // (0-10) and a note per session; no progression nudge; a check-in for pain of 4 or more, or 5 days without a session.
+  // The phone writes shared/<token>/logs (cloud.js › logs reads them with the clinic login); a client's tokens are in their
+  // saved programs (program.share; one link per client until it is stopped). What was read is kept on this device
+  // (bh-athlete-report-logs-v1) so the pages draw at once and refresh behind; signing out clears it.
+  var LOG_STORE = 'bh-athlete-report-logs-v1', PAIN_FLAG = 4, QUIET_DAYS = 5, LOG_FRESH_MS = 60000, HOME_FRESH_MS = 5 * 60000;
+  var logBook = null, logBusy = {}, ckAll = false;
+  // the day logging began: a link sent before it is never flagged for "nothing logged yet" (its client wasn't told about
+  // logging); once they log, it is checked like any other (window.BH_LOG_START: the suites' own day)
+  var LOG_START = /^\d{4}-\d{2}-\d{2}$/.test(String(window.BH_LOG_START || '')) ? window.BH_LOG_START : '2026-10-05';
+  var LOG_ICON = homeSvg('<path d="M4 19h16"/><path d="M7 15v-3M11 15V8M15 15v-5M19 15V5"/>');   // bars: sessions logged
+  function loadLogBook() {
+    if (logBook) return logBook;
+    var b = null, acct = CLOUD && CLOUD.account ? CLOUD.account() : null, email = acct ? acct.email : '';
+    try { b = JSON.parse(localStorage.getItem(LOG_STORE)); } catch (e) { b = null; }
+    logBook = b && typeof b === 'object' && b.tokens && typeof b.tokens === 'object' && !Array.isArray(b.tokens) && b.email === email ? b : { email: email, tokens: {} };
+    return logBook;
+  }
+  function saveLogBook() { try { localStorage.setItem(LOG_STORE, JSON.stringify(logBook)); } catch (e) { /* full: kept in memory */ } }
+  function clearLogBook() { logBook = null; logBusy = {}; try { localStorage.removeItem(LOG_STORE); } catch (e) { /* storage unavailable */ } }
+  function logsOn() { return !!(CLOUD && CLOUD.signedIn() && CLOUD.logs); }
+  // a session as the phone sent it, tidied for showing (null: removed by the client, or unreadable)
+  function tidyLogEntry(e) {
+    var o = e && e.log;
+    if (!o || typeof o !== 'object' || o.removed === true || !/^\d{4}-\d{2}-\d{2}$/.test(o.day || '')) return null;
+    var items = (Array.isArray(o.items) ? o.items : []).slice(0, 80).filter(function (it) { return it && typeof it === 'object' && cap(it.n, 120); }).map(function (it) {
+      var rx = it.rx && typeof it.rx === 'object' ? it.rx : {};
+      return { n: cap(it.n, 120), g: cap(it.g, 80), done: it.done === true, sets: cap(it.sets, 20), reps: cap(it.reps, 20), load: cap(it.load, 30),
+        rx: { sets: cap(rx.sets, 20), reps: cap(rx.reps, 20), load: cap(rx.load, 30) } };
+    });
+    var pain = typeof o.pain === 'number' && o.pain >= 0 && o.pain <= 10 ? Math.round(o.pain) : null;
+    return { id: e.id, token: e.token, day: o.day, at: String(e.at || ''), items: items, pain: pain, note: typeof o.note === 'string' ? o.note.trim().slice(0, 500) : '',
+      grp: cap(o.grp, 80), title: cap(o.title, 120) };
+  }
+  function clientTokens(key) {                         // the client's phone links, in the order first sent
+    var cl = key ? clients.clients[key] : null, out = [];
+    exPrograms(cl).forEach(function (x) { var sh = x.program.share; if (sh && TOKEN_RE.test(sh.token) && out.indexOf(sh.token) < 0) out.push(sh.token); });
+    return out;
+  }
+  function clientLogs(key) {                           // every session from their links, newest first
+    var book = loadLogBook(), out = [];
+    clientTokens(key).forEach(function (t) {
+      var e = book.tokens[t];
+      (e && Array.isArray(e.list) ? e.list : []).forEach(function (x) { var y = tidyLogEntry({ id: x.id, token: t, at: x.at, log: x.log }); if (y) out.push(y); });
+    });
+    return out.sort(function (a, b) { return a.day < b.day ? 1 : a.day > b.day ? -1 : (a.at < b.at ? 1 : a.at > b.at ? -1 : 0); });
+  }
+  // 'none' (no phone link), 'loading' (not read yet), 'denied' (the store refused: no rule for logs yet), 'error', 'ok'
+  function logState(key) {
+    var toks = clientTokens(key), book = loadLogBook(), st = 'ok';
+    if (!toks.length || !logsOn()) return 'none';
+    toks.forEach(function (t) {
+      var e = book.tokens[t];
+      if (!e) st = 'loading';
+      else if (e.err && st === 'ok') st = e.err;
+    });
+    return st;
+  }
+  // read these links' logs (those not read in the last freshMs); the pages showing them redraw when something arrives
+  function refreshLogs(tokens, freshMs) {
+    if (!logsOn()) return Promise.resolve(false);
+    var book = loadLogBook(), now = Date.now();
+    var want = tokens.filter(function (t, i) { var e = book.tokens[t]; return tokens.indexOf(t) === i && !logBusy[t] && (!e || now - (+e.at || 0) > freshMs); });
+    if (!want.length) return Promise.resolve(false);
+    want.forEach(function (t) { logBusy[t] = true; });
+    return Promise.all(want.map(function (t) {
+      return CLOUD.logs(t).then(function (r) {
+        if (logBook !== book) return false;            // signed out meanwhile
+        delete logBusy[t];
+        if (!r.ok && r.code === 'off') return false;
+        var had = !!book.tokens[t], e = book.tokens[t] || { list: [] }, before = had ? JSON.stringify([e.list, e.err || '']) : '';
+        if (r.ok) { e.list = r.logs.map(function (x) { return { id: x.id, at: x.at, log: x.log }; }); e.err = ''; }
+        else e.err = r.code === 'denied' ? 'denied' : 'error';   // (what was read before stays shown)
+        e.at = Date.now();
+        book.tokens[t] = e;
+        return !had || JSON.stringify([e.list, e.err || '']) !== before;   // the first read always redraws (no more "Checking…")
+      }, function () { delete logBusy[t]; return false; });
+    })).then(function (res) {
+      if (logBook !== book) return false;
+      saveLogBook();
+      var any = res.some(Boolean);
+      if (any) afterLogs();
+      return any;
+    });
+  }
+  // Home's check-ins alone (a sync or a log read redraws only this part of Home: never the tiles, whose photo picker may be open)
+  function renderCheckins() {
+    var sec = $('homeCheck');
+    if (!sec) return;
+    if (logsOn()) refreshLogs(liveTokens(), HOME_FRESH_MS);   // the clients with a working link, every five minutes at most
+    var a = document.activeElement, keep = a && sec.contains(a) ? a.getAttribute('data-home') : '', html = checkinsHtml();
+    sec.hidden = !html;
+    if (sec.innerHTML !== html) {
+      sec.innerHTML = html;
+      if (keep) focusQuiet(sec.querySelector('[data-home="' + keep + '"]') || $('homeHello'));
+    }
+  }
+  function afterLogs() {
+    if (homeView && clientPage) renderHome();
+    else if (homeView) renderCheckins();
+    else if (state && state.tool === 'ex') { refreshExClientBar(); applyExLogged(); }
+  }
+  function localDay(iso) { var t = Date.parse(iso || ''); if (!isFinite(t)) return ''; var d = new Date(t); return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); }
+  function logDay(iso) {                               // 'Tue 6 Oct' (the year too when it isn't this one)
+    var p = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso || '');
+    if (!p) return '';
+    var d = new Date(Date.UTC(+p[1], +p[2] - 1, +p[3]));
+    return ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][d.getUTCDay()] + ' ' + (+p[3]) + ' ' + ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][+p[2] - 1] +
+      (p[1] !== todayIso().slice(0, 4) ? ' ' + p[1] : '');
+  }
+  function agoText(day) {
+    var d = daysBetween(day, todayIso());
+    return d === null ? '' : d <= 0 ? 'today' : d === 1 ? 'yesterday' : d + ' days ago';
+  }
+  function doseText(r) {                               // '3 × 8 · 22.5 kg'
+    var sr = r.sets && r.reps ? r.sets + ' × ' + r.reps : r.sets ? r.sets + (/^\d+$/.test(r.sets) ? (r.sets === '1' ? ' set' : ' sets') : '') : r.reps;
+    return [sr, r.load].filter(Boolean).join(' · ');
+  }
+  function doneCount(l) { return l.items.filter(function (it) { return it.done; }).length; }
+  function loadKg(s) {                                 // a load as a number, when it reads as kilograms (or a bare number)
+    var t = String(s || '').replace(',', '.'), m = /(\d+(?:\.\d+)?)\s*kgs?\b/i.exec(t);
+    if (m) return +m[1];
+    m = /^\s*(\d+(?:\.\d+)?)\s*$/.exec(t);
+    return m ? +m[1] : null;
+  }
+  function weekStartIso(iso) {                         // the Monday of that week
+    var p = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso || '');
+    if (!p) return '';
+    var d = new Date(Date.UTC(+p[1], +p[2] - 1, +p[3])), back = (d.getUTCDay() + 6) % 7;
+    return new Date(d.getTime() - back * 86400000).toISOString().slice(0, 10);
+  }
+  // how often the current program asks for (its instructions: "3 times a week", "3x/week", "every day"), else null
+  function plannedPerWeek(key) {
+    var progs = exPrograms(key ? clients.clients[key] : null), p = progs.length ? progs[progs.length - 1].program : null, t = p ? String(p.instructions || '') : '';
+    var m = /(\d)\s*(?:x|×|times)\s*(?:a|per|\/|each)?\s*week/i.exec(t);
+    if (m && +m[1] >= 1 && +m[1] <= 7) return +m[1];
+    return /\b(every|each) day\b|\bdaily\b/i.test(t) ? 7 : null;
+  }
+  // the check-in for a client with a live link: pain of 4 or more in the last two weeks not yet marked as seen, and days
+  // without a session (counted from the last session, else from the program sent; a mark as seen starts the count again)
+  function checkinFor(key) {
+    var l = clientLink(key);
+    if (!logsOn() || !l || !linkLive(l)) return null;
+    var book = loadLogBook(), e = book.tokens[l.token];
+    if (!e || !Array.isArray(e.list)) return null;    // not read yet
+    var seenDoc = clients.checkins && clients.checkins[l.token], seenAt = seenDoc && !seenDoc.deleted && typeof seenDoc.seenAt === 'string' ? seenDoc.seenAt : '';
+    var seenMs = Date.parse(seenAt) || 0, list = clientLogs(key), since = addDaysIso(todayIso(), -14);
+    var pain = list.filter(function (x) { return x.pain !== null && x.pain >= PAIN_FLAG && x.day >= since && (!seenMs || (Date.parse(x.at) || 0) > seenMs); });
+    var ref = list.length ? list[0].day : l.date, seenDay = localDay(seenAt);
+    if (seenDay && seenDay > ref) ref = seenDay;
+    var quiet = !list.length && l.date < LOG_START ? null : daysBetween(ref, todayIso()), reasons = [];
+    if (pain.length) {
+      var worst = pain.slice().sort(function (a, b) { return b.pain - a.pain || (a.day < b.day ? 1 : -1); })[0];
+      reasons.push({ kind: 'pain', text: 'Pain ' + worst.pain + '/10 on ' + logDay(worst.day) + (pain.length > 1 ? ' (' + pain.length + ' sessions)' : '') });
+    }
+    if (quiet !== null && quiet >= QUIET_DAYS) reasons.push({ kind: 'quiet', text: list.length ? 'No session logged for ' + quiet + ' days' : 'Nothing logged yet (program sent ' + quiet + ' days ago)' });
+    return reasons.length ? { key: key, token: l.token, reasons: reasons, pain: pain.length ? pain[0].day : '', quiet: quiet || 0 } : null;
+  }
+  function liveTokens() {                              // every client's working link (for the check-ins)
+    var out = [];
+    Object.keys(clients.clients || {}).forEach(function (k) { var l = clientLink(k); if (l && linkLive(l) && out.indexOf(l.token) < 0) out.push(l.token); });
+    return out;
+  }
+  function markSeen(token) {
+    if (!CLOUD || !TOKEN_RE.test(token)) return;
+    var map = clients.checkins || {}, old = map[token] ? JSON.parse(JSON.stringify(map[token])) : null;
+    CLOUD.putDoc('checkins', token, { seenAt: new Date().toISOString(), by: userName() });
+    clients = CLOUD.cache;
+    CLOUD.sync();
+    var redraw = function () { if (homeView && clientPage) renderHome(); else if (homeView) renderCheckins(); };
+    redraw();
+    if (homeView && !clientPage) focusQuiet($('homeCheck').querySelector('.ck-seen') || $('homeHello'));   // (the row has gone)
+    toast('Marked as seen', { label: 'Undo', run: function () {
+      if (old && !old.deleted) CLOUD.putDoc('checkins', token, old); else CLOUD.deleteDoc('checkins', token);
+      CLOUD.sync();
+      redraw();
+    } });
+  }
+  // Home: who needs a look (pain first, then the longest without a session); each opens their log; Seen clears it
+  function checkinsHtml() {
+    if (!logsOn()) return '';
+    var rows = [];
+    Object.keys(clients.clients || {}).forEach(function (k) { var c = checkinFor(k); if (c) rows.push(c); });
+    if (!rows.length) return '';
+    rows.sort(function (a, b) { return (b.pain ? 1 : 0) - (a.pain ? 1 : 0) || (a.pain < b.pain ? 1 : a.pain > b.pain ? -1 : 0) || b.quiet - a.quiet; });
+    var more = rows.length > 6 ? '<button type="button" class="quiet ck-more" data-home="ckall" aria-expanded="' + ckAll + '">' + (ckAll ? 'Show fewer' : 'Show all ' + rows.length) + '</button>' : '';
+    if (!ckAll) rows = rows.slice(0, 6);
+    return '<h2 id="homeCheckH">Check-ins</h2><div class="ck-list">' + rows.map(function (c) {
+      var nm = clients.clients[c.key].name;
+      return '<div class="ck-row' + (c.pain ? ' ck-pain' : '') + '"><button type="button" class="ck-open" data-home="check:' + esc(c.key) + '"><span class="tile-ic">' + LOG_ICON + '</span>' +
+        '<span class="cont-text"><b>' + esc(nm) + '</b><small>' + c.reasons.map(function (r) { return '<span class="ck-why ck-' + r.kind + '">' + esc(r.text) + '</span>'; }).join('') + '</small></span>' +
+        '<span class="cont-go">' + HOME_ICON.go + '</span></button>' +
+        '<button type="button" class="ghost ck-seen" data-home="seen:' + esc(c.token) + '">Seen<span class="vh"> — ' + esc(nm) + '</span></button></div>';
+    }).join('') + '</div>' + more;
+  }
+  // the client page's card for the log (under Exercise programs' heading)
+  function logCardHtml(key) {
+    var st = logState(key);
+    if (st === 'none') return '';
+    var list = clientLogs(key), ck = checkinFor(key), line;
+    if (!list.length) line = st === 'loading' ? 'Checking their log…' : st === 'denied' ? 'The clinic store isn’t set up for training logs yet (its rules need the log lines).'
+      : st === 'error' ? 'Their log couldn’t be read just now.' : 'Nothing logged yet. Sessions they log on their phone show here.';
+    else {
+      var since = addDaysIso(todayIso(), -6), wk = list.filter(function (x) { return x.day >= since; }).length, last = list[0];
+      line = list.length + (list.length === 1 ? ' session' : ' sessions') + ' · last ' + logDay(last.day) + ' (' + agoText(last.day) + ')' + ' · ' + wk + ' in the last 7 days' +
+        (last.pain !== null ? ' · pain ' + last.pain + '/10 last time' : '');
+    }
+    return '<button type="button" class="cp-row cp-log" data-cp="log"><span class="tile-ic">' + LOG_ICON + '</span><span class="cp-text"><b>Training log</b><small>' + esc(line) + '</small>' +
+      (ck ? '<span class="cp-tags">' + ck.reasons.map(function (r) { return '<span class="cp-tag ' + (r.kind === 'pain' ? 'warn' : 'idle') + '">' + esc(r.text) + '</span>'; }).join('') + '</span>' : '') +
+      '</span><span class="cp-go"><span>View log</span>' + HOME_ICON.go + '</span></button>';
+  }
+  // sessions per week, the last 8 weeks (Monday to Sunday), one bar each; the planned number as a dashed line
+  function weeksSvg(list, plan) {
+    var weeks = [], start = weekStartIso(todayIso());
+    for (var i = 7; i >= 0; i--) weeks.push(addDaysIso(start, -7 * i));
+    var n = weeks.map(function (w) { var end = addDaysIso(w, 7); return list.filter(function (x) { return x.day >= w && x.day < end; }).length; });
+    var top = Math.max(plan || 0, Math.max.apply(null, n), 3), W = 480, H = 170, L = 26, B = 140, T = 14, bw = (W - L - 4) / 8;
+    var y = function (v) { return B - (B - T) * v / top; };
+    var grid = [0, top].map(function (v) { return '<line class="lg-grid" x1="' + L + '" x2="' + W + '" y1="' + y(v) + '" y2="' + y(v) + '"/><text class="lg-ax" x="' + (L - 6) + '" y="' + (y(v) + 4) + '" text-anchor="end">' + v + '</text>'; }).join('');
+    var bars = n.map(function (v, i) {
+      var x = L + 4 + i * bw + 2, h = B - y(v), w = bw - 6, lab = 'Week of ' + logDay(weeks[i]) + ': ' + v + (v === 1 ? ' session' : ' sessions');
+      var shape = v ? '<path class="lg-bar' + (i === 7 ? ' now' : '') + '" d="M' + x + ' ' + B + 'V' + (B - h + 4) + 'q0 -4 4 -4h' + (w - 8) + 'q4 0 4 4V' + B + 'Z"/>' : '';
+      return '<g class="lg-hit"><title>' + esc(lab) + '</title><rect x="' + (x - 2) + '" y="' + T + '" width="' + (w + 4) + '" height="' + (B - T + 22) + '" fill="transparent"/>' + shape +
+        (v ? '<text class="lg-val" x="' + (x + w / 2) + '" y="' + (B - h - 4) + '" text-anchor="middle">' + v + '</text>' : '') +
+        (i % 2 === 1 || i === 7 ? '<text class="lg-ax" x="' + (x + w / 2) + '" y="' + (B + 20) + '" text-anchor="middle">' + esc(i === 7 ? 'This wk' : logDay(weeks[i]).replace(/^\w+ /, '')) + '</text>' : '') + '</g>';
+    }).join('');
+    var target = plan ? '<line class="lg-plan" x1="' + L + '" x2="' + W + '" y1="' + y(plan) + '" y2="' + y(plan) + '"/><text class="lg-plan-t" x="' + W + '" y="' + (y(plan) - 4) + '" text-anchor="end">Plan ' + plan + ' a week</text>' : '';
+    return '<svg class="lg-chart" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="' + esc('Sessions per week, last 8 weeks: ' + n.join(', ') + (plan ? '; plan ' + plan + ' a week' : '')) + '">' + grid + target + bars + '</svg>';
+  }
+  // pain after each session (the last 12 with a score), 0-10; the check-in level as a dashed line
+  function painSvg(list) {
+    var pts = list.filter(function (x) { return x.pain !== null; }).slice(0, 12).reverse();
+    if (pts.length < 2) return '<p class="lg-none">' + (pts.length ? 'One score so far: ' + pts[0].pain + '/10 on ' + esc(logDay(pts[0].day)) + '.' : 'No pain scores yet.') + '</p>';
+    var W = 480, H = 170, L = 26, R = 12, B = 140, T = 14, step = (W - L - R) / (pts.length - 1);
+    var x = function (i) { return L + i * step; }, y = function (v) { return B - (B - T) * v / 10; };
+    var grid = [0, 10].map(function (v) { return '<line class="lg-grid" x1="' + L + '" x2="' + W + '" y1="' + y(v) + '" y2="' + y(v) + '"/><text class="lg-ax" x="' + (L - 6) + '" y="' + (y(v) + 4) + '" text-anchor="end">' + v + '</text>'; }).join('');
+    var flag = '<line class="lg-plan" x1="' + L + '" x2="' + W + '" y1="' + y(PAIN_FLAG) + '" y2="' + y(PAIN_FLAG) + '"/><text class="lg-plan-t" x="' + W + '" y="' + (y(PAIN_FLAG) - 4) + '" text-anchor="end">Check-in at ' + PAIN_FLAG + '</text>';
+    var line = '<polyline class="lg-line" points="' + pts.map(function (p, i) { return x(i).toFixed(1) + ',' + y(p.pain).toFixed(1); }).join(' ') + '"/>';
+    var dots = pts.map(function (p, i) {
+      return '<g class="lg-hit"><title>' + esc(logDay(p.day) + ': pain ' + p.pain + '/10') + '</title><circle cx="' + x(i).toFixed(1) + '" cy="' + y(p.pain).toFixed(1) + '" r="10" fill="transparent"/>' +
+        '<circle class="lg-dot' + (p.pain >= PAIN_FLAG ? ' hi' : '') + '" cx="' + x(i).toFixed(1) + '" cy="' + y(p.pain).toFixed(1) + '" r="4"/></g>';
+    }).join('');
+    var labs = '<text class="lg-ax" x="' + L + '" y="' + (B + 20) + '">' + esc(logDay(pts[0].day)) + '</text><text class="lg-ax" x="' + W + '" y="' + (B + 20) + '" text-anchor="end">' + esc(logDay(pts[pts.length - 1].day)) + '</text>';
+    return '<svg class="lg-chart" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="' + esc('Pain after sessions: ' + pts.map(function (p) { return p.pain; }).join(', ')) + '">' + grid + flag + line + dots + labs + '</svg>';
+  }
+  // the exercises: the current program's first (in its order), then any others logged; how often done, the last time, the load's trend
+  function logExercisesHtml(key, list) {
+    var progs = exPrograms(clients.clients[key]), cur = progs.length ? progItems(progs[progs.length - 1].program.items).filter(function (it) { return it.kind !== 'section'; }) : [];
+    var order = [], seen = {}, rx = {};
+    cur.forEach(function (it) { var k = it.name.toLowerCase(); if (!seen[k]) { seen[k] = 1; order.push(it.name); rx[k] = it; } });
+    list.slice().reverse().forEach(function (l) { l.items.forEach(function (it) { var k = it.n.toLowerCase(); if (!seen[k]) { seen[k] = 1; order.push(it.n); } }); });
+    var rows = order.map(function (name) {
+      var k = name.toLowerCase(), had = [], done = [];
+      list.forEach(function (l) { l.items.forEach(function (it) { if (it.n.toLowerCase() === k) { had.push(l); if (it.done) done.push({ l: l, it: it }); } }); });
+      if (!had.length && !rx[k]) return '';
+      var last = done[0], loads = done.slice(0, 8).reverse().map(function (d) { return loadKg(d.it.load); }), nums = loads.filter(function (v) { return v !== null; });
+      var spark = nums.length >= 2 ? sparkSvg({ values: loads, first: nums[0], last: nums[nums.length - 1] }, 'Higher', name + ' load ') : '';
+      var plan = rx[k] ? doseText({ sets: cap(rx[k].sets, 20), reps: cap(rx[k].reps, 20), load: cap(rx[k].load, 30) }) : '';
+      return '<tr><th scope="row">' + esc(name) + (plan ? '<small>Plan: ' + esc(plan) + '</small>' : '') + '</th>' +
+        '<td>' + (had.length ? done.length + ' of ' + had.length : '—') + '</td>' +
+        '<td>' + (last ? esc(doseText(last.it) || 'done') + '<small>' + esc(logDay(last.l.day)) + '</small>' : '—') + '</td>' +
+        '<td class="lg-trend">' + (nums.length >= 2 ? '<span>' + esc(E.fmt(nums[0]) + ' → ' + E.fmt(nums[nums.length - 1]) + ' kg') + '</span>' + spark : '') + '</td></tr>';
+    }).join('');
+    return rows ? '<div class="lg-tablewrap"><table class="lg-table"><thead><tr><th scope="col">Exercise</th><th scope="col">Done</th><th scope="col">Last time</th><th scope="col">Load</th></tr></thead><tbody>' + rows + '</tbody></table></div>' : '';
+  }
+  function logSessionsHtml(list) {
+    return '<div class="lg-sessions">' + list.map(function (l) {
+      var head = [logDay(l.day), l.grp, doneCount(l) + ' of ' + l.items.length + ' done'].filter(Boolean).join(' · ');
+      return '<details class="lg-s' + (l.pain !== null && l.pain >= PAIN_FLAG ? ' hi' : '') + '"><summary><span class="lg-s-h">' + esc(head) + '</span>' +
+        (l.pain !== null ? '<span class="lg-pain' + (l.pain >= PAIN_FLAG ? ' hi' : '') + '">Pain ' + l.pain + '/10</span>' : '') +
+        (l.note ? '<span class="lg-note">“' + esc(l.note) + '”</span>' : '') + '</summary><ul>' + l.items.map(function (it) {
+          var did = doseText(it), plan = doseText(it.rx);
+          return '<li class="' + (it.done ? 'y' : 'n') + '"><span class="lg-mk" aria-hidden="true">' + (it.done ? '✓' : '–') + '</span><b>' + esc(it.n) + '</b> ' +
+            (it.done ? esc(did || 'done') + (plan && plan !== did ? ' <small>(plan ' + esc(plan) + ')</small>' : '') : '<small>not done</small>') + '</li>';
+        }).join('') + '</ul></details>';
+    }).join('') + '</div>';
+  }
+  // the log's own page (on Home, in the client page's place): the check-in, four numbers, two charts, the exercises, every session
+  function renderClientLog() {
+    var page = $('cpage'), key = clientPage.key, cl = clients.clients[key], list = clientLogs(key), st = logState(key), ck = checkinFor(key);
+    var plan = plannedPerWeek(key), since7 = addDaysIso(todayIso(), -6), since28 = addDaysIso(todayIso(), -27);
+    var n7 = list.filter(function (x) { return x.day >= since7; }).length, n28 = list.filter(function (x) { return x.day >= since28; }).length, last = list[0], first = firstName(cl.name);
+    var link = clientLink(key), linkLine = !link ? '' : linkLive(link) ? 'Their phone link works until ' + E.displayIso(cpQldDay(link.expires)) + '.' : link.stopped ? 'Their phone link was stopped.' : 'Their phone link has ended.';
+    var tile = function (label, big, small) { return '<div class="lg-tile"><span>' + esc(label) + '</span><b>' + esc(big) + '</b>' + (small ? '<small>' + esc(small) + '</small>' : '') + '</div>'; };
+    var html = '<button type="button" class="cp-back quiet" data-cp="logback"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg>' + esc(first ? first + '’s page' : 'Their page') + '</button>' +
+      '<div class="cp-head"><h1 id="cpName" tabindex="-1">' + esc(cl.name) + '</h1><p>' + esc('Training log, from the program on their phone. ' + linkLine) + '</p></div>';
+    if (ck) html += '<div class="lg-check" role="status"><p><b>Check-in:</b> ' + ck.reasons.map(function (r) { return esc(r.text); }).join(' · ') + '</p><button type="button" class="ghost" data-cp="seen:' + esc(ck.token) + '">Mark as seen</button></div>';
+    if (!list.length) {
+      html += '<p class="cp-empty">' + esc(st === 'loading' ? 'Checking their log…' : st === 'denied' ? 'The clinic store isn’t set up for training logs yet: its rules need the log lines (see the notes).'
+        : st === 'error' ? 'Their log couldn’t be read just now. It will try again shortly.' : 'Nothing logged yet. Sessions they log on their phone show here.') + '</p>';
+    } else {
+      html += '<div class="lg-tiles">' + tile('Last 7 days', n7 + (n7 === 1 ? ' session' : ' sessions'), plan ? 'plan ' + plan + ' a week' : '') + tile('Last 4 weeks', n28 + (n28 === 1 ? ' session' : ' sessions'), 'about ' + String(Math.round(n28 / 4 * 10) / 10) + ' a week') +
+        tile('Last session', logDay(last.day), agoText(last.day)) + tile('Pain last session', last.pain !== null ? last.pain + '/10' : '—', last.pain !== null && last.pain >= PAIN_FLAG ? 'at or over the check-in level' : '') + '</div>' +
+        '<div class="lg-charts"><section class="lg-card" aria-labelledby="lgWeeksH"><h2 id="lgWeeksH">Sessions per week</h2>' + weeksSvg(list, plan) + '</section>' +
+        '<section class="lg-card" aria-labelledby="lgPainH"><h2 id="lgPainH">Pain after sessions</h2>' + painSvg(list) + '</section></div>' +
+        '<section class="lg-sec" aria-labelledby="lgExH"><h2 id="lgExH">Exercises</h2>' + logExercisesHtml(key, list) + '</section>' +
+        '<section class="lg-sec" aria-labelledby="lgSessH"><h2 id="lgSessH">Sessions <span>(' + list.length + ')</span></h2>' + logSessionsHtml(list) + '</section>';
+    }
+    var a = document.activeElement, keepId = a && page.contains(a) ? (a.getAttribute('data-cp') || a.id) : '';
+    var open = []; page.querySelectorAll('details.lg-s[open]').forEach(function (d, i) { open.push(i); });   // (sessions opened stay open)
+    page.innerHTML = html;
+    var ds = page.querySelectorAll('details.lg-s'); open.forEach(function (i) { if (ds[i]) ds[i].open = true; });
+    if (keepId) focusQuiet(page.querySelector('[data-cp="' + keepId + '"]') || $(keepId) || $('cpName'));
+  }
+  // the builder: what the client logged last for each exercise on the page, under its name (not printed)
+  function lastLogged(key, name) {
+    var k = String(name || '').trim().toLowerCase(), list = k ? clientLogs(key) : [];
+    for (var i = 0; i < list.length; i++) for (var j = 0; j < list[i].items.length; j++) { var it = list[i].items[j]; if (it.done && it.n.toLowerCase() === k) return { it: it, day: list[i].day }; }
+    return null;
+  }
+  function applyExLogged() {
+    if (!state || state.tool !== 'ex') return;
+    var key = E.nameKey(state.ex.meta.name), on = !!key && clients.clients[key] && logsOn() && clientTokens(key).length;
+    els.entry.querySelectorAll('.ex-row[data-id]:not(.ex-sec)').forEach(function (row) {
+      var it = exItem(row.dataset.id), col = row.querySelector('.ex-namecol'), el = row.querySelector('.ex-logged'), hit = on && it ? lastLogged(key, it.name) : null;
+      if (!col) return;
+      if (!hit) { if (el) el.remove(); return; }
+      var text = 'Logged ' + logDay(hit.day) + ': ' + (doseText(hit.it) || 'done');
+      if (!el) { el = document.createElement('div'); el.className = 'ex-logged'; var lib = col.querySelector('.ex-libact'); col.insertBefore(el, lib); }
+      if (el.textContent !== text) el.textContent = text;
+    });
+  }
+  function exLogBit(key) {                             // the builder's client bar: the log in a line, with View log
+    if (!logsOn() || !clientTokens(key).length) return '';
+    refreshLogs(clientTokens(key), LOG_FRESH_MS);
+    var list = clientLogs(key);
+    return ' <span class="cb-log">' + (list.length ? esc('Training log: ' + list.length + (list.length === 1 ? ' session' : ' sessions') + ', last ' + logDay(list[0].day) + '.') : 'Nothing logged on their phone yet.') +
+      ' <button type="button" class="quiet" data-action="ex-viewlog" data-client="' + esc(key) + '">View log</button></span>';
   }
   function wireHome() {
     els.homeSec.addEventListener('click', onHomeClick);
@@ -4742,6 +5095,7 @@
     fitExNotes();
     fitExWraps();
     applyExMarks();
+    applyExLogged();                                   // v40
     renderScanBar();
     refreshEx();
     showCard();
@@ -4921,6 +5275,7 @@
     renderExTop();                                     // v32: and the handout's cover opens when a suggestion fills it
     fitExWraps();
     applyExMarks();
+    applyExLogged();                                   // v40: what the client logged last, under each exercise
     refreshEx();
   }
   function renderExRationale() {                       // v25: show, update or remove the rationale box without redrawing the card
@@ -7356,6 +7711,7 @@
     var a = b.dataset.action;
     if (b.dataset.libSugg) { exTakeSuggestion(b); return true; }
     if (a === 'ex-loadprog') { loadProgramFor(b.dataset.client, false); return true; }
+    if (a === 'ex-viewlog') { openClientPage(b.dataset.client, 'log'); return true; }   // v40: the client's training log (on Home)
     if (a === 'tpl-start') { openTplPick(''); return true; }
     if (a === 'tpl-save') { openTplSave(); return true; }
     if (a === 'tpl-builder') { setExPage('builder'); focusQuiet(pickBtn()); return true; }
@@ -7616,15 +7972,16 @@
     bar.hidden = false;
     if (exLoaded && exLoaded.key === key) {
       bar.className = 'client-bar loaded';
-      bar.innerHTML = '<b>' + esc(cl.name) + '</b> — program from ' + esc(E.displayIso(exLoaded.date)) + ' loaded.';
+      bar.innerHTML = '<b>' + esc(cl.name) + '</b> — program from ' + esc(E.displayIso(exLoaded.date)) + ' loaded.' + exLogBit(key);   // v40: + their training log
     } else if (n) {
       bar.className = 'client-bar';
       bar.innerHTML = '<b>' + esc(cl.name) + '</b> — ' + (n === 1 ? '1 saved program, from ' : n + ' saved programs, the last on ') + esc(E.displayIso(last)) + '. ' +
-        '<button type="button" class="quiet" data-action="ex-loadprog" data-client="' + esc(key) + '">Load last program</button>';
+        '<button type="button" class="quiet" data-action="ex-loadprog" data-client="' + esc(key) + '">Load last program</button>' + exLogBit(key);
     } else {
       bar.className = 'client-bar';
       bar.innerHTML = '<b>' + esc(cl.name) + '</b> has a ' + recordWord() + '; no programs yet.';
     }
+    applyExLogged();                                   // v40: the rows' last-logged lines follow the client
   }
   function earlierCount(cl, t, date) {               // v36: the Custom battery counts the screen and strength sessions it can read too
     return cl ? historySessions(t, cl).filter(function (x) { return x.tool === t && x.date < date; }).length : 0;
@@ -8034,6 +8391,7 @@
     closeModal(false);
     if (!els.sheet.hidden) closeReport();
     if (clientPage) { clientPage = null; if (homeView && state) renderHome(); }   // v39: Home itself after the next sign-in
+    clearLogBook();                                    // v40: the training logs read go with the login
     document.documentElement.classList.add('signed-out');
     els.signin.hidden = false;
     els.signinName.value = userName();
@@ -8185,6 +8543,7 @@
       if (openModalEl === els.clientsDialog) renderClientsList();
       refresh();
       if (homeView && clientPage) renderHome();        // v39: a client's page shows what another device saved
+      else if (homeView) renderCheckins();             // v40: and Home its check-ins
     } else if (evt.kind === 'status') {
       renderCloudBar();
       if (!els.sheet.hidden) renderPhoneCard();        // v35: the link's state (sending, waiting, refused, working)
@@ -8193,6 +8552,8 @@
       toast('Uploaded ' + evt.n + (evt.n === 1 ? ' waiting result' : ' waiting results'));
     } else if (evt.kind === 'settings') {
       applyCloudKey(evt.key);
+    } else if (evt.kind === 'checkins') {              // v40: a check-in marked as seen on another device
+      if (state && homeView) { if (clientPage) renderHome(); else renderCheckins(); }
     } else if (evt.kind === 'library' || evt.kind === 'templates' || evt.kind === 'batteries') {   // v15: another device changed the library or a template; v36: or a battery
       libVer++;
       if (!state) return;

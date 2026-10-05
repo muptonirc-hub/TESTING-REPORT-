@@ -10,9 +10,10 @@
    v36: the Custom battery (nothing new to cache: its dialogs are in index.html).
    v37: the hip ratio and the Hamstring and ACL rehab tests in the Custom battery (no new files).
    v38: the Custom battery's tests by category, type then region (no new files).
-   v39: a client's page on Home: their screening (each report made again from the record) and their programs (no new files). */
-var CACHE = 'bh-athlete-report-v39';
-var FILES = ['./', 'index.html', 'app.js?v=39', 'engine.js?v=39', 'qrcode.js?v=39', 'report.js?v=39', 'report-fonts.js?v=39', 'jspdf.umd.min.js?v=39', 'cloud-config.js?v=39', 'cloud.js?v=39',
+   v39: a client's page on Home: their screening (each report made again from the record) and their programs (no new files).
+   v40: the client's training log (from their phone) on their page, the check-ins on Home (no new files). */
+var CACHE = 'bh-athlete-report-v40';
+var FILES = ['./', 'index.html', 'app.js?v=40', 'engine.js?v=40', 'qrcode.js?v=40', 'report.js?v=40', 'report-fonts.js?v=40', 'jspdf.umd.min.js?v=40', 'cloud-config.js?v=40', 'cloud.js?v=40',
   'norms.json', 'strength_norms.json', 'hamstring_norms.json', 'acl_norms.json', 'interpretation.json', 'explainers.json', 'exercise_library.json', 'programming_guide.md', 'manifest.webmanifest',
   'guides/index.json', 'guides/training-variables.md', 'guides/rehab-principles.md', 'guides/muscle-strains.md', 'guides/acl.md', 'guides/tendinopathy.md', 'guides/ankle-sprain.md',
   'guides/groin-pain.md', 'guides/rotator-cuff.md', 'guides/pfp-oa.md', 'guides/low-back-pain.md', 'guides/performance-tests.md', 'guides/rehab-performance.md', 'guides/block-design.md',
