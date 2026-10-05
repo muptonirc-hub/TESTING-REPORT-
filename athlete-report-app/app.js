@@ -2662,8 +2662,13 @@
     els.sheetEx.dataset.tool = offer;
     if (offer) $('sheetExQ').textContent = 'Exercises for this ' + person(offer) + '?';   // athlete on the Performance screen (v9 wording)
     current = { file: null, blob: null, title: built.rep.title, ex: !!(both || ex), phone: phone };   // v35: + the program's phone link
+    pastView = null; els.home.hidden = false;         // v39: (Return home is hidden for a report made again from the record)
     renderPhoneCard();
     els.sheetTitle.innerHTML = esc(built.rep.title) + '<small>' + esc(built.file) + '</small>';
+    showSheet(built, opts.focus);
+  }
+  // the report view with the PDF's pages (built from built.rep), Share and Save; focus: the id of what takes focus after
+  function showSheet(built, focus) {
     els.pages.innerHTML = '<p class="sheet-msg">Building the report…</p>';
     els.share.disabled = true; els.save.disabled = true; els.home.disabled = true;
     els.share.className = 'primary';                   // v16: Share leads until the PDF is out, then Return home does
@@ -2685,7 +2690,7 @@
       els.save.hidden = share && IS_IOS;
       els.save.className = share ? 'ghost' : 'primary';
       els.share.disabled = false; els.save.disabled = false; els.home.disabled = false;
-      var f = opts.focus && $(opts.focus);             // v35: made again from the phone card: focus stays there
+      var f = focus && $(focus);                       // v35: made again from the phone card: focus stays there
       (f || (share ? els.share : els.save)).focus();
     }).catch(function (err) {
       if (gen !== reportGen) return;
@@ -2696,6 +2701,13 @@
   function closeReport() {
     els.sheet.hidden = true;
     document.documentElement.style.overflow = '';
+    if (pastView) {                                    // v39: back to the client's page, on the report's row
+      var pv = pastView;
+      pastView = null;
+      els.home.hidden = false;
+      var row = homeView && clientPage ? els.homeSec.querySelector('[data-cp="test:' + pv.tool + '|' + pv.date + '"]') : null;
+      if (row) focusQuiet(row);
+    }
   }
   function addProgramFromReport() {                    // v20: the report view's Add exercise program
     var t = els.sheetEx.dataset.tool;
@@ -2734,7 +2746,7 @@
   var homeFrom = null;                                 // the report on screen: { tool, name (as in the record), saved }
   // the PDF is out (shared, or saved as a file): Return home becomes the main button
   function homeFirst() {
-    if (els.sheet.hidden) return;
+    if (els.sheet.hidden || pastView) return;          // v39: (a report from the record has no Return home)
     els.share.className = 'ghost';
     els.save.className = 'ghost';
     els.home.className = 'primary home-btn';
@@ -2926,6 +2938,8 @@
   // entries asks first: carry on with them, or start afresh (Undo). #continue in the address opens where the app left off
   // instead (the test suites and bookmarks).
   var homeView = location.hash !== '#continue', homeBuilt = false, homeAskFor = null, homeClientFor = null;
+  var clientPage = null;                               // v39: { key } while a client's page shows on Home
+  var pastView = null;                                 // v39: { key, tool, date } while a report from their record is on screen
   function homeSvg(paths) { return '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' + paths + '</svg>'; }
   var HOME_ICON = {
     screen: homeSvg('<path d="M3 12h3.5l2.5-6.5 4 13 2.5-6.5H21"/>'),                                                     // a trace: the jump, strength and speed tests
@@ -2978,7 +2992,8 @@
       '<div class="suggest home-sugg" id="homeSugg" hidden></div></div></div>' +
       '<section class="home-cont" id="homeCont" aria-labelledby="homeContH" hidden></section>' +
       '<section class="home-group" aria-labelledby="homeTestH"><h2 id="homeTestH">Testing</h2><div class="home-tiles" id="homeTests"></div></section>' +
-      '<section class="home-group" aria-labelledby="homeExH"><h2 id="homeExH">Exercises</h2><div class="home-tiles" id="homeEx"></div></section>';
+      '<section class="home-group" aria-labelledby="homeExH"><h2 id="homeExH">Exercises</h2><div class="home-tiles" id="homeEx"></div></section>' +
+      '<div class="cpage" id="cpage"></div>';           // v39: a client's page, drawn in place of the rest
     homeBuilt = true;
   }
   function homeTile(title, line, icon, busy) {
@@ -2988,6 +3003,10 @@
   function renderHome() {
     if (!state) return;
     if (!homeBuilt) buildHome();
+    if (clientPage && !clients.clients[clientPage.key]) clientPage = null;   // v39: their record was deleted meanwhile
+    els.homeSec.classList.toggle('cp-on', !!clientPage);
+    els.homeSec.setAttribute('aria-labelledby', clientPage ? 'cpName' : 'homeHello');
+    if (clientPage) { renderClientPage(); return; }
     var a = document.activeElement, holder = a && a.closest && els.homeSec.contains(a) ? a.closest('[data-home]') : null, keep = holder ? holder.getAttribute('data-home') : null;   // focus kept across a redraw
     $('homeHello').textContent = homeHello();
     $('homeDate').textContent = homeDate();
@@ -3020,6 +3039,7 @@
   function showHome(focus) {
     closePick(false);
     hideSuggest();
+    clientPage = null;                                 // v39: Home itself (a client's page is opened from it)
     homeView = true;
     document.documentElement.classList.add('home-on');
     renderHome();
@@ -3069,6 +3089,11 @@
       text = line + '. Add the photo’s exercises to it, or start a new program?';
       acts.push(pick('primary', 'add', 'Add to it', 'Add to it: take or choose photos of the exercise page'));
       acts.push(pick('ghost', 'new', 'Start a new program', 'Start a new program: take or choose photos of the exercise page'));
+    } else if (o.client && o.client.prog) {          // v39: a program chosen on the client's page
+      var on = E.displayIso(o.client.prog);
+      text = line + '. Open ' + o.client.name + '’s program from ' + on + ' in its place, or carry on with ' + (cur ? cur + '’s' : 'this one') + '?';
+      acts.push(btn('primary', 'new', 'Open the ' + on + ' program'));
+      acts.push(btn('ghost', 'continue', cur ? 'Continue ' + cur + '’s' : 'Continue it'));
     } else if (o.client) {
       text = line + '. Start a new one for ' + o.client.name + ', or carry on with ' + (cur ? cur + '’s' : 'this one') + '?';
       acts.push(btn('primary', 'new', 'Start new for ' + o.client.name));
@@ -3117,10 +3142,12 @@
     if (sg) {
       var typed = clean1($('homeSearch').value);
       $('homeSugg').hidden = true;
-      if (sg.dataset.homeClient) openHomeClient(sg.dataset.homeClient, '');
+      if (sg.dataset.homeClient) openClientPage(sg.dataset.homeClient);   // v39: their page (until v38 the chooser)
       else openHomeClient('', typed);
       return;
     }
+    var cp = e.target.closest('[data-cp]');
+    if (cp) { onClientPageClick(cp.dataset.cp); return; }   // v39
     var el = e.target.closest('[data-home]');
     if (!el || el.tagName === 'LABEL') return;           // the photo tile opens its picker by itself
     var k = el.dataset.home, part = k.split(':');
@@ -3159,8 +3186,9 @@
     else if (e.key === 'ArrowUp') { e.preventDefault(); if (i) items[i - 1].focus(); else $('homeSearch').focus(); }
     else if (e.key === 'Escape') { e.preventDefault(); box.hidden = true; $('homeSearch').focus(); }
   }
-  // a client chosen on Home: each test, with when they last did it, and their exercise program
-  function openHomeClient(key, name) {
+  // a client chosen on Home: each test, with when they last did it, and their exercise program. v39: a new client typed in
+  // the search; tests (true): + New test on a client's page, the tests only
+  function openHomeClient(key, name, tests) {
     var cl = key ? clients.clients[key] : null;
     if (key && !cl) return;
     if (!cl && !clean1(name)) return;
@@ -3168,8 +3196,9 @@
     var last = {};
     if (cl) cl.sessions.forEach(function (x) { if (!last[x.tool] || x.date > last[x.tool]) last[x.tool] = x.date; });
     els.homeClientTitle.textContent = homeClientFor.name;
-    els.homeClientDetail.textContent = cl ? 'Choose a test (their results from last time come with it) or their exercise program.' : 'New client, no record yet. Choose a test, or write their exercise program.';
-    els.homeClientList.innerHTML = TOOLS.concat(['ex']).map(function (t) {
+    els.homeClientDetail.textContent = tests ? 'Choose the test. Their results from last time come with it, to compare.'
+      : cl ? 'Choose a test (their results from last time come with it) or their exercise program.' : 'New client, no record yet. Choose a test, or write their exercise program.';
+    els.homeClientList.innerHTML = (tests ? TOOLS : TOOLS.concat(['ex'])).map(function (t) {
       var sub = t === 'ex' ? (last.ex ? 'Last program ' + E.displayIso(last.ex) : cl ? 'No programs yet' : '')
         : last[t] ? 'Last tested ' + E.displayIso(last[t]) : cl ? 'Not done yet' : '';
       return '<button type="button" class="hc-opt" data-hc="' + t + '"><span class="tile-ic">' + HOME_ICON[t === 'ex' ? 'builder' : t] + '</span>' +
@@ -3183,8 +3212,16 @@
     closeModal(false);
     homeClientGo(b.dataset.hc, c);
   }
+  // c: { key, name } (v39: + prog, the date of a program from their record; or blank: a new program, from their page)
   function homeClientGo(t, c) {
     var want = c.key || E.nameKey(c.name), cur = E.nameKey(state[t].meta.name);
+    if (t === 'ex' && (c.prog || c.blank)) {
+      // that program is on the page already (changed since or not): carry on with it
+      if (c.prog && cur === want && exLoaded && exLoaded.key === want && exLoaded.date === c.prog) { openTool('ex', 'builder'); return; }
+      if (exHasContent()) askHalfDone({ tool: t, client: c });   // exercises on the page (theirs or someone else's): ask first
+      else homeClientOpen(t, c, false);
+      return;
+    }
     if (homeBusy(t)) {
       if (cur && cur === want) { openTool(t, t === 'ex' ? 'builder' : null); return; }   // their own page in progress: carry on with it
       askHalfDone({ tool: t, client: c });
@@ -3202,19 +3239,221 @@
     if (t === 'ex') state.exPage = 'builder';
     state.tool = t;
     if (TOOLS.indexOf(t) >= 0) state.screenTool = t;
-    if (c.key && clients.clients[c.key]) {
-      if (t === 'ex') loadProgramFor(c.key, true, undo, was); else loadHistory(t, c.key, true, undo, was);   // (each draws the page)
+    if (c.key && clients.clients[c.key] && !c.blank) {
+      if (t === 'ex') loadProgramFor(c.key, true, undo, was, c.prog || ''); else loadHistory(t, c.key, true, undo, was);   // (each draws the page)
     } else {
-      state[t].meta.name = c.name;
+      state[t].meta.name = c.key && clients.clients[c.key] ? clients.clients[c.key].name : c.name;
       state[t].cardOpen = true;
+      if (t === 'ex') exLoaded = null;                 // v39: + New program on their page: an empty builder with their name
       render();
-      if (undo) toast('Cleared ' + (was ? was + '’s' : 'the last') + ' entries for ' + c.name, { label: 'Undo', run: undo });
+      if (undo) toast(c.blank ? 'New program started for ' + c.name : 'Cleared ' + (was ? was + '’s' : 'the last') + ' entries for ' + c.name, { label: 'Undo', run: undo });
     }
     saveDraft();
     window.scrollTo(0, 0);
     if (t === 'ex') exPageOpened();
     focusQuiet(pickBtn());
     keepAwake();
+  }
+
+  // ------------------------------------------------------------------ v39: a client's page
+  // Matthew (5 Oct): "when we search for a client - the client shows - we click on it and it takes us to a client home page -
+  // there is a screening section (showing all screening and dates of screening) and a Exercise Program section where is shows
+  // current or previously created programs for them." His choices: a screening opens its report again, made from the saved
+  // results (to view, save or share; the app keeps no PDFs), and + New test starts one with last time's results to compare;
+  // a program opens in the builder (to print again, change or send to their phone), the newest marked Current, with the
+  // phone link's state. The page is drawn on Home in place of the rest; ‹ Home, the Home tab and the logo go back.
+  function openClientPage(key) {
+    if (!clients.clients[key]) return;
+    if (!homeView) showHome(false);
+    var box = $('homeSugg'), find = $('homeSearch');
+    if (box) { box.hidden = true; box.innerHTML = ''; }
+    if (find) find.value = '';                         // the name searched for has been found
+    clientPage = { key: key };
+    renderHome();
+    window.scrollTo(0, 0);
+    focusQuiet($('cpName'));
+  }
+  function closeClientPage() {
+    clientPage = null;
+    renderHome();
+    window.scrollTo(0, 0);
+    focusQuiet($('homeHello'));
+  }
+  function cpCount(n, one, many) { return n + ' ' + (n === 1 ? one : many); }
+  function cpResults(x) {                              // the tests in a session: LL Strength's two legs count once
+    var keys = Object.keys(x.results || {});
+    if (x.tool !== 'str') return keys.length;
+    var ids = {};
+    keys.forEach(function (k) { ids[k.split('|')[0]] = 1; });
+    return Object.keys(ids).length;
+  }
+  function cpQldDay(iso) {                             // a link's end (a moment) as its day in Queensland (UTC+10 all year)
+    var t = Date.parse(iso);
+    return isFinite(t) ? new Date(t + 10 * 3600 * 1000).toISOString().slice(0, 10) : '';
+  }
+  function renderClientPage() {
+    var page = $('cpage'), key = clientPage.key, cl = clients.clients[key];
+    var a = document.activeElement, holder = a && page.contains(a) ? a.closest('[data-cp]') : null, keep = holder ? holder.getAttribute('data-cp') : (a && a.id === 'cpName' ? 'name' : null);
+    var ISO = /^\d{4}-\d{2}-\d{2}$/;                     // (each row's address is its tool and date)
+    var tests = E.sortSessions(cl.sessions.filter(function (x) { return x && TOOLS.indexOf(x.tool) >= 0 && ISO.test(x.date); })).reverse();
+    var progs = exPrograms(cl).filter(function (x) { return ISO.test(x.date); }).reverse();
+    // the details: from their latest test that has each (the record keeps what was typed each time)
+    var info = {};
+    tests.forEach(function (x) { ['sex', 'sport'].forEach(function (f) { var v = x.meta && x.meta[f]; if (!info[f] && typeof v === 'string' && !blank(v)) info[f] = clean1(v); }); });
+    var detail = [info.sex, info.sport, cpCount(tests.length, 'screening', 'screenings') + ', ' + cpCount(progs.length, 'program', 'programs')].filter(Boolean).join(' · ');
+    var go = function (label) { return '<span class="cp-go"><span>' + esc(label) + '</span>' + HOME_ICON.go + '</span>'; };
+    var testRows = tests.map(function (x) {
+      var t = x.tool, m = x.meta || {}, n = cpResults(x), bits = [], tags = '';
+      var title = TOOL_NAMES[t] + (t === 'custom' && typeof x.batName === 'string' && !blank(x.batName) ? ' — ' + clean1(x.batName) : '');
+      if (n) bits.push(cpCount(n, 'test', 'tests'));
+      if ((t === 'ham' || t === 'acl') && typeof m.phase === 'string' && m.phase) bits.push(m.phase);
+      var by = NAME_FIELDS[t] && typeof m[NAME_FIELDS[t]] === 'string' && !blank(m[NAME_FIELDS[t]]) ? m[NAME_FIELDS[t]] : (typeof x.savedBy === 'string' ? x.savedBy : '');
+      if (!blank(by)) bits.push(clean1(by));
+      var co = m.coach && typeof m.coach === 'object' ? m.coach.status : '';
+      if (COACH_LOOK[co]) tags = '<span class="cp-tags">' + chip(COACH_LOOK[co], co) + '</span>';
+      return '<button type="button" class="cp-row" data-cp="test:' + esc(t + '|' + x.date) + '"><span class="tile-ic">' + HOME_ICON[t] + '</span>' +
+        '<span class="cp-text"><b>' + esc(title) + '</b><small><span class="cp-when">' + esc(E.displayIso(x.date)) + '</span>' + (bits.length ? ' · ' + esc(bits.join(' · ')) : '') + '</small>' + tags + '</span>' +
+        go('View report') + '</button>';
+    }).join('');
+    var link = clientLink(key), live = linkLive(link);
+    var progRows = progs.map(function (x, i) {
+      var p = x.program, n = progItems(p.items).filter(function (it) { return it.kind !== 'section'; }).length, bits = [], tags = [];
+      if (n) bits.push(cpCount(n, 'exercise', 'exercises'));
+      if (x.meta && typeof x.meta.practitioner === 'string' && !blank(x.meta.practitioner)) bits.push(clean1(x.meta.practitioner));
+      if (!i) tags.push('<span class="cp-tag cur">Current</span>');
+      if (link && link.date === x.date) {               // the program their phone shows (the newest sent to it)
+        var day = cpQldDay(link.expires);
+        tags.push(live ? '<span class="cp-tag phone">On their phone' + (day ? ' until ' + esc(E.displayIso(day)) : '') + '</span>'
+          : '<span class="cp-tag">' + (link.stopped ? 'Phone link stopped' : 'Phone link ended') + '</span>');
+      }
+      return '<button type="button" class="cp-row" data-cp="prog:' + esc(x.date) + '"><span class="tile-ic">' + HOME_ICON.builder + '</span>' +
+        '<span class="cp-text"><b>' + esc(clean1(exStr(p.title)) || 'Exercise program') + '</b><small><span class="cp-when">' + esc(E.displayIso(x.date)) + '</span>' + (bits.length ? ' · ' + esc(bits.join(' · ')) : '') + '</small>' +
+        (tags.length ? '<span class="cp-tags">' + tags.join('') + '</span>' : '') + '</span>' + go('Open') + '</button>';
+    }).join('');
+    page.innerHTML =
+      '<button type="button" class="cp-back quiet" data-cp="back"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg>Home</button>' +
+      '<div class="cp-head"><h1 id="cpName" tabindex="-1">' + esc(cl.name) + '</h1><p>' + esc(detail) + '</p></div>' +
+      '<div class="cp-cols">' +
+      '<section class="cp-sec" aria-labelledby="cpTestsH"><div class="cp-sec-head"><h2 id="cpTestsH">Screening</h2>' +
+      '<button type="button" class="ghost cp-add" data-cp="newtest">+ New test</button></div>' +
+      (testRows ? '<div class="cp-list">' + testRows + '</div>' : '<p class="cp-empty">No screening saved yet. + New test starts one.</p>') + '</section>' +
+      '<section class="cp-sec" aria-labelledby="cpProgsH"><div class="cp-sec-head"><h2 id="cpProgsH">Exercise programs</h2>' +
+      '<button type="button" class="ghost cp-add" data-cp="newprog">+ New program</button></div>' +
+      (progRows ? '<div class="cp-list">' + progRows + '</div>' : '<p class="cp-empty">No programs saved yet. + New program starts one.</p>') + '</section>' +
+      '</div>';
+    if (keep === 'name') focusQuiet($('cpName'));
+    else if (keep) { var back = page.querySelector('[data-cp="' + keep + '"]'); focusQuiet(back || $('cpName')); }
+  }
+  function onClientPageClick(what) {
+    var key = clientPage && clientPage.key, cl = key ? clients.clients[key] : null;
+    if (what === 'back' || !cl) { closeClientPage(); return; }
+    var i = what.indexOf(':'), kind = i < 0 ? what : what.slice(0, i), arg = i < 0 ? '' : what.slice(i + 1);
+    if (kind === 'newtest') openHomeClient(key, '', true);
+    else if (kind === 'newprog') homeClientGo('ex', { key: key, name: cl.name, blank: true });
+    else if (kind === 'prog') homeClientGo('ex', { key: key, name: cl.name, prog: arg });
+    else if (kind === 'test') { var j = arg.indexOf('|'); openPastReport(key, arg.slice(0, j), arg.slice(j + 1)); }
+  }
+  // a tool's page as it was when a session was saved: its details, results, previous results, summary and coach band. The
+  // phase, norm set, population and Custom battery come from the session; LL Strength's previous results (not kept with
+  // the session) come from the record before that date, as loading the client fills them in
+  function stateFromSession(cl, x) {
+    var t = x.tool, s = freshTool(t), m = x.meta || {}, H = DATA.ham, A = DATA.acl;
+    Object.keys(s.meta).forEach(function (f) { if (typeof m[f] === 'string') s.meta[f] = m[f]; });
+    s.meta.name = cl.name;
+    s.meta.date = x.date;
+    if (SL(t)) {
+      var pops = E.sportPopulations(DATA.screen);
+      s.pop = m.pop === 'general' || pops.indexOf(m.pop) >= 0 ? m.pop : 'general';
+      if (Array.isArray(x.radar)) s.radar = x.radar.filter(function (k) { return typeof k === 'string'; });
+    }
+    if (t === 'custom') {
+      s.battery = tidyBattery(x.battery);
+      s.batName = typeof x.batName === 'string' ? x.batName : '';
+      s.hamPhase = H.phases.indexOf(m.hamPhase) >= 0 ? m.hamPhase : null;
+      s.aclPhase = A.phases.indexOf(m.aclPhase) >= 0 ? m.aclPhase : null;
+      if (s.meta.injured !== 'Left' && s.meta.injured !== 'Right') s.meta.injured = '';
+    }
+    if (t === 'ham' || t === 'acl') s.phase = DATA[t].phases.indexOf(m.phase) >= 0 ? m.phase : null;
+    if (t === 'acl') s.sex = A.sexes.indexOf(m.normSex) >= 0 ? m.normSex : null;
+    Object.keys(x.values || {}).forEach(function (k) {
+      var src = x.values[k] || {}, v = { result: '', previous: '', side: '', left: '', right: '' };
+      Object.keys(v).forEach(function (f) { if (src[f] != null && typeof src[f] !== 'object') v[f] = String(src[f]); });
+      s.values[k] = v;
+    });
+    s.interp = { text: typeof x.interp === 'string' ? x.interp : '', ai: x.interpAi === true, basis: '' };
+    var co = m.coach && typeof m.coach === 'object' ? m.coach : null;
+    if (co) s.coach = { status: COACH_STATUS.indexOf(co.status) >= 0 ? co.status : '', mods: typeof co.mods === 'string' ? co.mods : '', retest: typeof co.retest === 'string' && E.parseDate(co.retest, ['Y-m-d']) ? co.retest : '' };
+    return s;
+  }
+  // the previous results that aren't in the session's values (with state[t] already the rebuilt page): kept with the session
+  // since v39; for one saved before, from the record before that date
+  function pastPrevious(t, cl, date, x) {
+    var s = state[t], hs = historySessions(t, cl), pv = x.prev && typeof x.prev === 'object' ? x.prev : null;
+    var str1 = function (v) { return v != null && typeof v !== 'object' ? String(v) : ''; };
+    if (pv) {
+      Object.keys(pv).forEach(function (k) {
+        var p = pv[k] || {}, v = s.values[k] || (s.values[k] = { result: '', previous: '', side: '', left: '', right: '' });
+        if (t === 'str') { v.prevLeft = str1(p.L); v.prevRight = str1(p.R); v.prevMass = str1(p.mass); v.prevDate = str1(p.date); }
+        else if (t === 'custom') v.prevMass = str1(p.mass);
+      });
+      return;
+    }
+    if (t === 'str') {
+      DATA.str.tests.forEach(function (tt) {
+        if (tt.input === 'calc') return;
+        [['left', 'L', 'prevLeft'], ['right', 'R', 'prevRight']].forEach(function (sd) {
+          var p = E.previousFor(hs, 'str', tt.id + '|' + sd[1], date), raw = p && p.session.values && p.session.values[tt.id];
+          if (!p || !raw || blank(raw[sd[0]])) return;
+          var v = s.values[tt.id] || (s.values[tt.id] = { result: '', previous: '', side: '', left: '', right: '' });
+          v[sd[2]] = String(raw[sd[0]]); v.prevMass = p.mass == null ? '' : String(p.mass); v.prevDate = p.date;
+        });
+      });
+    } else if (t === 'custom') {                       // a previous load or force: the body mass it was scored with
+      customSet().groups.forEach(function (g) {
+        g.metrics.forEach(function (mm) {
+          var v = s.values[mm.name];
+          if (!v || blank(v.previous) || !/^(XBW|PCTBW|PERKG|PERBW)$/.test(mm.calc || '')) return;
+          var p = E.previousFor(hs.filter(function (y) { return y.values && y.values[mm.name] && !blank(y.values[mm.name].result); }), 'custom', mm.name, date);
+          var raw = p && p.session.values[mm.name].result;
+          if (p && String(raw).trim() === String(v.previous).trim()) v.prevMass = p.mass == null ? '' : String(p.mass);
+        });
+      });
+    }
+  }
+  // a screening on the client's page: its report made again from the saved results, to view, save or share. Nothing is
+  // saved and nothing on the pages in use changes; Back returns to their page
+  function openPastReport(key, t, date) {
+    var cl = clients.clients[key], x = null;
+    if (!cl || TOOLS.indexOf(t) < 0) return;
+    cl.sessions.forEach(function (y) { if (y && y.tool === t && y.date === date) x = y; });
+    if (!x) return;
+    var keep = state[t], built = null, why = '';
+    try {
+      state[t] = stateFromSession(cl, x);
+      pastAsOf = date;
+      pastPrevious(t, cl, date, x);
+      built = buildReport(t);
+      if (!built) why = blocker(computeFor(t), t);
+    } catch (err) {
+      why = 'something in the saved results couldn’t be read';
+    } finally {
+      state[t] = keep;
+      pastAsOf = '';
+    }
+    if (!built) {
+      toast('The ' + TOOL_NAMES[t] + ' report from ' + E.displayIso(date) + ' couldn’t be made again (' + String(why || 'no results were saved').replace(/\.$/, '').replace(/^./, function (ch) { return ch.toLowerCase(); }) + ').');
+      return;
+    }
+    pastView = { key: key, tool: t, date: date };
+    els.sheetEx.hidden = true;
+    els.sheetEx.dataset.tool = '';
+    current = { file: null, blob: null, title: built.rep.title, ex: false, phone: null };
+    renderPhoneCard();
+    var first = firstName(cl.name);
+    els.back.textContent = '‹ Back to ' + (first ? first + '’s page' : 'their page');
+    els.home.hidden = true;
+    els.sheetTitle.innerHTML = esc(built.rep.title) + '<small>' + esc(built.file) + ' · made again from the record of ' + esc(E.displayIso(date)) + '</small>';
+    showSheet(built, '');
   }
   function wireHome() {
     els.homeSec.addEventListener('click', onHomeClick);
@@ -3236,7 +3475,8 @@
     els.homeClientCancel.addEventListener('click', function () { closeModal(); });
     els.brandHome.addEventListener('click', function () {
       if (document.documentElement.classList.contains('signed-out') || !state) return;
-      if (homeView) window.scrollTo(0, 0); else showHome(true);
+      if (homeView && clientPage) closeClientPage();   // v39: from a client's page, Home itself
+      else if (homeView) window.scrollTo(0, 0); else showHome(true);
     });
   }
 
@@ -3253,7 +3493,7 @@
   // v15: the Exercises tab works the same way: from Screening it returns to the Exercises page last in use; a second
   // tap, already there, scrolls to the top and opens its page picker
   function onSectionTab(section) {
-    if (section === 'home') { if (homeView) window.scrollTo(0, 0); else showHome(true); return; }   // v30
+    if (section === 'home') { if (homeView && clientPage) closeClientPage(); else if (homeView) window.scrollTo(0, 0); else showHome(true); return; }   // v30; v39: a client's page goes back to Home
     if (homeView) { openTool(section === 'ex' ? 'ex' : state.screenTool, section === 'ex' ? state.exPage : null); return; }   // v30: where it was left
     var here = section === 'ex' ? state.tool === 'ex' : state.tool !== 'ex';
     if (!here) {
@@ -7273,6 +7513,18 @@
     var sess = { tool: t, date: date, savedAt: new Date().toISOString(), meta: meta, values: compactValues(t), results: currentResults(t, c),
       mass: E.parseInput(m.mass), interp: blank(state[t].interp.text) ? '' : String(state[t].interp.text).trim() };
     if (t === 'custom') { sess.battery = tidyBattery(state.custom.battery); if (state.custom.batName) sess.batName = state.custom.batName; }   // v36: the tests done
+    // v39: so the client's page can make the report again as printed: the summary's AI note and the radar's chosen axes
+    if (sess.interp && state[t].interp.ai) sess.interpAi = true;
+    if (SL(t) && Array.isArray(state[t].radar)) sess.radar = state[t].radar.filter(function (k) { return typeof k === 'string'; }).slice(0, 6);
+    // v39: and the previous results the page had that the values don't keep: LL Strength's each leg (with that day's mass and
+    // date), and the body mass a Custom battery's previous load was scored with
+    var pv = {}, sv = state[t].values;
+    Object.keys(sv).forEach(function (k) {
+      var v = sv[k] || {};
+      if (t === 'str' && (!blank(v.prevLeft) || !blank(v.prevRight))) pv[k] = { L: String(v.prevLeft || '').trim(), R: String(v.prevRight || '').trim(), mass: String(v.prevMass || '').trim(), date: String(v.prevDate || '') };
+      else if (t === 'custom' && !blank(v.previous) && !blank(v.prevMass)) pv[k] = { mass: String(v.prevMass).trim() };
+    });
+    if (t === 'str' || t === 'custom') sess.prev = pv;   // (even empty: a session from before v39 has none, and is filled from the record)
     if (userName()) sess.savedBy = userName();         // v13: who saved it (the practitioner's name on this device)
     return storeSession(key, name, sess);
   }
@@ -7315,10 +7567,12 @@
   // (title, instructions and rows with fresh ids; each row keeps its library link, dose and notes; the cues and video
   // come from the library). The date stays (a new visit). Undo puts back what was replaced.
   var exLoaded = null;                                 // { key, date }: the program loaded last (the client bar says so)
-  function loadProgramFor(key, picked, undoClear, was) {
+  // v39: which (a date): that program from their record (the client's page), else the last one
+  function loadProgramFor(key, picked, undoClear, was, which) {
     var cl = clients.clients[key];
     if (!cl) return;
-    var x = state.ex, last = exPrograms(cl).slice(-1)[0];
+    var x = state.ex, progs = exPrograms(cl), last = progs.slice(-1)[0];
+    if (which) progs.forEach(function (p) { if (p.date === which) last = p; });
     x.meta.name = cl.name;
     hideSuggest();
     if (!last) {
@@ -7557,10 +7811,13 @@
     var same = cl.sessions.some(function (x) { return x.tool === t && x.date === date; });
     return same ? 'Updates ' + cl.name + '’s ' + recordWord() + ' for this date.' : 'Saves to ' + cl.name + where;
   }
+  var pastAsOf = '';                                   // v39: a report made again from the record: only sessions before its date
   function progressData(t, c) {
     var m = state[t].meta, cl = clientFor(m.name);
     if (!cl) return null;
-    var p = E.progress(historySessions(t, cl), t, { date: m.date || todayIso(), results: currentResults(t, c) }, 5);
+    var hs = historySessions(t, cl);
+    if (pastAsOf) hs = hs.filter(function (x) { return x.date < pastAsOf; });   // (as it was printed: nothing from later visits)
+    var p = E.progress(hs, t, { date: m.date || todayIso(), results: currentResults(t, c) }, 5);
     if (!p.rows.length) return null;
     var label = {}, unit = {}, dir = {};
     if (t === 'str') {
@@ -7630,7 +7887,7 @@
     els.clientsSummary.textContent = !keys.length ? 'No saved clients yet. A record starts when you create a report with a name filled in.'
       : pick ? loads
         : keys.length + (keys.length === 1 ? ' client, ' : ' clients, ') + total + (total === 1 ? ' session' : ' sessions') + (CLOUD ? ', in the clinic store. ' : ', saved on this device. ') +
-          (clientsEditing ? 'Tap Delete to remove a client.' : homeView ? 'Tap a name to choose a test or their program.' : 'Tap a name to load it here.');
+          (clientsEditing ? 'Tap Delete to remove a client.' : homeView ? 'Tap a name to open their page.' : 'Tap a name to load it here.');
     els.clientsSearchWrap.hidden = !keys.length;
     var shown = q ? keys.filter(function (k) { return k.indexOf(q) >= 0; }) : keys;
     if (!keys.length) { els.clientsList.innerHTML = ''; return; }
@@ -7677,7 +7934,7 @@
   var delTimer = null;
   function onClientsClick(e) {
     var pk = e.target.closest('button[data-action="pick-client"]');
-    if (pk && homeView && clientsMode === 'manage') { closeModal(false); openHomeClient(pk.dataset.key, ''); return; }   // v30: what to do for them
+    if (pk && homeView && clientsMode === 'manage') { closeModal(false); openClientPage(pk.dataset.key); return; }   // v30: what to do for them; v39: their page
     if (pk) { pickFromDialog(pk.dataset.key); return; }
     var b = e.target.closest('button[data-action="delete-client"]');
     if (!b) return;
@@ -7699,6 +7956,7 @@
     }
     renderClientsList();
     refresh();
+    if (homeView && clientPage) renderHome();          // v39: their page, if it was open, gives way to Home
     toast('Deleted ' + name + '’s record');
   }
   function backupClients() {
@@ -7775,6 +8033,7 @@
     closeMenu(false);
     closeModal(false);
     if (!els.sheet.hidden) closeReport();
+    if (clientPage) { clientPage = null; if (homeView && state) renderHome(); }   // v39: Home itself after the next sign-in
     document.documentElement.classList.add('signed-out');
     els.signin.hidden = false;
     els.signinName.value = userName();
@@ -7925,6 +8184,7 @@
       if (!state) return;
       if (openModalEl === els.clientsDialog) renderClientsList();
       refresh();
+      if (homeView && clientPage) renderHome();        // v39: a client's page shows what another device saved
     } else if (evt.kind === 'status') {
       renderCloudBar();
       if (!els.sheet.hidden) renderPhoneCard();        // v35: the link's state (sending, waiting, refused, working)

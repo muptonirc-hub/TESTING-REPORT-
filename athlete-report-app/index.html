@@ -266,6 +266,46 @@ html:not(.home-on) .home, html.signed-out .home { display: none !important; }
 .hc-opt:active { background: var(--surface); }
 @media (hover: hover) { .hc-opt:hover { background: var(--surface); } }
 .hc-opt:focus-visible { outline-offset: -3px; }
+/* v39: a client's page (on Home, in place of the rest): their screening, each opening its report again, and their programs */
+.home.cp-on > :not(.cpage), .home:not(.cp-on) > .cpage { display: none !important; }
+.cpage { display: flex; flex-direction: column; gap: 22px; }
+.cp-back { align-self: flex-start; display: inline-flex; align-items: center; gap: 2px; min-height: 40px; margin: -8px 0 -12px -10px; padding: 0 12px 0 6px;
+  border: 0; background: transparent; color: var(--teal-ink); font-size: 15px; font-weight: 650; }
+.cp-head { min-width: 0; }
+.cp-head h1 { margin: 0; font: 700 34px/1.08 var(--font-brand); letter-spacing: .2px; text-transform: uppercase; text-wrap: balance; overflow-wrap: anywhere; }
+.cp-head h1:focus { outline: none; }
+.cp-head p { margin: 6px 0 0; color: var(--muted); font-size: 15px; }
+.cp-cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 22px 26px; align-items: start; }
+.cp-sec { min-width: 0; }
+.cp-sec-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 40px; margin: 0 0 8px; }
+.cp-sec-head h2 { margin: 0; font-size: 12.5px; font-weight: 700; letter-spacing: .9px; text-transform: uppercase; color: var(--muted); }
+.cp-add { flex: none; min-height: 40px; padding: 0 14px; font-size: 14.5px; background: var(--surface); }
+.cp-list { display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); box-shadow: var(--shadow); overflow: hidden; }
+.cp-row { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 66px; padding: 10px 14px 10px 12px; border: 0; border-radius: 0;
+  background: transparent; color: var(--fg); text-align: left; font: inherit; cursor: pointer; }
+.cp-row + .cp-row { border-top: 1px solid var(--line); }
+.cp-row:active { background: var(--field); }
+@media (hover: hover) { .cp-row:hover { background: var(--field); } }
+.cp-row:focus-visible { outline-offset: -3px; }
+.cp-row .tile-ic { width: 38px; height: 38px; border-radius: 11px; }
+.cp-row .tile-ic svg { width: 20px; height: 20px; }
+.cp-text { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
+.cp-text b { font-size: 15px; font-weight: 700; overflow-wrap: anywhere; }
+.cp-text small { color: var(--muted); font-size: 13px; line-height: 1.4; overflow-wrap: anywhere; }
+.cp-when { color: var(--fg); font-weight: 650; white-space: nowrap; }
+.cp-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 3px; }
+.cp-tags .chip { height: 22px; font-size: 12px; padding: 0 8px; }
+.cp-tag { display: inline-flex; align-items: center; height: 22px; padding: 0 9px; border-radius: 999px; background: var(--field); color: var(--muted); font-size: 12px; font-weight: 700; white-space: nowrap; }
+.cp-tag.cur { background: color-mix(in srgb, var(--brand) 16%, transparent); color: var(--teal-ink); }
+.cp-tag.phone { background: var(--green-soft); color: var(--green-ink); }
+.cp-go { flex: none; display: inline-flex; align-items: center; gap: 1px; color: var(--teal-ink); font-size: 13.5px; font-weight: 650; white-space: nowrap; }
+.cp-empty { margin: 0; padding: 18px 16px; border: 1px dashed var(--line-strong); border-radius: 14px; color: var(--muted); font-size: 14px; }
+@media (max-width: 899px) { .cp-cols { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 599px) {
+  .cp-head h1 { font-size: 27px; }
+  .cp-go > span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }   /* the chevron alone on a phone */
+  .cp-row { padding-inline: 10px 8px; }
+}
 @media (min-width: 600px) and (max-width: 759px) {
   /* the three tabs, Clients and ⋯ still share the logo's row on a narrow iPad (split view): Home and Clients show their icons only */
   .tools button { padding-inline: 12px; }
@@ -1919,13 +1959,13 @@ html.row-dragging, html.row-dragging * { cursor: grabbing !important; user-selec
 
 <div class="toast" id="toast" role="status" hidden></div>
 
-<script src="engine.js?v=38" defer></script>
-<script src="report-fonts.js?v=38" defer></script>
-<script src="jspdf.umd.min.js?v=38" defer></script>
-<script src="qrcode.js?v=38" defer></script>
-<script src="report.js?v=38" defer></script>
-<script src="cloud-config.js?v=38" defer></script>
-<script src="cloud.js?v=38" defer></script>
-<script src="app.js?v=38" defer></script>
+<script src="engine.js?v=39" defer></script>
+<script src="report-fonts.js?v=39" defer></script>
+<script src="jspdf.umd.min.js?v=39" defer></script>
+<script src="qrcode.js?v=39" defer></script>
+<script src="report.js?v=39" defer></script>
+<script src="cloud-config.js?v=39" defer></script>
+<script src="cloud.js?v=39" defer></script>
+<script src="app.js?v=39" defer></script>
 </body>
 </html>
