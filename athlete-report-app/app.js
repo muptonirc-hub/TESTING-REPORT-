@@ -1619,6 +1619,7 @@
 
   function refresh() {
     if (state.tool === 'ex') { if (state.exPage === 'builder') refreshEx(); return; }   // e.g. a late AI draft or a client restore while on the Exercises tab
+    if (state.tool === 'custom' && state.custom.pop === null) { renderSummary(compute()); return; }   // v41: only the population step is drawn (a sync or a photo read meanwhile)
     var t = state.tool, c = compute();
     applyRetest(false);
     refreshClientBar(c);
@@ -2316,7 +2317,7 @@
     } else if (b.dataset.action === 'scan-undo') {
       undoScan();
     } else if (b.dataset.action === 'scan-close') {
-      scanInfo = null; renderScanBar();
+      delete scanInfo[state.tool]; renderScanBar();
     } else if (b.dataset.action === 'ai-draft') {
       draftInterp();
     } else if (b.dataset.action === 'ai-undo') {
@@ -2838,9 +2839,9 @@
     if (aiBusy === t) { aiGen++; aiBusy = null; }
     if (interpMsg.tool === t) interpMsg = { tool: null, kind: '', text: '' };
     if (interpUndo && interpUndo.tool === t) interpUndo = null;
-    if (scanBusy === t) { scanGen++; scanBusy = null; }
-    if (t === 'ex' && suggestBusy) { scanGen++; suggestBusy = false; }   // v21
-    if (scanInfo && scanInfo.tool === t) scanInfo = null;
+    if (scanBusy[t]) { bumpScan(t); delete scanBusy[t]; }
+    if (t === 'ex' && suggestBusy) { bumpScan('ex'); suggestBusy = false; }   // v21
+    delete scanInfo[t];
     delete coachOpen[t]; delete interpOpen[t];
     if (t === 'ex') exTopOpen = false;
     retest.tool = null;
@@ -2881,9 +2882,8 @@
       if (aiBusy && gone[aiBusy]) { aiGen++; aiBusy = null; }
       if (interpMsg.tool && gone[interpMsg.tool]) interpMsg = { tool: null, kind: '', text: '' };
       if (interpUndo && gone[interpUndo.tool]) interpUndo = null;
-      if (scanBusy && gone[scanBusy]) { scanGen++; scanBusy = null; }
-      if (suggestBusy && gone.ex) { scanGen++; suggestBusy = false; }   // v21
-      if (scanInfo && gone[scanInfo.tool]) scanInfo = null;
+      Object.keys(gone).forEach(function (t) { if (scanBusy[t]) { bumpScan(t); delete scanBusy[t]; } delete scanInfo[t]; });   // v41: each page's own
+      if (suggestBusy && gone.ex) { bumpScan('ex'); suggestBusy = false; }   // v21
       Object.keys(gone).forEach(function (t) { delete coachOpen[t]; delete interpOpen[t]; });   // v18: folded again
       if (gone.ex) exTopOpen = false;
       // the report and its preview go (they hold the client's details)
@@ -2939,6 +2939,7 @@
   // instead (the test suites and bookmarks).
   var homeView = location.hash !== '#continue', homeBuilt = false, homeAskFor = null, homeClientFor = null;
   var clientPage = null;                               // v39: { key } while a client's page shows on Home
+  var homeSub = '';                                    // v41: 'screening', 'ex' or 'photo' while one of Home's buttons' pages shows
   var pastView = null;                                 // v39: { key, tool, date } while a report from their record is on screen
   function homeSvg(paths) { return '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' + paths + '</svg>'; }
   var HOME_ICON = {
@@ -2966,7 +2967,7 @@
   };
   function homeLine(k) { return k === 'templates' ? (CLOUD ? 'Saved programs to start from, shared by the clinic.' : 'Saved programs to start from, kept on this device.') : HOME_LINE[k]; }
   function syncTabs() {
-    var section = homeView ? 'home' : state && state.tool === 'ex' ? 'ex' : 'screening';
+    var section = homeView ? (homeSub === 'screening' || homeSub === 'ex' ? homeSub : 'home') : state && state.tool === 'ex' ? 'ex' : 'screening';   // v41: Home's Screening and Exercise programming pages
     document.querySelectorAll('.tools button').forEach(function (b) { b.setAttribute('aria-selected', String(b.dataset.section === section)); });
   }
   // what a tile would find: entries of a client's (the practitioner's own name and the date don't count); a program that
@@ -2990,10 +2991,10 @@
       '<div class="home-find" role="search"><label class="client-search" for="homeSearch">' + HOME_ICON.search + '<span class="vh">Find a client by name</span>' +
       '<input id="homeSearch" type="search" placeholder="Find a client" autocomplete="off" autocapitalize="words" autocorrect="off" spellcheck="false" enterkeyhint="search" aria-controls="homeSugg"></label>' +
       '<div class="suggest home-sugg" id="homeSugg" hidden></div></div></div>' +
+      '<nav class="home-hubs" id="homeHubs" aria-label="Start"></nav>' +   // v41: Photo mode, Screening, Exercise programming
       '<section class="home-cont" id="homeCont" aria-labelledby="homeContH" hidden></section>' +
       '<section class="home-check" id="homeCheck" aria-labelledby="homeCheckH" hidden></section>' +   // v40: the check-ins
-      '<section class="home-group" aria-labelledby="homeTestH"><h2 id="homeTestH">Testing</h2><div class="home-tiles" id="homeTests"></div></section>' +
-      '<section class="home-group" aria-labelledby="homeExH"><h2 id="homeExH">Exercises</h2><div class="home-tiles" id="homeEx"></div></section>' +
+      '<div class="hsub" id="hsub"></div>' +             // v41: the page a button opens, drawn in place of the rest
       '<div class="cpage" id="cpage"></div>';           // v39: a client's page, drawn in place of the rest
     homeBuilt = true;
   }
@@ -3005,9 +3006,12 @@
     if (!state) return;
     if (!homeBuilt) buildHome();
     if (clientPage && !clients.clients[clientPage.key]) clientPage = null;   // v39: their record was deleted meanwhile
+    var sub = clientPage ? '' : homeSub;
     els.homeSec.classList.toggle('cp-on', !!clientPage);
-    els.homeSec.setAttribute('aria-labelledby', clientPage ? 'cpName' : 'homeHello');
+    els.homeSec.classList.toggle('sub-on', !!sub);     // v41
+    els.homeSec.setAttribute('aria-labelledby', clientPage ? 'cpName' : sub ? 'hsubH' : 'homeHello');
     if (clientPage) { renderClientPage(); return; }
+    if (sub) { renderHomeSub(); return; }              // v41: Screening, Exercise programming or Photo mode
     var a = document.activeElement, holder = a && a.closest && els.homeSec.contains(a) ? a.closest('[data-home]') : null, keep = holder ? holder.getAttribute('data-home') : null;   // focus kept across a redraw
     $('homeHello').textContent = homeHello();
     $('homeDate').textContent = homeDate();
@@ -3019,19 +3023,7 @@
         '<span class="cont-text"><b><span class="vh">Continue: </span>' + esc(t === 'ex' ? 'Exercise program' : HEAD[t][0]) + '</b><small>' + esc(contentLine(t)) + '</small></span>' +
         '<span class="cont-go">' + HOME_ICON.go + '</span></button>';
     }).join('') + '</div>';
-    $('homeTests').innerHTML = TOOLS.map(function (t) {
-      return '<button type="button" class="tile" data-home="tool:' + t + '">' + homeTile(HEAD[t][0], homeLine(t), HOME_ICON[t], homeBusy(t) ? 'In progress' : '') + '</button>';
-    }).join('');
-    var exBusy = homeBusy('ex');
-    // Photo to handout: with nothing in progress the tile is the photo picker itself (its file input laid over it, so the
-    // tap lands on the input, as Scan exercise page does); with a program in progress it asks first
-    $('homeEx').innerHTML = (exBusy
-      ? '<button type="button" class="tile tile-photo" data-home="photo">' + homeTile('Photo to handout', homeLine('photo'), HOME_ICON.photo, '') + '</button>'
-      : '<label class="tile tile-photo file-btn" data-home="photo">' + homeTile('Photo to handout', homeLine('photo'), HOME_ICON.photo, '') +
-        '<input type="file" accept="image/*" multiple data-scan-mode="fresh" aria-label="Photo to handout: take or choose photos of a handwritten exercise program, several pages at once"></label>') +
-      '<button type="button" class="tile" data-home="ex:builder">' + homeTile('Build a program', homeLine('builder'), HOME_ICON.builder, exBusy ? 'In progress' : '') + '</button>' +
-      '<button type="button" class="tile" data-home="ex:library">' + homeTile('Exercise library', homeLine('library'), HOME_ICON.library, '') + '</button>' +
-      '<button type="button" class="tile" data-home="ex:templates">' + homeTile('Program templates', homeLine('templates'), HOME_ICON.templates, '') + '</button>';
+    $('homeHubs').innerHTML = hubsHtml();               // v41: until v40 the tiles of every tool and Exercises page
     if (keep) {
       var back = els.homeSec.querySelector('[data-home="' + keep + '"]');
       if (back) focusQuiet(back.tagName === 'LABEL' ? back.querySelector('input') : back);
@@ -3042,6 +3034,7 @@
     closePick(false);
     hideSuggest();
     clientPage = null;                                 // v39: Home itself (a client's page is opened from it)
+    setHomeSub('');                                    // v41: and none of its buttons' pages
     homeView = true;
     document.documentElement.classList.add('home-on');
     renderHome();
@@ -3052,11 +3045,316 @@
   function leaveHome() {
     if (!homeView) return;
     homeView = false;
+    setHomeSub('');                                    // v41: Photo mode's photos go with it
     document.documentElement.classList.remove('home-on');
     var box = $('homeSugg'), find = $('homeSearch');
     if (box) { box.hidden = true; box.innerHTML = ''; }
     if (find) find.value = '';                         // a name searched for has been dealt with
     syncTabs();
+  }
+  // ------------------------------------------------------------------ v41: Home's three buttons and the pages they open
+  // Matthew (6 Oct): "I want "photo mode" as its own section then screening tools as its own section and Exercise
+  // Programming as the 3rd button on the home screen. Then clicking on screening for example takes you to the screening
+  // page where you pic what battery your want to use (custom is included in this). The same for Exercise program."
+  // His choices for Photo mode: Results + exercises first; the battery picked by the clinician (never guessed from the
+  // photo); the results and the exercise page taken as two photo steps; the three buttons at the top of Home, Continue
+  // and Check-ins under them. Each page is drawn on Home in place of the rest, as a client's page is (homeSub).
+  var HUBS = [
+    ['photo', 'Photo mode', 'Photograph the results and the exercise page at the end of the appointment: the report and the handout, ready to send.'],
+    ['screening', 'Screening', 'Choose the battery: Performance & readiness, LL Strength, Hamstring or ACL rehab, or Custom.'],
+    ['ex', 'Exercise programming', 'Build a program, or open the exercise library and the program templates.']
+  ];
+  var BACK_SVG = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg>';
+  var hsubDrawn = '';
+  function hubsHtml() {
+    var busy = { photo: false, screening: TOOLS.some(function (t) { return homeBusy(t); }), ex: homeBusy('ex') };
+    var icon = { photo: HOME_ICON.photo, screening: HOME_ICON.screen, ex: HOME_ICON.builder };
+    return HUBS.map(function (h) {
+      return '<button type="button" class="hub hub-' + h[0] + '" data-home="hub:' + h[0] + '"><span class="tile-ic">' + icon[h[0]] + '</span>' +
+        '<span class="hub-text"><b>' + esc(h[1]) + '</b><small>' + esc(h[2]) + '</small>' + (busy[h[0]] ? '<span class="tile-badge">In progress</span>' : '') + '</span>' +
+        '<span class="hub-go">' + HOME_ICON.go + '</span></button>';
+    }).join('');
+  }
+  function setHomeSub(sub) {
+    if (homeSub === 'photo' && sub !== 'photo') pmReset();   // Photo mode's photos and choices go when it is left
+    homeSub = sub;
+    hsubDrawn = '';
+    var box = $('hsub');
+    if (box && !sub) box.innerHTML = '';
+  }
+  function openHomeSub(sub) {
+    if (['photo', 'screening', 'ex'].indexOf(sub) < 0) return;
+    closePick(false);
+    hideSuggest();
+    if (!homeView) { homeView = true; document.documentElement.classList.add('home-on'); }
+    clientPage = null;
+    setHomeSub(sub);
+    renderHome();
+    syncTabs();
+    window.scrollTo(0, 0);
+    focusQuiet($('hsubH'));
+  }
+  function closeHomeSub() {
+    var was = homeSub;
+    setHomeSub('');
+    renderHome();
+    syncTabs();
+    window.scrollTo(0, 0);
+    focusQuiet(els.homeSec.querySelector('[data-home="hub:' + was + '"]') || $('homeHello'));
+  }
+  function subHeadHtml(title, line, backAttr, backLabel) {
+    return '<button type="button" class="cp-back quiet" ' + (backAttr || 'data-home="back"') + '>' + BACK_SVG + esc(backLabel || 'Home') + '</button>' +
+      '<div class="cp-head"><h1 id="hsubH" tabindex="-1">' + esc(title) + '</h1>' + (line ? '<p>' + esc(line) + '</p>' : '') + '</div>';
+  }
+  // the page drawn only when it changed (a sync redraws Home: Photo mode's search box and its keyboard stay put)
+  function renderHomeSub() {
+    var box = $('hsub'), html = homeSub === 'photo' ? photoModeHtml() : homeSub === 'ex' ? exHubHtml() : screenHubHtml();
+    if (html === hsubDrawn && box.innerHTML) return;
+    var a = document.activeElement, inBox = a && box.contains(a);
+    var keep = inBox ? (a.id || a.getAttribute('data-pm') || a.getAttribute('data-home') || (a.getAttribute('data-pm-files') ? 'files:' + a.getAttribute('data-pm-files') : '')) : '';
+    box.innerHTML = html;
+    hsubDrawn = html;
+    var find = $('pmFind');
+    if (find && pm) find.value = pm.q;
+    if (!keep) return;
+    var to = $(keep) || box.querySelector('[data-pm="' + keep + '"]') || box.querySelector('[data-home="' + keep + '"]') || (keep.indexOf('files:') === 0 ? box.querySelector('[data-pm-files="' + keep.slice(6) + '"]') : null);
+    focusQuiet(to || $('hsubH'));
+    if (to && to.id === 'pmFind') { try { to.setSelectionRange(to.value.length, to.value.length); } catch (e) { /* not a text box */ } }
+  }
+  function screenHubHtml() {
+    return subHeadHtml('Screening', 'Choose the battery. Results on paper or in the VALD app? Photo mode reads them for you.') +
+      '<div class="home-tiles" id="homeTests">' + TOOLS.map(function (t) {
+        return '<button type="button" class="tile" data-home="tool:' + t + '">' + homeTile(HEAD[t][0], homeLine(t), HOME_ICON[t], homeBusy(t) ? 'In progress' : '') + '</button>';
+      }).join('') + '</div>' +
+      '<p class="hsub-note">Photographed results? <button type="button" class="quiet hsub-link" data-home="hub:photo">Open Photo mode</button></p>';
+  }
+  function exHubHtml() {
+    var exBusy = homeBusy('ex');
+    return subHeadHtml('Exercise programming', 'Build a program for a client, or keep the clinic’s exercise library and templates up to date.') +
+      '<div class="home-tiles" id="homeEx">' +
+      '<button type="button" class="tile" data-home="ex:builder">' + homeTile('Build a program', homeLine('builder'), HOME_ICON.builder, exBusy ? 'In progress' : '') + '</button>' +
+      '<button type="button" class="tile" data-home="ex:library">' + homeTile('Exercise library', homeLine('library'), HOME_ICON.library, '') + '</button>' +
+      '<button type="button" class="tile" data-home="ex:templates">' + homeTile('Program templates', homeLine('templates'), HOME_ICON.templates, '') + '</button></div>' +
+      '<p class="hsub-note">A handwritten program? <button type="button" class="quiet hsub-link" data-home="hub:photo">Open Photo mode</button></p>';
+  }
+
+  // ------------------------------------------------------------------ v41: Photo mode
+  // Results + exercises: the client (their record brings last time's results; the name never goes to Claude), the battery
+  // (the last one used ticked), photos of the results, photos of the exercise page, the usual questions; then both are read
+  // at once and the battery's page opens with the results filled in for checking and the program linked to it (Create
+  // report + exercises makes the one PDF). Screening results: the same without the exercise page. Exercise prescription:
+  // Photo to handout, as on Home until v40 (the picker itself; Add to it or Start a new program while one is in progress).
+  // pm: { kind: 'both' | 'results', step, who: { key, name } (key '' and name '' when skipped), tool, r: [photos], x: [photos],
+  // urls: { r: [], x: [] } (the thumbnails), q (typed in the search), msg }
+  var pm = null;
+  var PM_STEPS = { both: ['client', 'battery', 'results', 'ex'], results: ['client', 'battery', 'results'] };
+  var PM_LABEL = { client: 'Client', battery: 'Battery', results: 'Results', ex: 'Exercise page' };
+  function pmReset() {
+    if (pm) ['r', 'x'].forEach(function (k) { pm.urls[k].forEach(function (u) { try { URL.revokeObjectURL(u); } catch (e) { /* gone */ } }); });
+    pm = null;
+  }
+  function pmStart(kind) {
+    pmReset();
+    pm = { kind: kind, step: 'client', who: null, tool: '', r: [], x: [], urls: { r: [], x: [] }, q: '', msg: '' };
+    pmDraw('#hsubH');
+  }
+  function pmDraw(focusSel) {
+    renderHome();
+    window.scrollTo(0, 0);
+    var el = focusSel ? els.homeSec.querySelector(focusSel) : null;
+    focusQuiet(el || $('hsubH'));
+  }
+  function photoModeHtml() {
+    if (!pm) {
+      var exBusy = homeBusy('ex'), exOpt = homeTile('Exercise prescription', 'Photograph a handwritten program and get a neat, printable handout.', HOME_ICON.builder, '');
+      return subHeadHtml('Photo mode', 'For the end of the appointment: photograph what you wrote down or the VALD app’s results. Claude reads them; you check before anything is made.') +
+        '<div class="pm-opts">' +
+        '<button type="button" class="tile pm-opt pm-main" data-pm="start:both">' + homeTile('Results + exercises', 'Photograph the screening results, then the exercise page. The report and the handout come together in one PDF, ready to send to their phone.', HOME_ICON.photo, '') + '</button>' +
+        '<button type="button" class="tile pm-opt" data-pm="start:results">' + homeTile('Screening results', 'VALD screenshots or handwritten results fill a battery’s boxes, highlighted for checking.', HOME_ICON.screen, '') + '</button>' +
+        // the photo picker itself, as Photo to handout was; with a program in progress it asks first
+        (exBusy ? '<button type="button" class="tile pm-opt" data-home="photo">' + exOpt + '</button>'
+          : '<label class="tile pm-opt file-btn" data-home="photo">' + exOpt + '<input type="file" accept="image/*" multiple data-scan-mode="fresh" aria-label="Exercise prescription: take or choose photos of a handwritten exercise program, several pages at once"></label>') +
+        '</div>';
+    }
+    var steps = PM_STEPS[pm.kind], at = steps.indexOf(pm.step);
+    var html = subHeadHtml(pm.kind === 'both' ? 'Results + exercises' : 'Screening results', '', 'data-pm="options"', 'Photo mode') +
+      '<ol class="pm-steps" aria-label="Steps">' + steps.map(function (st, i) {
+        var val = pmStepValue(st), inner = '<span class="n" aria-hidden="true">' + (i < at ? '✓' : i + 1) + '</span><span class="lab"><b>' + esc(PM_LABEL[st]) + '</b>' + (i < at && val ? '<small>' + esc(val) + '</small>' : '') + '</span>';
+        return '<li class="' + (i < at ? 'done' : i === at ? 'cur' : '') + '"' + (i === at ? ' aria-current="step"' : '') + '>' +
+          (i < at ? '<button type="button" class="pm-st" data-pm="step:' + st + '"><span class="vh">Change the </span>' + inner + '</button>' : '<span class="pm-st">' + inner + '</span>') + '</li>';
+      }).join('') + '</ol>';
+    html += '<section class="pm-card" aria-labelledby="pmStepH">' + (pm.step === 'client' ? pmClientHtml() : pm.step === 'battery' ? pmBatteryHtml() : pmPhotosHtml(pm.step === 'results' ? 'r' : 'x')) +
+      (pm.msg ? '<p class="pm-msg" role="alert">' + esc(pm.msg) + '</p>' : '') + '</section>';
+    return html;
+  }
+  function pmStepValue(st) {
+    if (st === 'client') return pm.who ? (pm.who.name || 'No name yet') : '';
+    if (st === 'battery') return pm.tool ? TOOL_NAMES[pm.tool] : '';
+    var n = pm[st === 'results' ? 'r' : 'x'].length;
+    return n ? n + (n === 1 ? ' photo' : ' photos') : 'Skipped';
+  }
+  function pmClientHtml() {
+    return '<h2 id="pmStepH">Who is it for?</h2><p class="pm-lead">Their record brings last time’s results to compare. The name is never sent to Claude.</p>' +
+      '<label class="client-search pm-find" for="pmFind">' + HOME_ICON.search + '<span class="vh">Find or add a client</span>' +
+      '<input id="pmFind" type="search" placeholder="Find or add a client" autocomplete="off" autocapitalize="words" autocorrect="off" spellcheck="false" enterkeyhint="search" aria-controls="pmSugg"></label>' +
+      '<div class="pm-list" id="pmSugg">' + pmListHtml() + '</div>' +
+      '<div class="pm-acts"><button type="button" class="quiet pm-skip" data-pm="noname">Skip: add the name later</button></div>';
+  }
+  // the clients matching what is typed (and a new one by that name), or the most recent when nothing is typed
+  function pmListHtml() {
+    var typed = clean1(pm.q), k = E.nameKey(typed), keys;
+    function row(key) {
+      var cl = clients.clients[key], n = cl.sessions.length, last = '';
+      cl.sessions.forEach(function (x) { if (x.date > last) last = x.date; });
+      return '<button type="button" class="pm-row" data-pm="client:' + esc(key) + '"><span class="pm-row-text"><b>' + esc(cl.name) + '</b><small>' + n + (n === 1 ? ' session' : ' sessions') + (last ? ' · last ' + esc(E.displayIso(last)) : '') + '</small></span>' + HOME_ICON.go + '</button>';
+    }
+    if (!k) {
+      keys = clientKeys().map(function (key) { var last = ''; clients.clients[key].sessions.forEach(function (x) { if (x.date > last) last = x.date; }); return [key, last]; })
+        .filter(function (x) { return x[1]; }).sort(function (a, b) { return a[1] < b[1] ? 1 : a[1] > b[1] ? -1 : 0; }).slice(0, 5).map(function (x) { return x[0]; });
+      return keys.length ? '<p class="pm-list-h">Recent clients</p>' + keys.map(row).join('') : '<p class="pm-hint">Type a name to find a client, or to add a new one.</p>';
+    }
+    keys = clientKeys().filter(function (key) { return key.indexOf(k) >= 0; }).slice(0, 6);
+    var html = keys.map(row).join('');
+    if (!clients.clients[k] && typed.length >= 2) html += '<button type="button" class="pm-row pm-new" data-pm="new"><span class="pm-row-text"><b>New client: ' + esc(typed) + '</b><small>no record yet</small></span>' + HOME_ICON.go + '</button>';
+    return html || '<p class="pm-hint">No client by that name yet. Keep typing to add them.</p>';
+  }
+  function pmSuggest() {
+    var box = $('pmSugg'), find = $('pmFind');
+    if (!box || !find || !pm) return;
+    pm.q = find.value.slice(0, 120);
+    box.innerHTML = pmListHtml();
+    hsubDrawn = photoModeHtml();
+  }
+  // the battery used last: the page in progress, else the clinic's most recent screening in the records ('' on a new device)
+  function pmLastTool() {
+    if (TOOLS.indexOf(state.screenTool) >= 0 && homeBusy(state.screenTool)) return state.screenTool;
+    var best = '', day = '';
+    Object.keys(clients.clients || {}).forEach(function (k) { clients.clients[k].sessions.forEach(function (x) { if (TOOLS.indexOf(x.tool) >= 0 && x.date >= day) { day = x.date; best = x.tool; } }); });
+    return best;
+  }
+  function pmBatteryHtml() {
+    var cl = pm.who && pm.who.key ? clients.clients[pm.who.key] : null, last = {}, used = pmLastTool();
+    if (cl) cl.sessions.forEach(function (x) { if (!last[x.tool] || x.date > last[x.tool]) last[x.tool] = x.date; });
+    return '<h2 id="pmStepH">Which battery?</h2><p class="pm-lead">The results are scored against this battery’s norms.' + (used ? ' The one used last is marked.' : '') + '</p>' +
+      '<div class="pm-list">' + TOOLS.map(function (t) {
+        var bits = [];
+        if (last[t]) bits.push('Last tested ' + E.displayIso(last[t]));
+        else if (cl) bits.push('Not done yet');
+        if (t === 'custom') bits.push(state.custom.pop === null ? 'You choose who to compare against first' : 'Tests the photo holds are added');
+        return '<button type="button" class="pm-row" data-pm="bat:' + t + '" aria-pressed="' + (pm.tool === t) + '"><span class="tile-ic">' + HOME_ICON[t] + '</span>' +
+          '<span class="pm-row-text"><b>' + esc(HEAD[t][0]) + '</b>' + (bits.length ? '<small>' + esc(bits.join(' · ')) + '</small>' : '') + '</span>' +
+          (t === used ? '<span class="cp-tag cur">Last used</span>' : '') + HOME_ICON.go + '</button>';
+      }).join('') + '</div>';
+  }
+  function pmPhotosHtml(k) {
+    var files = pm[k], n = files.length, both = pm.kind === 'both', res = k === 'r', max = (res ? scanCfg() : exScanCfg()).max_photos || 6;
+    var html = '<h2 id="pmStepH">' + (res ? 'Photograph the results' : 'Photograph the exercise page') + '</h2>' +
+      '<p class="pm-lead">' + (res ? 'VALD app screenshots or your handwritten notes, up to ' + max + ' photos.' : 'The handwritten program, one photo a page (up to ' + max + '). A few quick questions come next.') + '</p>' +
+      '<label class="pm-shot file-btn' + (n ? ' more' : '') + '">' + CAMERA + '<span>' + (n ? 'Add more photos' : 'Take or choose photos') + '</span>' +
+      '<input type="file" accept="image/*" multiple data-pm-files="' + k + '" aria-label="' + esc((n ? 'Add more photos of ' : 'Take or choose photos of ') + (res ? 'the results' : 'the exercise page')) + '"></label>';
+    if (n) {
+      html += '<div class="pm-thumbs">' + pm.urls[k].map(function (u, i) { return '<img src="' + esc(u) + '" alt="Photo ' + (i + 1) + '">'; }).join('') + '</div>' +
+        '<p class="pm-count" role="status">' + n + (n === 1 ? ' photo' : ' photos') + (n > max ? ' (only the first ' + max + ' are read)' : '') + ' <button type="button" class="quiet" data-pm="clear:' + k + '">Remove ' + (n === 1 ? 'it' : 'them') + '</button></p>';
+    }
+    var go = res ? (both ? 'Next: the exercise page' : 'Read the results') : 'Next: a few questions';
+    html += '<div class="pm-acts"><button type="button" class="primary" data-pm="next"' + (n ? '' : ' disabled') + '>' + esc(go) + '</button>' +
+      (both && (res || pm.r.length) ? '<button type="button" class="quiet pm-skip" data-pm="skip">' + (res ? 'Skip: no results photos' : 'Skip: no exercise page') + '</button>' : '') + '</div>';
+    return html;
+  }
+  function pmNextStep() {
+    var steps = PM_STEPS[pm.kind], i = steps.indexOf(pm.step);
+    pm.step = steps[i + 1] || pm.step;
+    pm.msg = '';
+    pmDraw('#pmStepH');
+  }
+  function onPhotoModeClick(k) {
+    var i = k.indexOf(':'), kind = i < 0 ? k : k.slice(0, i), arg = i < 0 ? '' : k.slice(i + 1);
+    if (kind === 'start') { pmStart(arg === 'results' ? 'results' : 'both'); return; }
+    if (!pm) return;
+    if (kind === 'options') { pmReset(); pmDraw(null); focusQuiet(els.homeSec.querySelector('[data-pm="start:both"]') || $('hsubH')); return; }
+    if (kind === 'step') { if (PM_STEPS[pm.kind].indexOf(arg) >= 0) { pm.step = arg; pm.msg = ''; pmDraw(arg === 'client' ? '#pmFind' : '#pmStepH'); } return; }
+    if (kind === 'client' && clients.clients[arg]) { pm.who = { key: arg, name: clients.clients[arg].name }; pmNextStep(); return; }
+    if (kind === 'new') { var nm = clean1(pm.q); if (nm.length >= 2) { pm.who = { key: '', name: nm }; pmNextStep(); } return; }
+    if (kind === 'noname') { pm.who = { key: '', name: '' }; pmNextStep(); return; }
+    if (kind === 'bat' && TOOLS.indexOf(arg) >= 0) { pm.tool = arg; pmNextStep(); return; }
+    if (kind === 'clear' && (arg === 'r' || arg === 'x')) {
+      pm.urls[arg].forEach(function (u) { try { URL.revokeObjectURL(u); } catch (e) { /* gone */ } });
+      pm[arg] = []; pm.urls[arg] = []; pm.msg = '';
+      pmDraw('[data-pm-files="' + arg + '"]');
+      return;
+    }
+    if (kind === 'skip') {
+      if (pm.step === 'results') { pmClear('r'); pmNextStep(); }
+      else if (pm.step === 'ex' && pm.r.length) { pmClear('x'); pmProceed(null); }
+      return;
+    }
+    if (kind === 'next') {
+      if (pm.step === 'results' && pm.r.length) { if (pm.kind === 'both') pmNextStep(); else pmProceed(null); }
+      else if (pm.step === 'ex' && pm.x.length) pmAskThenGo();
+    }
+  }
+  function pmClear(k) { pm.urls[k].forEach(function (u) { try { URL.revokeObjectURL(u); } catch (e) { /* gone */ } }); pm[k] = []; pm.urls[k] = []; }
+  function onPhotoModeFiles(input) {
+    var k = input.dataset.pmFiles, files = Array.prototype.slice.call(input.files || []);
+    input.value = '';
+    if (!pm || (k !== 'r' && k !== 'x') || !files.length) return;
+    var photos = files.filter(function (f) { return !f.type || f.type.indexOf('image/') === 0; });
+    pm.msg = photos.length < files.length ? (photos.length ? 'Only photos can be read: ' + (files.length - photos.length) + (files.length - photos.length === 1 ? ' file was' : ' files were') + ' left out.' : 'That file isn’t a photo. Choose photos of ' + (k === 'r' ? 'the results.' : 'the exercise page.')) : '';
+    photos.forEach(function (f) { pm[k].push(f); var u = ''; try { u = URL.createObjectURL(f); } catch (e) { u = ''; } pm.urls[k].push(u); });
+    renderHome();
+    focusQuiet(els.homeSec.querySelector(pm[k].length ? '[data-pm="next"]' : '[data-pm-files="' + k + '"]'));
+  }
+  // what reading needs: the AI settings file, a connection and the clinic's key (asked for once, then on it goes)
+  function pmCanRead(then) {
+    var msg = !DATA.ai || !scanCfg().model ? 'The AI settings file (interpretation.json) didn’t load. Reopen the app while online.'
+      : navigator.onLine === false ? 'No internet connection. Connect to read the photos.' : '';
+    if (msg) { pm.msg = msg; pmDraw('.pm-msg'); return false; }
+    if (!aiKey()) {
+      openAiSettings(function () { if (pm && aiKey()) then(); }, 'To read photos of your notes, VALD screenshots or an exercise page, the app needs a Claude API key. ' + ONCE_NOTE());
+      return false;
+    }
+    return true;
+  }
+  function pmAskThenGo() {
+    if (!pmCanRead(pmAskThenGo)) return;
+    var files = pm.x.slice();
+    openPhotoAsk(files, function (a) { if (pm) pmProceed(a); }, freshAsk());
+  }
+  function pmProceed(a) {
+    if (!pm) return;
+    if (pm.r.length && !pmCanRead(function () { pmProceed(a); })) return;
+    var f = pm, t = f.tool, who = f.who || { key: '', name: '' }, rs = f.r.slice(), xs = f.x.slice();
+    if (!rs.length && !xs.length) return;
+    var want = who.key || E.nameKey(who.name), undos = [];
+    if (!rs.length) {                                  // the exercise page only (the results skipped): a new program for them
+      var had = homeBusy('ex'), ux = clearForClient('ex');
+      if (had) undos.push(ux);
+      if (who.name) state.ex.meta.name = who.name;
+      openTool('ex', 'builder');
+      if (a) { state.ex.ask = a; saveDraft(); }
+      startScan(xs, { tool: 'ex', ask: a });
+    } else {
+      // the battery's page for them: another client's entries are cleared first (Undo); theirs carry on
+      if (homeBusy(t) && (!want || E.nameKey(state[t].meta.name) !== want)) undos.push(clearForClient(t));
+      else if (!xs.length && linkedTool() === t && E.nameKey(state.ex.meta.name) !== want) state.ex.link = '';   // someone else's program never follows this report
+      if (xs.length) { var hadX = exHasContent(), u2 = clearForClient('ex'); if (hadX) undos.push(u2); }
+      if (who.key && clients.clients[who.key]) homeClientOpen(t, { key: who.key, name: who.name }, false);   // details and last time's results (draws the page)
+      else { if (who.name) state[t].meta.name = who.name; openTool(t, null); }
+      if (xs.length) {                                 // the program prints after this report (as Add an exercise program does)
+        var x = state.ex, by = NAME_FIELDS[t] ? state[t].meta[NAME_FIELDS[t]] : '';
+        x.link = t;
+        followReport();
+        if (blank(x.meta.practitioner) && !blank(by)) x.meta.practitioner = clean1(by);
+        state.exPage = 'builder';
+        if (a) x.ask = a;
+        saveDraft();
+      }
+      startScan(rs, { tool: t, pair: !!xs.length });
+      if (xs.length) startScan(xs, { tool: 'ex', ask: a });
+      refresh();                                       // the summary: "Reading the exercise page…"
+    }
+    pmReset();
+    if (undos.length) toast('Cleared the earlier entries' + (who.name ? ' for ' + who.name : ''), { label: 'Undo', run: function () { undos.slice().reverse().forEach(function (u) { u(); }); } });
   }
   // a page opened from Home (a tile, a Continue card, a tab), as it was left
   function openTool(t, page) {
@@ -3150,9 +3448,13 @@
     }
     var cp = e.target.closest('[data-cp]');
     if (cp) { onClientPageClick(cp.dataset.cp); return; }   // v39
+    var pmb = e.target.closest('[data-pm]');
+    if (pmb && pmb.tagName !== 'LABEL') { onPhotoModeClick(pmb.dataset.pm); return; }   // v41
     var el = e.target.closest('[data-home]');
     if (!el || el.tagName === 'LABEL') return;           // the photo tile opens its picker by itself
     var k = el.dataset.home, part = k.split(':');
+    if (part[0] === 'hub') { openHomeSub(part[1]); return; }   // v41: one of Home's three buttons
+    if (k === 'back') { closeHomeSub(); return; }
     if (part[0] === 'check') { openClientPage(k.slice(6), 'log'); return; }   // v40: a check-in: their log
     if (part[0] === 'seen') { markSeen(k.slice(5)); return; }
     if (k === 'ckall') { ckAll = !ckAll; renderCheckins(); focusQuiet(els.homeSec.querySelector('[data-home="ckall"]')); return; }
@@ -3270,6 +3572,7 @@
   function openClientPage(key, view) {                 // v40: view 'log': their training log
     if (!clients.clients[key]) return;
     if (!homeView) showHome(false);
+    setHomeSub('');                                    // v41
     var box = $('homeSugg'), find = $('homeSearch');
     if (box) { box.hidden = true; box.innerHTML = ''; }
     if (find) find.value = '';                         // the name searched for has been found
@@ -3810,9 +4113,14 @@
   }
   function wireHome() {
     els.homeSec.addEventListener('click', onHomeClick);
-    els.homeSec.addEventListener('change', function (e) { if (e.target.matches && e.target.matches('input[data-scan-mode]')) onHomeScanPick(e.target); });
-    els.homeSec.addEventListener('input', function (e) { if (e.target.id === 'homeSearch') homeSuggest(); });
+    els.homeSec.addEventListener('change', function (e) {
+      if (!e.target.matches) return;
+      if (e.target.matches('input[data-scan-mode]')) onHomeScanPick(e.target);
+      else if (e.target.matches('input[data-pm-files]')) onPhotoModeFiles(e.target);   // v41
+    });
+    els.homeSec.addEventListener('input', function (e) { if (e.target.id === 'homeSearch') homeSuggest(); else if (e.target.id === 'pmFind') pmSuggest(); });
     els.homeSec.addEventListener('keydown', function (e) {
+      if (e.target.id === 'pmFind' && e.key === 'Enter') { e.preventDefault(); var first = $('pmSugg') && $('pmSugg').querySelector('button'); if (first) first.click(); return; }   // v41
       if (e.target.id === 'homeSearch') onHomeSearchKey(e);
       else if (e.target.closest && e.target.closest('#homeSugg')) onHomeSuggKey(e);
     });
@@ -3829,6 +4137,7 @@
     els.brandHome.addEventListener('click', function () {
       if (document.documentElement.classList.contains('signed-out') || !state) return;
       if (homeView && clientPage) closeClientPage();   // v39: from a client's page, Home itself
+      else if (homeView && homeSub) closeHomeSub();    // v41: and from a button's page
       else if (homeView) window.scrollTo(0, 0); else showHome(true);
     });
   }
@@ -3845,9 +4154,16 @@
   // Screening, opens the tool picker so the other tools are one tap away
   // v15: the Exercises tab works the same way: from Screening it returns to the Exercises page last in use; a second
   // tap, already there, scrolls to the top and opens its page picker
+  // v41: from Home (or one of its pages) a tab opens its section's page (choose a battery; an Exercises page), as Home's
+  // buttons do; the tab of the page in use opens it too (until v40 the heading's menu); the other section's tab still goes
+  // straight back to where it was left (one tap between a report and its program)
   function onSectionTab(section) {
-    if (section === 'home') { if (homeView && clientPage) closeClientPage(); else if (homeView) window.scrollTo(0, 0); else showHome(true); return; }   // v30; v39: a client's page goes back to Home
-    if (homeView) { openTool(section === 'ex' ? 'ex' : state.screenTool, section === 'ex' ? state.exPage : null); return; }   // v30: where it was left
+    if (section === 'home') {                          // v30; v39: a client's page goes back to Home; v41: so does a button's page
+      if (homeView && clientPage) closeClientPage(); else if (homeView && homeSub) closeHomeSub(); else if (homeView) window.scrollTo(0, 0); else showHome(true);
+      return;
+    }
+    var sub = section === 'ex' ? 'ex' : 'screening';
+    if (homeView) { if (homeSub === sub && !clientPage) window.scrollTo(0, 0); else openHomeSub(sub); return; }
     var here = section === 'ex' ? state.tool === 'ex' : state.tool !== 'ex';
     if (!here) {
       closePick(false);
@@ -3855,8 +4171,7 @@
       if (section === 'ex') exPageOpened();
       return;
     }
-    window.scrollTo(0, 0);
-    openPick(false);
+    openHomeSub(sub);
   }
   // an Exercises page chosen from the heading's menu (choosing the one showing just closes the menu)
   function pickPage(page) {
@@ -4038,7 +4353,7 @@
     // an AI draft still on its way belongs to the athlete just cleared: drop it when it arrives
     aiGen++;
     aiBusy = null; interpMsg = { tool: null, kind: '', text: '' }; interpUndo = null;
-    scanBusy = null; scanInfo = null; scanGen++; suggestBusy = false;
+    scanBusy = {}; scanInfo = {}; TOOLS.concat(['ex']).forEach(bumpScan); suggestBusy = false;   // v41: every lane
     releaseWake();                                     // nothing entered now: the screen may sleep again
     // drop the last report built (it holds the athlete's details) and its preview, and one still being built (v16)
     reportGen++;
@@ -4239,7 +4554,10 @@
   // results), or while linked, Exercise program included (a tap opens it in the builder)
   function exLinkHtml(t) {
     if (linkedTool() === t) {
-      var n = exCounts().exercises;
+      // v41: Photo mode's exercise page, still being read, or not read (the builder's message says why)
+      if (scanBusy.ex) return '<p class="quiet ex-flag busy" role="status">' + EX_ICON + 'Reading the exercise page…</p>';
+      var n = exCounts().exercises, xi = scanInfo.ex;
+      if (!n && xi && !xi.ai && (xi.kind === 'error' || xi.kind === 'empty')) return '<button type="button" class="quiet ex-flag stale" data-action="goto-program">' + EX_ICON + 'The exercise page wasn’t read: see why</button>';
       // v20: '· 4 exercises' kept together when the line wraps on a narrow phone
       return n ? '<button type="button" class="quiet ex-flag ok" data-action="goto-program"><span>✓ Exercise program included <span class="nw">· ' + n + (n === 1 ? ' exercise' : ' exercises') + '</span></span></button>'
         : '<button type="button" class="quiet ex-flag stale" data-action="goto-program">' + EX_ICON + 'Exercise program: no exercises yet</button>';
@@ -4455,7 +4773,13 @@
   // only copies what is written: it never calculates. The readings go straight into the boxes, highlighted
   // until they are checked or edited, with an Undo. Names on the paper are never read back.
   var CAMERA = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h3l2-3h6l2 3h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="3.5"/></svg>';
-  var scanBusy = null, scanGen = 0, scanInfo = null;
+  // v41: one lane per page (each screening tool, and 'ex' for the program and Suggest), so Photo mode can read the results
+  // and the exercise page at the same time: scanBusy[t] while that page's photos are being read, scanGen[t] counts that
+  // lane's cancellations, scanInfo[t] is that page's message (until v40 one of each for the whole app)
+  var scanBusy = {}, scanGen = {}, scanInfo = {};
+  function scanGenOf(t) { return scanGen[t] || 0; }
+  function bumpScan(t) { scanGen[t] = scanGenOf(t) + 1; }
+  function anyScanBusy() { return Object.keys(scanBusy).some(function (k) { return scanBusy[k]; }); }
   var SCAN_DEFAULT = {
     effort: 'medium', max_tokens: 8000, timeout_s: 120, max_edge: 2000, max_photos: 6,
     system: [
@@ -4598,12 +4922,14 @@
   }
   // opts (v30): { append: true } adds a scanned exercise page after the program's rows (Photo to handout › Add to it on Home)
   // v33: { ask: answers } the clinician's answers from the form after the photos (Exercises only; none when adding pages)
+  // v41: { tool } the page whose photos these are (Photo mode reads a battery's and the exercise page's together; else the
+  // page in use); { pair: true } the results of Photo mode's Results + exercises (the message says both are being read)
   function startScan(files, opts) {
-    var t = state.tool, exm = t === 'ex', append = exm && !!(opts && opts.append);   // exm: the Exercises tab's own prompt, schema and apply step
+    var t = opts && opts.tool ? opts.tool : state.tool, exm = t === 'ex', append = exm && !!(opts && opts.append);   // exm: the Exercises tab's own prompt, schema and apply step
     var ask = exm && !append && opts && askGiven(opts.ask) ? tidyAsk(opts.ask) : null;
-    if (!files.length || scanBusy || (exm && suggestBusy)) return;
+    if (!files.length || scanBusy[t] || (exm && suggestBusy)) return;
     var cfg = exm ? exScanCfg() : scanCfg();
-    function fail(msg) { scanInfo = { tool: t, kind: 'error', text: msg }; renderScanBar(); }
+    function fail(msg) { scanInfo[t] = { tool: t, kind: 'error', text: msg }; renderScanBar(); }
     if (!DATA.ai || !cfg.model) return fail('The AI settings file (interpretation.json) didn’t load. Reopen the app while online.');
     var photos = files.filter(function (f) { return !f.type || f.type.indexOf('image/') === 0; });
     if (!photos.length) return fail(exm ? 'That file isn’t a photo. Choose a photo of the exercise page.' : 'That file isn’t a photo. Choose a photo of your notes.');
@@ -4616,12 +4942,14 @@
     if (navigator.onLine === false) return fail(exm ? 'No internet connection. Connect to scan the exercise page, or type the exercises in.' : 'No internet connection. Connect to scan your notes, or type the results in.');
     var max = cfg.max_photos || 6, extra = photos.length > max ? photos.length - max : 0;
     photos = photos.slice(0, max);
-    var gen = scanGen, list = exm ? null : scanList(t), nPhotos = photos.length;
-    scanBusy = t;
-    scanInfo = { tool: t, kind: 'busy', text: 'Reading ' + (nPhotos === 1 ? (exm ? 'the exercise page' : 'your notes') : nPhotos + ' photos') + '… this can take up to a minute.' };
+    var gen = scanGenOf(t), list = exm ? null : scanList(t), nPhotos = photos.length;
+    scanBusy[t] = true;
+    scanInfo[t] = { tool: t, kind: 'busy', text: opts && opts.pair
+      ? 'Reading the results (' + (nPhotos === 1 ? '1 photo' : nPhotos + ' photos') + ') and the exercise page… this can take up to a minute.'
+      : 'Reading ' + (nPhotos === 1 ? (exm ? 'the exercise page' : 'your notes') : nPhotos + ' photos') + '… this can take up to a minute.' };
     renderScanBar();
     prepareAll(photos, cfg.max_edge || 2000).then(function (images) {
-      if (gen !== scanGen) throw null;
+      if (gen !== scanGenOf(t)) throw null;
       var content = [];
       images.forEach(function (im, i) {
         if (images.length > 1) content.push({ type: 'text', text: 'Photo ' + (i + 1) + ':' });
@@ -4637,26 +4965,28 @@
       if (cfg.effort) body.output_config.effort = cfg.effort;
       return claudeRequest(aiKey(), body, cfg.endpoint, cfg.timeout_s || 120, 'read the photo');
     }).then(function (j) {
-      if (gen !== scanGen) return;
+      if (gen !== scanGenOf(t)) return;
       if (j.stop_reason === 'max_tokens') throw new Error('There was too much to read in one go. Try fewer photos at a time.');
       if (j.stop_reason === 'refusal') throw new Error('Claude couldn’t read these notes. Try a clearer photo.');
       var out;
       try { out = JSON.parse(replyText(j)); } catch (e) { throw new Error('Claude’s answer couldn’t be read. Try again.'); }
       if (exm) applyExScan(out, nPhotos, append, ask); else applyScan(t, out, list);
-      if (extra) scanInfo.unclear.unshift('Only the first ' + max + ' photos were read (' + extra + (extra === 1 ? ' more was' : ' more were') + ' left out). Scan the rest separately.');
+      if (extra && scanInfo[t] && scanInfo[t].unclear) scanInfo[t].unclear.unshift('Only the first ' + max + ' photos were read (' + extra + (extra === 1 ? ' more was' : ' more were') + ' left out). Scan the rest separately.');
     }).catch(function (err) {
-      if (gen !== scanGen || err === null) return;
-      scanInfo = { tool: t, kind: 'error', text: err && err.message ? err.message : 'Something went wrong reading the photo. Try again.' };
+      if (gen !== scanGenOf(t) || err === null) return;
+      scanInfo[t] = { tool: t, kind: 'error', text: err && err.message ? err.message : 'Something went wrong reading the photo. Try again.' };
     }).then(function () {
-      if (gen !== scanGen) return;
-      scanBusy = null;
+      if (gen !== scanGenOf(t)) return;
+      delete scanBusy[t];
       // results filled in: the details card folds into the strip (v11), the scan's message showing under it
-      var filled = !!(scanInfo && scanInfo.tool === t && scanInfo.undo && (exm || scanInfo.kind === 'done'));
-      if (state.tool === t && scanInfo && scanInfo.undo) {
+      var info = scanInfo[t], filled = !!(info && info.undo && (exm || info.kind === 'done'));
+      if (state.tool === t && info && info.undo) {
         if (exm) { showExScan(); if (filled) foldNow(t, false); }
         else if (scanOffPage(t)) { if (filled) foldBeforeRender(t); render(); }   // a value for a section left out under Tests today
         else { showFilled(t); retest.tool = null; refresh(); applyScanMarks(); if (filled) foldNow(t, false); }
       } else if (filled) foldBeforeRender(t);          // read while on another tab: folded there for when it's opened
+      // v41: the exercise page read while its report is on screen (Photo mode): the report's summary says how it went
+      if (exm && state.tool !== 'ex' && !homeView && TOOLS.indexOf(state.tool) >= 0) refresh();
       renderScanBar();
       var bar = $('scanBar');
       if (bar && !bar.hidden && bar.scrollIntoView && state.tool === t) {
@@ -4666,7 +4996,7 @@
     });
   }
   function scanOffPage(t) {                            // a box the scan filled isn't on the page (its section isn't drawn)
-    return Object.keys(scanInfo.undo.put).some(function (mk) {
+    return Object.keys(scanInfo[t].undo.put).some(function (mk) {
       var i = mk.lastIndexOf('|'), key = mk.slice(0, i);
       return key !== 'meta' && !markEl(t, key, mk.slice(i + 1));
     });
@@ -4743,7 +5073,7 @@
     var keys = Object.keys(undo.put), n = keys.filter(function (k) { return k.indexOf('meta|') !== 0; }).length;
     var unclear = (out && Array.isArray(out.unclear) ? out.unclear : []).map(function (x) { return String(x).trim(); }).filter(Boolean).concat(notes);
     if (added.length) { unclear.unshift('Added to the battery: ' + added.join(', ') + '.'); fillCustomPrevious(); }   // v36: and their previous results, for a loaded client
-    scanInfo = {
+    scanInfo[t] = {
       tool: t, kind: n ? 'done' : 'empty', n: n, unclear: unclear.slice(0, 12), undo: keys.length ? undo : null,
       date: 'meta|date' in undo.put, mass: 'meta|mass' in undo.put
     };
@@ -4751,7 +5081,7 @@
   // Undo puts back what each box held before the scan, except boxes changed by hand since
   function undoScan() {
     if (state.tool === 'ex') { undoExScan(); return; }
-    var t = state.tool, u = scanInfo && scanInfo.tool === t && scanInfo.undo;
+    var t = state.tool, u = scanInfo[t] && scanInfo[t].undo;
     if (!u) return;
     var s = state[t], kept = 0;
     Object.keys(u.put).forEach(function (mk) {
@@ -4769,7 +5099,7 @@
       }); });
       s.battery = s.battery.filter(function (it) { var k = batteryKey(it); return u.added.indexOf(k) < 0 || held[k]; });
     }
-    scanInfo = null;
+    delete scanInfo[t];
     render();
     toast(kept ? 'Scan undone. ' + kept + (kept === 1 ? ' box you changed was' : ' boxes you changed were') + ' kept.' : 'Scan undone');
   }
@@ -4782,7 +5112,7 @@
   }
   // show the scanned values in the boxes on screen without rebuilding the page (keeps the keyboard where it is)
   function showFilled(t) {
-    Object.keys(scanInfo.undo.put).forEach(function (mk) {
+    Object.keys(scanInfo[t].undo.put).forEach(function (mk) {
       var i = mk.lastIndexOf('|'), key = mk.slice(0, i), f = mk.slice(i + 1), el = markEl(t, key, f);
       if (!el) return;
       if (f === 'side') {
@@ -4819,26 +5149,26 @@
       (info.extra ? ' Claude added ' + info.extra + (info.extra === 1 ? ' exercise' : ' exercises') + ' you asked for (marked under ' + (info.extra === 1 ? 'it' : 'them') + ').' : '');
   }
   function renderScanBar() {
-    var bar = $('scanBar'), btn = $('scanBtn'), t = state.tool;
+    var bar = $('scanBar'), btn = $('scanBtn'), t = state.tool, busy = !!scanBusy[t];   // v41: this page's own photos
     if (btn) {
-      btn.classList.toggle('busy', !!scanBusy);
-      btn.setAttribute('aria-disabled', String(!!scanBusy));
-      btn.querySelector('[data-label]').textContent = scanBusy ? 'Reading…' : scanLabel(t);
+      btn.classList.toggle('busy', busy);
+      btn.setAttribute('aria-disabled', String(busy));
+      btn.querySelector('[data-label]').textContent = busy ? 'Reading…' : scanLabel(t);
       var inp = $('scanFiles');
-      if (inp) inp.disabled = !!scanBusy;
+      if (inp) inp.disabled = busy;
     }
     var ib = $('importBtn');                           // v18: the Import results button says it's reading too
-    if (ib) { ib.classList.toggle('busy', !!scanBusy); ib.querySelector('[data-label]').innerHTML = scanBusy ? 'Reading…' : IMPORT_LABEL; }
+    if (ib) { ib.classList.toggle('busy', busy); ib.querySelector('[data-label]').innerHTML = busy ? 'Reading…' : IMPORT_LABEL; }
     var sc = $('stripScan');                           // the strip's camera (v11) says the same
     if (sc) {
-      sc.classList.toggle('busy', !!scanBusy);
-      sc.setAttribute('aria-disabled', String(!!scanBusy));
-      sc.title = scanBusy ? 'Reading…' : (t === 'ex' ? 'Scan exercise page' : 'Scan notes');
+      sc.classList.toggle('busy', busy);
+      sc.setAttribute('aria-disabled', String(busy));
+      sc.title = busy ? 'Reading…' : (t === 'ex' ? 'Scan exercise page' : 'Scan notes');
     }
     var sg = $('exSuggest');                           // v21: Suggest from the report says it's working
     if (sg) { sg.classList.toggle('busy', suggestBusy); sg.setAttribute('aria-disabled', String(suggestBusy)); sg.querySelector('[data-label]').textContent = suggestBusy ? 'Suggesting…' : 'Suggest from the report'; }
     if (!bar) return;
-    var info = scanInfo && scanInfo.tool === t ? scanInfo : null;
+    var info = scanInfo[t] || null;
     if (!info) { bar.hidden = true; bar.innerHTML = ''; bar.className = 'scan-bar'; return; }
     bar.hidden = false;
     bar.className = 'scan-bar ' + info.kind + (info.ai ? ' ai' : '');
@@ -4955,7 +5285,7 @@
     var cfg = exScanCfg(), photos = files.filter(function (f) { return !f.type || f.type.indexOf('image/') === 0; });
     if (!files.length) return;
     // nothing to ask when the page can't be read now: the scan says why (busy, no settings file, not a photo, offline)
-    if (scanBusy || suggestBusy || !DATA.ai || !cfg.model || !photos.length || navigator.onLine === false) { go(null); return; }
+    if (scanBusy.ex || suggestBusy || !DATA.ai || !cfg.model || !photos.length || navigator.onLine === false) { go(null); return; }
     if (!aiKey()) {
       openAiSettings(function () { openPhotoAsk(files, go, a); }, 'To read photos of a handwritten exercise page, the app needs a Claude API key. ' + ONCE_NOTE());
       return;
@@ -5931,7 +6261,7 @@
       rows.forEach(function (r) { found.push({ row: r }); n++; });
     });
     var unclear = (out && Array.isArray(out.unclear) ? out.unclear : []).map(function (u) { return clean1(u); }).filter(Boolean).slice(0, 12);
-    if (!n) { scanInfo = { tool: 'ex', kind: 'empty', n: 0, photos: photos, unclear: unclear, undo: null }; return; }
+    if (!n) { scanInfo.ex = { tool: 'ex', kind: 'empty', n: 0, photos: photos, unclear: unclear, undo: null }; return; }
     var before = exSnap();
     var marks = {}, lib = libList(), matched = 0;
     var rows = found.map(function (f) {
@@ -5962,7 +6292,7 @@
       if (ask.weeks) { x.weeks = exWeeks(ask.weeks); autoReview(); wrote.push('a ' + x.weeks + '-week block'); }
     }
     x.scanned = marks;
-    scanInfo = { tool: 'ex', kind: 'done', n: n, photos: photos, unclear: unclear, undo: before, matched: matched, added: added,
+    scanInfo.ex = { tool: 'ex', kind: 'done', n: n, photos: photos, unclear: unclear, undo: before, matched: matched, added: added,
       asked: !!ask && !added, wrote: wrote, weeks: ask && !added ? ask.weeks : '', extra: extra };
   }
   // the program as it is now (for an Undo), and putting it back unless Clear all replaced the program since
@@ -5990,12 +6320,12 @@
     renderExTable();
   }
   function undoExScan() {
-    var u = scanInfo && scanInfo.tool === 'ex' && scanInfo.undo, x = state.ex, ai = !!(scanInfo && scanInfo.ai);
+    var u = scanInfo.ex && scanInfo.ex.undo, x = state.ex, ai = !!(scanInfo.ex && scanInfo.ex.ai);
     if (!u) return;
     x.title = u.title; x.instructions = u.instructions; x.rationale = exStr(u.rationale); x.items = u.items; x.scanned = u.scanned;
     exCoverBack(x, u);
     x.seq = Math.max(x.seq, u.seq);                    // ids are never reused
-    scanInfo = null;
+    delete scanInfo.ex;
     render();
     toast(ai ? 'Suggestions undone' : 'Scan undone');   // v21
   }
@@ -6205,18 +6535,18 @@
   // v23: Suggest from the report asks about the person and the setting first (a small dialog; the choices are kept with the
   // program), then sends the request
   function startExSuggest() {
-    if (suggestBusy || scanBusy) return;
+    if (suggestBusy || anyScanBusy()) return;          // v41: not while photos are being read (the report's or the program's)
     var lt = suggestTool();
-    function fail(msg) { scanInfo = { tool: 'ex', kind: 'error', ai: true, text: msg }; renderScanBar(); }
+    function fail(msg) { scanInfo.ex = { tool: 'ex', kind: 'error', ai: true, text: msg }; renderScanBar(); }
     if (!lt) return;
     var cfg = exSuggestCfg(), c = computeFor(lt), why = blocker(c, lt);
     if (why) return fail(TOOL_NAMES[lt] + ' report: ' + why.charAt(0).toLowerCase() + why.slice(1) + ' Then suggest again.');
     if (!DATA.ai || !cfg.model) return fail('The AI settings file (interpretation.json) didn’t load. Reopen the app while online.');
     if (!aiKey()) { openAiSettings(function () { if (state.tool === 'ex') startExSuggest(); }, 'To suggest exercises from a report, the app needs a Claude API key. ' + ONCE_NOTE()); return; }
     if (navigator.onLine === false) return fail('No internet connection. Connect to suggest exercises, or add them from the library.');
-    var gen = scanGen;
+    var gen = scanGenOf('ex');
     guidesReady.then(function () {                     // v24: the guide library is usually long loaded; if not, the dialog waits for it
-      if (gen !== scanGen || state.tool !== 'ex' || suggestBusy || scanBusy || suggestTool() !== lt) return;
+      if (gen !== scanGenOf('ex') || state.tool !== 'ex' || suggestBusy || anyScanBusy() || suggestTool() !== lt) return;
       renderPlanDialog(lt);
       openModal(els.suggestDialog, els.suggestGo);
     });
@@ -6301,14 +6631,14 @@
   }
   function runExSuggest() {
     closeModal(false);
-    if (suggestBusy || scanBusy) return;
+    if (suggestBusy || anyScanBusy()) return;
     var lt = suggestTool(), x = state.ex;
     if (!lt || !aiKey()) return;
     var cfg = exSuggestCfg(), c = computeFor(lt);
     if (blocker(c, lt)) return;
-    var gen = scanGen, max = perDay(cfg);           // v26: per day
+    var gen = scanGenOf('ex'), max = perDay(cfg);   // v26: per day
     suggestBusy = true;
-    scanInfo = { tool: 'ex', kind: 'busy', ai: true, text: 'Choosing exercises from the ' + TOOL_NAMES[lt] + ' report… this can take two or three minutes.' };
+    scanInfo.ex = { tool: 'ex', kind: 'busy', ai: true, text: 'Choosing exercises from the ' + TOOL_NAMES[lt] + ' report… this can take two or three minutes.' };
     renderScanBar();
     var ttl = cacheTtl(cfg), mark = ttl === 'off' ? null : (ttl === '1h' ? { type: 'ephemeral', ttl: '1h' } : { type: 'ephemeral' });
     var blocks = exSuggestParts(lt, c, max, cfg).map(function (t, i) {   // v29: the documents (cached), then this report
@@ -6325,28 +6655,28 @@
     if (cfg.effort) body.output_config.effort = cfg.effort;
     focusQuiet($('exSuggest'));
     claudeRequest(aiKey(), body, cfg.endpoint, cfg.timeout_s || 480, 'suggest exercises').then(function (j) {
-      if (gen !== scanGen || state.ex !== x) return;
+      if (gen !== scanGenOf('ex') || state.ex !== x) return;
       if (j.stop_reason === 'max_tokens') throw new Error('Claude’s answer was cut short. Try again.');
       if (j.stop_reason === 'refusal') throw new Error('Claude didn’t suggest exercises for these results. Add them from the library instead.');
       var out;
       try { out = JSON.parse(replyText(j)); } catch (e) { throw new Error('Claude’s answer couldn’t be read. Try again.'); }
       applyExSuggest(out, lt, max);
-      if (scanInfo && scanInfo.tool === 'ex' && scanInfo.ai) { scanInfo.cents = usageCents(cfg, j.usage); scanInfo.reused = !!(j.usage && +j.usage.cache_read_input_tokens > 0); }   // v28: the bar says what it cost; v29: and whether the guides came from the cache
+      var si = scanInfo.ex; if (si && si.ai) { si.cents = usageCents(cfg, j.usage); si.reused = !!(j.usage && +j.usage.cache_read_input_tokens > 0); }   // v28: the bar says what it cost; v29: and whether the guides came from the cache
     }).catch(function (err) {
-      if (gen !== scanGen || state.ex !== x) return;
-      scanInfo = { tool: 'ex', kind: 'error', ai: true, text: err && err.message ? err.message : 'Something went wrong suggesting exercises. Try again.' };
+      if (gen !== scanGenOf('ex') || state.ex !== x) return;
+      scanInfo.ex = { tool: 'ex', kind: 'error', ai: true, text: err && err.message ? err.message : 'Something went wrong suggesting exercises. Try again.' };
     }).then(function () {
-      if (gen !== scanGen) return;
+      if (gen !== scanGenOf('ex')) return;
       suggestBusy = false;
       if (state.tool === 'ex' && state.exPage === 'builder') {
-        if (scanInfo && scanInfo.undo) { renderExTable(); foldNow('ex', false); }
+        if (scanInfo.ex && scanInfo.ex.undo) { renderExTable(); foldNow('ex', false); }
         renderScanBar();
         var bar = $('scanBar');
         if (bar && !bar.hidden && bar.scrollIntoView) {
           var r = bar.getBoundingClientRect(), top = appbarH + (state.ex.cardOpen === false ? 48 : 0);
           if (r.top < top || r.bottom > window.innerHeight) bar.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
         }
-      } else if (scanInfo && scanInfo.undo) { foldBeforeRender('ex'); saveDraft(); }   // suggested while on another page: folded there for when it's opened
+      } else if (scanInfo.ex && scanInfo.ex.undo) { foldBeforeRender('ex'); saveDraft(); }   // suggested while on another page: folded there for when it's opened
     });
   }
   // the suggested rows into the program: library rows linked, Claude's own unlinked (v22), all marked to check; after the
@@ -6383,7 +6713,7 @@
     });
     var notes = (out && Array.isArray(out.notes) ? out.notes : []).map(function (u) { return clean1(u); }).filter(Boolean).slice(0, 8);
     if (dropped) notes.push(dropped + (dropped === 1 ? ' suggestion wasn’t' : ' suggestions weren’t') + ' in the library and ' + (dropped === 1 ? 'was' : 'were') + ' left out.');
-    if (!n) { scanInfo = { tool: 'ex', kind: 'empty', ai: true, from: lt, unclear: notes, undo: null }; return; }
+    if (!n) { scanInfo.ex = { tool: 'ex', kind: 'empty', ai: true, from: lt, unclear: notes, undo: null }; return; }
     var before = exSnap(), added = x.items.some(function (r) { return r.kind === 'ex' && !blank(r.name); });
     found.forEach(function (f) {
       var it = f.heading ? newExSection(f.heading) : newExRow(f.row);
@@ -6400,7 +6730,7 @@
     var why = exTidy(out.why_this_plan, 'reason');
     if (why && (blank(x.reason) || x.scanned.reason)) { x.reason = why; x.scanned.reason = true; }
     if (blank(x.weeks)) { x.weeks = exWeeks(tidyPlan(x.plan).weeks); autoReview(); }
-    scanInfo = { tool: 'ex', kind: 'done', ai: true, from: lt, n: n, own: own, added: added, unclear: notes, undo: before };
+    scanInfo.ex = { tool: 'ex', kind: 'done', ai: true, from: lt, n: n, own: own, added: added, unclear: notes, undo: before };
   }
 
   // ------------------------------------------------------------------ exercise library (v15)
@@ -7604,7 +7934,7 @@
       x.reason = '';                                   // v32: and the note telling the client why the old one
       x.items = rows;
       x.scanned = {};
-      if (scanInfo && scanInfo.tool === 'ex') scanInfo = null;   // a scan's Undo no longer applies
+      delete scanInfo.ex;                              // a scan's Undo no longer applies
     }
     foldBeforeRender('ex');
     if (state.exPage !== 'builder') { state.exPage = 'builder'; window.scrollTo(0, 0); }
@@ -7950,7 +8280,7 @@
     x.items = progItems(p.items).map(function (it) { return it.kind === 'section' ? newExSection(it.heading) : newExRow(it); });
     if (p.plan) x.plan = tidyPlan(p.plan);             // v23: the client's last plan (sessions a week, setting, experience, block)
     x.scanned = {};
-    if (scanInfo && scanInfo.tool === 'ex') scanInfo = null;   // a scan's Undo no longer applies to this program
+    delete scanInfo.ex;                                // a scan's Undo no longer applies to this program
     exLoaded = { key: key, date: last.date };
     foldBeforeRender('ex');
     render();
@@ -8542,7 +8872,7 @@
       if (!state) return;
       if (openModalEl === els.clientsDialog) renderClientsList();
       refresh();
-      if (homeView && clientPage) renderHome();        // v39: a client's page shows what another device saved
+      if (homeView && (clientPage || homeSub)) renderHome();   // v39: a client's page shows what another device saved; v41: a button's page too (redrawn only if it changed)
       else if (homeView) renderCheckins();             // v40: and Home its check-ins
     } else if (evt.kind === 'status') {
       renderCloudBar();
