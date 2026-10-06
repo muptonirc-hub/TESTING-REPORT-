@@ -1089,6 +1089,174 @@
   }
 
 
+  // ------------------------------------------------------------------ v42: Ankle-GO
+  // The total out of 25 and its band (the developers' cut-offs, decision support), each item's points on the injured leg,
+  // then both legs side by side (each reach as % of that leg's length) and the progress table. Sources in the footer.
+  var AGO_COL = { Green: C.G, Amber: C.A, Red: C.R };
+  function agoV(x, unit) {
+    if (x === null || x === undefined) return '—';
+    var n = String(Math.round(x * 100) / 100);       // as typed: 9.5 s (not 9.50)
+    return unit === '%' ? n + '%' : (unit === 'errors' ? n + (x === 1 ? ' error' : ' errors') : n + (unit ? ' ' + unit : ''));
+  }
+  function agoPts(p, max) { return p + ' of ' + max + (max === 1 ? ' pt' : ' pts'); }
+  function agoScore(doc, d) {
+    var g = d.ago, b = g.band, padX = px(12), padY = px(10), numW = px(118), textX = ML + padX + numW, textW = CW - padX * 2 - numW;
+    var chipO = { size: 10, padX: 8, padY: 2, icon: b ? b.look : null };
+    var body = b ? b.text : (g.tested ? 'The band shows once every item is in (' + g.done + ' of ' + g.items.length + ' items complete so far).' : 'No items tested yet.');
+    var lines = wrap(body, b ? 'regular' : 'italic', fs(9.5), textW);
+    var extra = [];
+    if (g.noAppr && g.noAppr.length) extra.push('Apprehension not recorded: ' + g.noAppr.join(', ') + '.');
+    if (g.prev) extra.push('Previous score ' + E.fmt(g.prev.value) + ' of ' + g.max + ' on ' + E.displayIso(g.prev.date) + (g.change ? ' · ' + E.changeLabel(g.change, g.change_kind) + ' points' : '') + '.');
+    var exL = [];
+    extra.forEach(function (t) { exL = exL.concat(wrap(t, 'bold', fs(9), textW)); });
+    var chipH = b ? lineH(10) + px(4) + px(6) : 0;
+    var h = Math.max(px(70), padY * 2 + chipH + lines.length * lineH(9.5, 1.35) + (exL.length ? px(5) + exL.length * lineH(9) : 0));
+    section(doc, 'Ankle-GO score', { keep: h + px(4), right: g.total + ' of ' + g.max + (g.complete ? '' : ' so far') });
+    var top = doc.y + px(2), look = b ? AGO_COL[b.look] : C.NA;
+    doc.rect(ML, top, CW, h, { r: px(6), fill: '#F5F7F9', stroke: C.LINE, lw: px(1) });
+    doc.rect(ML, top, px(5), h, { r: [px(6), 0, 0, px(6)], fill: look });
+    var nx = ML + padX + px(4);
+    var tw = doc.text(g.tested ? String(g.total) : '–', nx, baseline(top + h / 2 - lineH(34) / 2 - px(4), 34), { style: 'bold', size: fs(34), color: C.BLACK });
+    doc.text('of ' + g.max, nx + tw + px(4), baseline(top + h / 2 - lineH(34) / 2 - px(4) + lineH(34) - lineH(12) - px(4), 12), { style: 'bold', size: fs(12), color: C.MUTE });
+    doc.text(g.complete ? 'Ankle-GO' : 'so far', nx, baseline(top + h / 2 + lineH(34) / 2 - px(4), 9), { style: 'bold', size: fs(9), color: C.MUTE, cs: px(0.4) });
+    var y = top + padY;
+    if (b) { chip(doc, b.label + ' · ' + b.short, textX, y + (lineH(10) + px(4)) / 2, look, chipO); y += chipH; }
+    lines.forEach(function (l) { doc.text(l, textX, baseline(y, 9.5), { style: b ? 'regular' : 'italic', size: fs(9.5), color: C.INK }); y += lineH(9.5, 1.35); });
+    if (exL.length) y += px(5);
+    exL.forEach(function (l) { doc.text(l, textX, baseline(y, 9), { style: 'bold', size: fs(9), color: C.INK }); y += lineH(9); });
+    doc.y = top + h + px(2);
+  }
+  function agoItems(doc, d, tailH) {                   // ITEM & RULE | INJURED LEG | POINTS
+    var g = d.ago, pad = px(6), gap = px(12), c3 = px(96), c2 = px(150), c1 = CW - 2 * pad - c2 - c3 - 2 * gap;
+    var x1 = ML + pad, x2 = x1 + c1 + gap, x3 = ML + CW - pad;
+    var bandH = lineH(9.5) + px(6), headH = px(4) + lineH(7.5) + px(3);
+    function head() {
+      var top = doc.y;
+      doc.rect(ML, top, CW, bandH, { r: px(3), fill: C.GBAND });
+      var bl = baseline(top + px(3), 9.5);
+      doc.rect(ML + px(8), bl - px(7), px(7), px(7), { r: px(2), fill: C.BLUE });
+      doc.text('ANKLE-GO ITEMS' + (g.injured ? ' · ' + g.injured.toUpperCase() + ' LEG (INJURED)' : ''), ML + px(8 + 7 + 7), bl, { style: 'bold', size: fs(9.5), color: C.WHITE, cs: px(0.4) });
+      var hy = baseline(top + bandH + px(4), 7.5), o = { style: 'bold', size: fs(7.5), color: C.MUTE, cs: px(0.5) };
+      doc.text('ITEM & HOW IT SCORES', x1, hy, o);
+      doc.text('RESULT', x2, hy, o);
+      doc.text('POINTS', x3, hy, Object.assign({ align: 'right' }, o));
+      doc.y = top + bandH + headH;
+    }
+    var rows = g.items.map(function (it) {
+      var nl = wrap(it.label, 'bold', fs(10), c1), rl = wrap(it.rule, 'regular', fs(8), c1);
+      var unit = it.unit === '%' || /^FAAM|ALR/.test(it.label) ? '%' : it.unit;
+      var sub = it.tested ? [] : ['not tested'];
+      if (it.tested) {
+        it.bonus.forEach(function (b) { sub.push(b.label + ': ' + (b.value === null ? '—' : (b.got ? 'yes' : 'no') + ' (' + agoV(b.value, '%') + ')')); });
+        if (it.appr !== null) sub.push(it.appr === 'No' ? 'No apprehension' : (it.appr === 'Yes' ? 'Apprehension' : 'Apprehension not recorded'));
+      }
+      var sl = [];
+      sub.forEach(function (t) { sl = sl.concat(wrap(t, 'regular', fs(8), c2)); });
+      var h = Math.max(nl.length * lineH(10) + px(2) + rl.length * lineH(8), lineH(11) + (sl.length ? px(2) + sl.length * lineH(8) : 0)) + px(10) + px(1);
+      return { it: it, nl: nl, rl: rl, sl: sl, h: h, unit: unit };
+    });
+    doc.ensure(px(7) + bandH + headH + rows[0].h + px(11));
+    doc.y += px(7);
+    head();
+    rows.forEach(function (R, ri) {
+      if (!doc.fits(R.h + (ri === rows.length - 1 ? tailH : 0))) { doc.newPage(); head(); }
+      var top = doc.y, inner = top + px(5), it = R.it;
+      R.nl.forEach(function (l, i) { doc.text(l, x1, baseline(inner + i * lineH(10), 10), { style: 'bold', size: fs(10), color: C.INK }); });
+      var ry = inner + R.nl.length * lineH(10) + px(2);
+      R.rl.forEach(function (l, i) { doc.text(l, x1, baseline(ry + i * lineH(8), 8), { style: 'regular', size: fs(8), color: C.MUTE }); });
+      if (it.tested) doc.text(agoV(it.value, R.unit), x2, baseline(inner, 11), { style: 'bold', size: fs(11), color: C.BLACK });
+      var sy = inner + (it.tested ? lineH(11) + px(2) : 0);
+      R.sl.forEach(function (l, i) { doc.text(l, x2, baseline(sy + i * lineH(8), 8), { style: 'regular', size: fs(8), color: C.MUTE }); });
+      var midY = inner + lineH(11) / 2;
+      chip(doc, it.tested ? agoPts(it.pts, it.max) : '– of ' + it.max, x3, midY, it.tested ? AGO_COL[it.status] : C.NA, { right: true, size: 9, padX: 7, padY: 1, icon: it.tested ? it.status : 'n/a' });
+      doc.line(ML, top + R.h - px(0.5), ML + CW, top + R.h - px(0.5), { stroke: C.LINE, lw: px(1) });
+      doc.y = top + R.h;
+    });
+  }
+  function agoLegs(doc, d, tailH) {                    // MEASURE | LEFT | RIGHT | INJURED VS OTHER
+    var g = d.ago, inj = g.injured ? g.injured.toLowerCase() : '';
+    var list = [];
+    (d.rows || []).forEach(function (gr) {
+      gr.rows.forEach(function (r) {
+        if (r.kind === 'q') return;
+        var L = r.kind === 'comp' ? r.left : r.rawLeft, Rr = r.kind === 'comp' ? r.right : r.rawRight;
+        if ((L === null || L === undefined) && (Rr === null || Rr === undefined)) return;
+        function cell(sd) {
+          var rawv = sd === 'left' ? r.rawLeft : r.rawRight, sc = sd === 'left' ? r.left : r.right;
+          if (r.kind === 'comp') return { v: agoV(sc, '%'), sub: '' };
+          if (rawv === null || rawv === undefined) return { v: '—', sub: '' };
+          if (r.role === 'reach') return { v: agoV(sc, '%'), sub: agoV(rawv, 'cm') };
+          return { v: agoV(rawv, r.raw), sub: '' };
+        }
+        var diff = '';
+        if (inj && r.role !== 'len') {
+          var a = inj === 'left' ? r.left : r.right, b = inj === 'left' ? r.right : r.left;
+          if (a !== null && a !== undefined && b !== null && b !== undefined) {
+            if (r.raw === 'errors') { var dd = a - b; diff = dd === 0 ? 'same' : (dd > 0 ? '+' : '−') + Math.abs(dd) + (Math.abs(dd) === 1 ? ' error' : ' errors'); }
+            else if (b) {
+              var pct = (a - b) / Math.abs(b) * 100, p = E.pyFixed(Math.abs(pct), 0);
+              diff = p === '0' ? 'level' : p + '% ' + (r.unit === 's' ? (pct > 0 ? 'slower' : 'faster') : (pct < 0 ? 'lower' : 'higher'));
+            }
+          }
+        }
+        list.push({ name: r.name, l: cell('left'), r: cell('right'), diff: diff, role: r.role });
+      });
+    });
+    if (!list.length) return;
+    var pad = px(6), gap = px(10), c2 = px(120), c3 = px(120), c4 = px(150), c1 = CW - 2 * pad - c2 - c3 - c4 - 3 * gap;
+    var x1 = ML + pad, x2 = x1 + c1 + gap, x3 = x2 + c2 + gap, x4 = ML + CW - pad;
+    var headH = px(4) + lineH(7.5) + px(3), rowH = lineH(10) + px(10) + px(1);
+    function head() {
+      var hy = baseline(doc.y + px(4), 7.5), o = { style: 'bold', size: fs(7.5), color: C.MUTE, cs: px(0.5) };
+      doc.text('MEASURE', x1, hy, o);
+      doc.text('LEFT' + (inj === 'left' ? ' (INJURED)' : ''), x2, hy, Object.assign({}, o, inj === 'left' ? { color: C.BLACK } : {}));
+      doc.text('RIGHT' + (inj === 'right' ? ' (INJURED)' : ''), x3, hy, Object.assign({}, o, inj === 'right' ? { color: C.BLACK } : {}));
+      doc.text('INJURED VS OTHER', x4, hy, Object.assign({ align: 'right' }, o));
+      doc.y += headH;
+      doc.line(ML, doc.y - px(0.5), ML + CW, doc.y - px(0.5), { stroke: C.LINE, lw: px(1) });
+    }
+    section(doc, 'Both legs', { keep: headH + rowH * Math.min(3, list.length) + (list.length <= 3 ? tailH : 0) });
+    head();
+    list.forEach(function (r, i) {
+      if (!doc.fits(rowH + (i === list.length - 1 ? tailH : 0))) { doc.newPage(); head(); }
+      var top = doc.y, bl = baseline(top + px(5), 10);
+      doc.text(r.name, x1, bl, { style: 'bold', size: fs(10), color: C.INK });
+      [[r.l, x2, 'left'], [r.r, x3, 'right']].forEach(function (cc) {
+        var w = doc.text(cc[0].v, cc[1], bl, { style: inj === cc[2] ? 'bold' : 'regular', size: fs(10), color: cc[0].v === '—' ? C.MUTE : C.BLACK });
+        if (cc[0].sub) doc.text(cc[0].sub, cc[1] + w + px(6), bl, { style: 'regular', size: fs(8), color: C.MUTE });
+      });
+      doc.text(r.diff || '—', x4, bl, { style: r.diff ? 'bold' : 'regular', size: fs(9), color: r.diff ? C.INK : C.MUTE, align: 'right' });
+      doc.line(ML, top + rowH - px(0.5), ML + CW, top + rowH - px(0.5), { stroke: C.LINE, lw: px(1) });
+      doc.y = top + rowH;
+    });
+    var qs = [];
+    (d.rows || []).forEach(function (gr) { gr.rows.forEach(function (r) { if (r.kind === 'q' && r.total !== null && r.total !== undefined && r.of) qs.push(r.name + ' ' + E.fmt(r.total) + ' of ' + r.of); }); });
+    var note = 'Star excursion reaches as % of leg length (the reach in cm beside it), standing on the leg named.' + (qs.length ? ' Questionnaire totals: ' + qs.join(', ') + '.' : '');
+    wrap(note, 'italic', fs(7.5), CW - px(4)).forEach(function (l) {
+      doc.ensure(lineH(7.5));
+      doc.text(l, ML + px(2), baseline(doc.y + px(3), 7.5), { style: 'italic', size: fs(7.5), color: C.MUTE });
+      doc.y += lineH(7.5);
+    });
+    doc.y += px(3);
+  }
+  function ankle(d) {
+    var doc = new Doc(), m = d.meta || {}, g = d.ago, title = 'Ankle-GO Return-to-Sport Score';
+    header(doc, title, 'Lateral ankle sprain • 4 tests + 3 questionnaires • injured leg, out of 25');
+    meta(doc, [['Patient', m.name], ['Date', m.date], ['Injured side', m.injured], ['Wks since injury', m.weeks],
+      ['Clinician', m.clinician], ['Sport', m.sport], ['Notes', m.notes]]);
+    coachBand(doc, d.coach);
+    band(doc, 'Ankle-GO', g.tested ? g.total + ' of ' + g.max + (g.band ? ' · ' + g.band.label + ': ' + g.band.short : (g.complete ? '' : ' so far')) : 'not scored yet', tallyChips('rehab', d.counts));
+    interpretation(doc, d.interp);
+    agoScore(doc, d);
+    var foot = (d.disclaimer || '') + (d.sources && d.sources.length ? ' Sources: ' + d.sources.join('; ') + '.' : '');
+    var tail = d.progress ? 0 : footerH(foot);
+    agoItems(doc, d, 0);
+    agoLegs(doc, d, tail);
+    progressTable(doc, d.progress, null, footerH(foot));
+    footer(doc, foot);
+    return finish(doc, title, m.name);
+  }
+
   // ------------------------------------------------------------------ strength battery: left vs right table
   function strengthTable(doc, tests, tailH) {
     tailH = tailH || 0;
@@ -1770,6 +1938,6 @@
     });
   }
 
-  return { screening: screening, rehab: rehab, strength: strength, exercises: exercises, toPdf: toPdf, toSvg: toSvg, fontFaces: fontFaces, _width: width, _wrap: wrap,
+  return { screening: screening, rehab: rehab, ankle: ankle, strength: strength, exercises: exercises, toPdf: toPdf, toSvg: toSvg, fontFaces: fontFaces, _width: width, _wrap: wrap,
     qr: qrMatrix };                                  // v35: the phone link's code, for the app's Show code
 });

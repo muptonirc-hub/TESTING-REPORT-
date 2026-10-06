@@ -1,0 +1,83 @@
+{
+  "about": "v42: the Ankle-GO score (Picot et al. 2024) for return to sport after a lateral ankle sprain managed without surgery. Four functional tests and three questionnaires, scored on the injured side for a total out of 25. groups lists the rows as they appear on the page: kind 'lr' takes left and right (for a reach, the stance leg; role 'len' is the leg length the reaches are divided by, role 'reach' a reach in cm scored as % of leg length), kind 'comp' is worked out (the mean of its 'from' rows, per leg) and kind 'q' is a questionnaire typed as % (or as a total out of 'of', which the app turns into the %). items holds the points: steps are tried in order (op against value; the first that holds gives its pts, none gives 0), bonus adds points for other rows on the injured side, appr adds 1 point when the patient reported no apprehension during the test. bands are the developers' cut-offs, used only once every item is in (or when the points still to come can't change the band). thr is the change between sessions treated as beyond test noise (approximate: FAAM ADL 8 and Sport 9 are the published MCIDs; the others are the clinic's working values, edit as needed). range is the usual range of a typed value (outside it the app asks for a check). Edit wording here on GitHub; the app picks it up the next time it opens online.",
+  "title": "Ankle-GO",
+  "condition": "Lateral ankle sprain, managed without surgery",
+  "max": 25,
+  "groups": [
+    {
+      "title": "SINGLE-LEG STANCE",
+      "metrics": [
+        { "name": "Single-leg stance", "unit": "errors", "kind": "lr", "dir": "Lower", "item": "sls", "thr": 2, "range": [0, 30], "hint": "errors in 20 s, eyes closed", "scan": "number of errors in 20 s on one leg with eyes closed, for each leg" }
+      ]
+    },
+    {
+      "title": "STAR EXCURSION BALANCE TEST (mSEBT)",
+      "metrics": [
+        { "name": "Leg length", "unit": "cm", "kind": "lr", "role": "len", "range": [55, 125], "hint": "ASIS to medial malleolus", "scan": "leg length in cm (ASIS to medial malleolus), for each leg" },
+        { "name": "SEBT anterior", "unit": "cm", "kind": "lr", "role": "reach", "dir": "Higher", "scoreUnit": "%", "range": [25, 120], "hint": "mean of 3 reaches · stance leg", "scan": "anterior reach in cm for each stance leg, the average of the trials only if it is written" },
+        { "name": "SEBT posteromedial", "unit": "cm", "kind": "lr", "role": "reach", "dir": "Higher", "scoreUnit": "%", "range": [35, 140], "hint": "mean of 3 reaches · stance leg", "scan": "posteromedial reach in cm for each stance leg, the average of the trials only if it is written" },
+        { "name": "SEBT posterolateral", "unit": "cm", "kind": "lr", "role": "reach", "dir": "Higher", "scoreUnit": "%", "range": [30, 140], "hint": "mean of 3 reaches · stance leg", "scan": "posterolateral reach in cm for each stance leg, the average of the trials only if it is written" },
+        { "name": "SEBT composite", "unit": "%", "kind": "comp", "dir": "Higher", "item": "sebt", "thr": 4, "from": ["SEBT anterior", "SEBT posteromedial", "SEBT posterolateral"], "hint": "mean of the three reaches, % of leg length" }
+      ]
+    },
+    {
+      "title": "HOP TESTS",
+      "metrics": [
+        { "name": "Side hop", "unit": "s", "kind": "lr", "dir": "Lower", "item": "sidehop", "thr": 1.5, "range": [5, 45], "hint": "10 hops each way over 30 cm", "scan": "side hop time in seconds, for each leg" },
+        { "name": "Figure-of-8 hop", "unit": "s", "kind": "lr", "dir": "Lower", "item": "fig8", "thr": 1, "range": [7, 45], "hint": "2 laps around cones 5 m apart", "scan": "figure-of-8 hop time in seconds, for each leg" }
+      ]
+    },
+    {
+      "title": "QUESTIONNAIRES",
+      "metrics": [
+        { "name": "FAAM ADL", "unit": "%", "kind": "q", "dir": "Higher", "item": "faam_adl", "of": 84, "thr": 8, "range": [0, 100], "hint": "activities of daily living, 21 items", "scan": "FAAM ADL score as a percentage, only if the percentage itself is written" },
+        { "name": "FAAM Sport", "unit": "%", "kind": "q", "dir": "Higher", "item": "faam_sport", "of": 32, "thr": 9, "range": [0, 100], "hint": "sport, 8 items", "scan": "FAAM Sport score as a percentage, only if the percentage itself is written" },
+        { "name": "ALR-RSI", "unit": "%", "kind": "q", "dir": "Higher", "item": "alr_rsi", "of": 120, "thr": 10, "range": [0, 100], "hint": "readiness to return to sport, 12 items", "scan": "ALR-RSI score as a percentage, only if the percentage itself is written" }
+      ]
+    }
+  ],
+  "items": [
+    { "id": "sls", "label": "Single-leg stance", "metric": "Single-leg stance", "max": 3, "appr": true,
+      "steps": [{ "op": "<=", "value": 0, "pts": 2 }, { "op": "<=", "value": 3, "pts": 1 }],
+      "rule": "0 errors 2 · 1–3 errors 1 · more than 3 errors 0 · no apprehension +1" },
+    { "id": "sebt", "label": "Star excursion (mSEBT)", "metric": "SEBT composite", "max": 7, "appr": true,
+      "steps": [{ "op": ">", "value": 95, "pts": 4 }, { "op": ">=", "value": 90, "pts": 2 }],
+      "bonus": [
+        { "metric": "SEBT anterior", "op": ">", "value": 60, "pts": 1, "label": "anterior over 60%" },
+        { "metric": "SEBT posteromedial", "op": ">", "value": 90, "pts": 1, "label": "posteromedial over 90%" }
+      ],
+      "rule": "composite over 95% 4 · 90–95% 2 · under 90% 0 · anterior over 60% +1 · posteromedial over 90% +1 · no apprehension +1" },
+    { "id": "sidehop", "label": "Side hop", "metric": "Side hop", "max": 5, "appr": true,
+      "steps": [{ "op": "<", "value": 10, "pts": 4 }, { "op": "<=", "value": 13, "pts": 2 }],
+      "rule": "under 10 s 4 · 10–13 s 2 · over 13 s 0 · no apprehension +1" },
+    { "id": "fig8", "label": "Figure-of-8 hop", "metric": "Figure-of-8 hop", "max": 3, "appr": true,
+      "steps": [{ "op": "<", "value": 13, "pts": 2 }, { "op": "<=", "value": 18, "pts": 1 }],
+      "rule": "under 13 s 2 · 13–18 s 1 · over 18 s 0 · no apprehension +1" },
+    { "id": "faam_adl", "label": "FAAM ADL", "metric": "FAAM ADL", "max": 2,
+      "steps": [{ "op": ">", "value": 95, "pts": 2 }, { "op": ">=", "value": 90, "pts": 1 }],
+      "rule": "over 95% 2 · 90–95% 1 · under 90% 0" },
+    { "id": "faam_sport", "label": "FAAM Sport", "metric": "FAAM Sport", "max": 2,
+      "steps": [{ "op": ">", "value": 95, "pts": 2 }, { "op": ">=", "value": 80, "pts": 1 }],
+      "rule": "over 95% 2 · 80–95% 1 · under 80% 0" },
+    { "id": "alr_rsi", "label": "ALR-RSI", "metric": "ALR-RSI", "max": 3,
+      "steps": [{ "op": ">", "value": 76, "pts": 3 }, { "op": ">=", "value": 63, "pts": 2 }, { "op": ">=", "value": 55, "pts": 1 }],
+      "rule": "over 76% 3 · 63–76% 2 · 55–63% 1 · under 55% 0" }
+  ],
+  "score": { "name": "Ankle-GO score", "unit": "of 25", "dir": "Higher", "thr": 1.2 },
+  "bands": [
+    { "min": 0, "max": 7, "look": "Red", "label": "Under 8", "short": "not yet",
+      "text": "In the developers’ studies, a score under 8 two months after the sprain went with not getting back to the pre-injury level of sport at four months, and under 8 on returning to sport with more re-sprains over the next two years (odds about 9 times higher). Keep rehabilitating and retest." },
+    { "min": 8, "max": 10, "look": "Amber", "label": "8 to 10", "short": "continue rehab",
+      "text": "Past the under-8 cut-off but short of 11, the score at two months the developers linked with a full return to sport without a re-sprain or giving way a year later. They advise further rehab below 11; retest as it progresses." },
+    { "min": 11, "max": 25, "look": "Green", "label": "11 or more", "short": "on track",
+      "text": "A score of 11 or more two months after the sprain was linked with a full return to sport without a re-sprain or giving way a year later. Supports, never replaces, the clinician’s return-to-sport decision." }
+  ],
+  "mdc": 1.2,
+  "note": "Decision support only. Cut-offs from Picot et al. 2024 for a lateral ankle sprain managed without surgery; a change of 2 points or more between tests is beyond measurement error (MDC 1.2).",
+  "sources": [
+    "Picot B, Lopes R, Rauline G, Fourchet F, Hardy A. Development and validation of the Ankle-GO score for discriminating and predicting return-to-sport outcomes after lateral ankle sprain. Sports Health 2024;16(1):47–57. doi:10.1177/19417381231183647",
+    "Picot B, Fourchet F, Lopes R, Rauline G, et al. Low Ankle-GO score while returning to sport after lateral ankle sprain leads to a 9-fold increased risk of recurrence: a two-year prospective cohort study. Sports Med Open 2024. doi:10.1186/s40798-024-00693-w",
+    "Picot B, Fourchet F, Rauline G, et al. Ankle-GO score is associated with the probability of becoming coper after lateral ankle sprain: a 1-year prospective cohort study. Br J Sports Med 2024 (online 9 Aug). doi:10.1136/bjsports-2024-108361"
+  ],
+  "disclaimer": "Ankle-GO (Picot et al. 2024): four functional tests and three questionnaires scored on the injured side, out of 25, for a lateral ankle sprain managed without surgery. Under 8 = not yet; 8 to 10 = continue rehab; 11 or more = on track. It supports, and does not replace, the clinician’s return-to-sport decision. This report organises and displays testing data and is not medical advice."
+}

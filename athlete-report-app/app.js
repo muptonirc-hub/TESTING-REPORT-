@@ -99,7 +99,7 @@
     var p = STATUS_ICON[status];
     return p ? '<svg class="si" viewBox="0 0 12 12" width="12" height="12" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round">' + p + '</svg>' : '';
   }
-  function wordKind(t) { return t === 'ham' || t === 'acl' ? 'rehab' : 'target'; }
+  function wordKind(t) { return t === 'ham' || t === 'acl' || t === 'ankle' ? 'rehab' : 'target'; }   // v42: + Ankle-GO
   // v36: the Custom battery is scored like the Performance screen (population norms), so most of its code is the screen's
   function SL(t) { return t === 'screen' || t === 'custom'; }
   // Screening is for athletes; LL Strength and the rehab tabs are used with patients of all kinds (v9)
@@ -112,8 +112,8 @@
   }
 
   // ------------------------------------------------------------------ state
-  var TOOLS = ['screen', 'str', 'ham', 'acl', 'custom'];   // the five reports (the Exercises tab, 'ex', is handled on its own); v36: + the Custom battery
-  var TOOL_NAMES = { screen: 'Performance screen', str: 'LL Strength', ham: 'Hamstring rehab', acl: 'ACL rehab', custom: 'Custom battery', ex: 'Exercises' };   // v14: 'Screening' is the section
+  var TOOLS = ['screen', 'str', 'ham', 'acl', 'ankle', 'custom'];   // the six reports (the Exercises tab, 'ex', is handled on its own); v36: + the Custom battery; v42: + Ankle-GO
+  var TOOL_NAMES = { screen: 'Performance screen', str: 'LL Strength', ham: 'Hamstring rehab', acl: 'ACL rehab', ankle: 'Ankle-GO', custom: 'Custom battery', ex: 'Exercises' };   // v14: 'Screening' is the section
   function freshInterp() { return { text: '', ai: false, basis: '' }; }
   // For the coach (v8): the clinician's call on training, printed as a band on the report. Never worked out by the
   // app, never filled in from records and never sent to Claude.
@@ -124,7 +124,7 @@
   // the Clinician box (tester on Screening and LL Strength, clinician on Hamstring, practitioner on Exercises) whenever that
   // box is empty; never a typed value. The ACL box is the surgeon's, so it is left alone.
   function userName() { return CLOUD ? CLOUD.userName() : ''; }
-  var NAME_FIELDS = { screen: 'tester', str: 'tester', ham: 'clinician', custom: 'tester', ex: 'practitioner' };
+  var NAME_FIELDS = { screen: 'tester', str: 'tester', ham: 'clinician', ankle: 'clinician', custom: 'tester', ex: 'practitioner' };
   // cardOpen (v11): the details card is open (true) or folded into the one-line strip (false)
   function freshTool(tool, keep) {
     keep = keep || {};
@@ -134,6 +134,8 @@
     if (tool === 'custom') return { meta: { name: '', date: todayIso(), sex: '', age: '', sport: '', tester: keep.tester || userName(), mass: '', notes: '', injured: '' }, pop: null, battery: [], batName: '', hamPhase: null, aclPhase: null, values: {}, radar: null, collapsed: {}, interp: freshInterp(), coach: freshCoach(), cardOpen: true };
     if (tool === 'ham') return { meta: { name: '', date: todayIso(), injured: '', clinician: keep.clinician || userName(), doi: '', weeks: '', sport: '', notes: '' }, phase: null, values: {}, collapsed: {}, interp: freshInterp(), coach: freshCoach(), cardOpen: true };
     if (tool === 'str') return { meta: { name: '', date: todayIso(), mass: '', sport: '', tester: keep.tester || userName(), notes: '' }, values: {}, collapsed: {}, interp: freshInterp(), coach: freshCoach(), cardOpen: true };
+    // v42: Ankle-GO: the injured side (the score is the injured leg's), the injury date or weeks since it
+    if (tool === 'ankle') return { meta: { name: '', date: todayIso(), injured: '', clinician: keep.clinician || userName(), doi: '', weeks: '', sport: '', notes: '' }, values: {}, collapsed: {}, interp: freshInterp(), coach: freshCoach(), cardOpen: true };
     return { meta: { name: '', date: todayIso(), injured: '', surgeon: keep.surgeon || '', graft: '', dos: '', months: '', sport: '', notes: '' }, phase: null, sex: null, values: {}, collapsed: {}, interp: freshInterp(), coach: freshCoach(), cardOpen: true };
   }
   // blank Clinician boxes take the practitioner's name; boxes still holding the previous name (was) follow a name change
@@ -179,6 +181,8 @@
     if (state.screen.pop !== 'general' && pops.indexOf(state.screen.pop) < 0) state.screen.pop = 'general';
     if (!state.str) state.str = freshTool('str');
     if (!state.custom) state.custom = freshTool('custom');   // v36: drafts from v35 and earlier
+    if (!state.ankle || typeof state.ankle !== 'object' || !state.ankle.meta) state.ankle = freshTool('ankle');   // v42: drafts from v41 and earlier
+    if (state.ankle.meta.injured !== 'Left' && state.ankle.meta.injured !== 'Right') state.ankle.meta.injured = '';
     var cu = state.custom;
     if (cu.pop !== null && cu.pop !== 'general' && pops.indexOf(cu.pop) < 0) cu.pop = null;
     cu.battery = tidyBattery(cu.battery);
@@ -277,6 +281,7 @@
   }
   // v18: what still has to be chosen before a rehab tool can score anything ('' when nothing)
   function rehabNeed(t) {
+    if (t === 'ankle') return state.ankle.meta.injured ? '' : 'Choose the injured side';   // v42: the score is the injured leg's
     if (t !== 'ham' && t !== 'acl') return '';
     var s = state[t], p = !s.phase, x = t === 'acl' && !s.sex;
     return p && x ? 'Choose the rehab phase and norm set' : p ? 'Choose the rehab phase' : x ? 'Choose the norm set' : '';
@@ -305,6 +310,7 @@
   function computeFor(t) {                             // v19: any report tool's results (the builder makes the linked report too)
     if (SL(t)) return computeScreen(t);
     if (t === 'str') return computeStrength();
+    if (t === 'ankle') return computeAnkle();          // v42
     return computeRehab(t);
   }
 
@@ -596,6 +602,7 @@
     str: ['Lower-limb strength & capacity', 'Enter each leg\u2019s load, force or reps. Blank tests are left out.'],
     ham: ['Hamstring rehab & return to play', 'Injured-limb results against the targets for the chosen phase.'],
     acl: ['ACL rehab & return to play', 'Injured-limb and symmetry results against ACLR norms for the chosen phase and sex.'],
+    ankle: ['Ankle-GO return-to-sport score', 'Lateral ankle sprain (no surgery): four tests and three questionnaires, scored out of 25 on the injured leg.'],   // v42
     custom: ['Custom screening battery', 'Choose the population, then pick the tests or photograph your notes. Results are scored against the norms available.'],   // v36
     ex: ['Program builder', 'Add exercises from the library, type them, or scan a handwritten page (no patient name on it).']
   };
@@ -619,6 +626,7 @@
     'SMARTSPEED - SPEED & AGILITY': 'SmartSpeed · Speed & agility',
     'LOWER-LIMB STRENGTH & CAPACITY': 'Lower-limb strength & capacity',
     'HAMSTRING REHAB': 'Hamstring rehab', 'ACL REHAB': 'ACL rehab',   // v37: the Custom battery's rehab sections
+    'STAR EXCURSION BALANCE TEST (mSEBT)': 'Star excursion balance test (mSEBT)',   // v42: Ankle-GO
     'RANGE OF MOTION / LENGTH (DynaMo)': 'Range of motion / length (DynaMo)',
     'STRENGTH - HAND-HELD / FIXED DYNAMOMETRY (DynaMo)': 'Strength · Hand-held / fixed dynamometry (DynaMo)',
     'ECCENTRIC STRENGTH (NordBord)': 'Eccentric strength (NordBord)',
@@ -749,6 +757,12 @@
         field(t, 'mass', 'Body mass (kg)', { mode: 'decimal' }) +
         field(t, 'sport', 'Sport', { words: true }) + field(t, 'tester', 'Clinician', { words: true }) +
         field(t, 'notes', 'Notes', { cls: 'wide' });
+    } else if (t === 'ankle') {                        // v42: Ankle-GO: no phase to choose, the score has its own cut-offs
+      out += field(t, 'name', Person(t) + ' name', { cls: 'wide', words: true }) + field(t, 'date', 'Test date', { type: 'date' }) +
+        seg(t, 'injured', 'Injured side', ['Left', 'Right']) +
+        field(t, 'doi', 'Date of injury', { type: 'date' }) + field(t, 'weeks', 'Weeks since injury', { mode: 'decimal' }) +
+        field(t, 'clinician', 'Clinician', { words: true }) + field(t, 'sport', 'Sport', { words: true }) +
+        field(t, 'notes', 'Notes', { cls: 'full' });
     } else if (t === 'ham') {
       out += field(t, 'name', Person(t) + ' name', { cls: 'wide', words: true }) + field(t, 'date', 'Test date', { type: 'date' }) +
         seg(t, 'injured', 'Injured side', ['Left', 'Right']) +
@@ -783,7 +797,7 @@
     if (t === 'screen') return !!m.sex;
     if (t === 'custom') return state.custom.pop !== null && (state.custom.pop !== 'general' || !!m.sex) && !customRehabNeed();   // v36: the population, and sex for the general norms; v37: what rehab tests need
     if (t === 'str') return !blank(m.mass);
-    if (t === 'ham' || t === 'acl') return !!m.injured && !rehabNeed(t);   // v18: and the phase (and norm set) chosen
+    if (t === 'ham' || t === 'acl' || t === 'ankle') return !!m.injured && !rehabNeed(t);   // v18: and the phase (and norm set) chosen; v42: Ankle-GO the injured side
     return true;
   }
   function stripHtml(t) {
@@ -816,6 +830,12 @@
     } else if (t === 'str') {
       if (!blank(m.mass)) add(clean1(m.mass) + ' kg');
       add(m.sport); add(date);
+    } else if (t === 'ankle') {                        // v42
+      if (m.injured) add(m.injured + ' injured');
+      var wk = sinceText(t);
+      if (wk) add(wk + ' wk');
+      if (c && c.ago && c.ago.tested) add('Ankle-GO ' + c.ago.total + (c.ago.complete ? '/' + c.ago.max : ' so far'));
+      add(date);
     } else if (t === 'ham' || t === 'acl') {
       if (m.injured) add(m.injured + ' injured');
       var since = sinceText(t);
@@ -1078,13 +1098,13 @@
     var unit = t === 'str' ? ['test', 'tests'] : ['section', 'sections'];
     return '<div class="tests-bar"><button type="button" class="ghost tests-btn" id="testsBtn" data-action="tests-today" aria-haspopup="dialog">Tests today<span class="chev-s" aria-hidden="true"></span></button>' +
       (n ? '<span class="tests-hidden" id="testsHidden">' + n + ' ' + unit[n === 1 ? 0 : 1] + ' hidden</span>' : '') +
-      (t !== 'str' ? '<button type="button" class="quiet add-prev" id="addPrev" data-action="add-prev"' + (prevShown(t) ? ' hidden' : '') + '>+ Add previous results</button>' : '') + '</div>';
+      (t !== 'str' && t !== 'ankle' ? '<button type="button" class="quiet add-prev" id="addPrev" data-action="add-prev"' + (prevShown(t) ? ' hidden' : '') + '>+ Add previous results</button>' : '') + '</div>';   // v42: Ankle-GO's previous results come from the record
   }
   // v18: the Previous column shows once there is a previous result on the page (a client's record loaded, or one typed),
   // or after + Add previous results; a first visit has no column of empty boxes. LL Strength has no Previous boxes.
   function prevShown(t) {
     var s = state[t];
-    if (t === 'str' || s.showPrev === true) return true;
+    if (t === 'str' || t === 'ankle' || s.showPrev === true) return true;   // v42: Ankle-GO has no Previous boxes either
     return Object.keys(s.values).some(function (k) { var v = s.values[k]; return !!v && !blank(v.previous); });
   }
   function addPrevious() {
@@ -1494,6 +1514,7 @@
     str: 'Each leg\u2019s load, force or reps: asymmetry and capacity against the targets.',
     ham: 'Injured-limb results against the targets for the chosen rehab phase.',
     acl: 'Injured-limb and symmetry results against ACLR norms for the phase and sex.',
+    ankle: 'Lateral ankle sprain: four tests and three questionnaires, scored out of 25 on the injured leg.',   // v42
     custom: 'Any mix of the screen, LL Strength and rehab tests (or your own), built by hand or from a photo of your notes.'   // v36; v37: the rehab tests too
   };
   // v15: the Exercises tab's heading is the same picker, listing its three pages (data-page on the button; the items
@@ -1529,7 +1550,7 @@
       return;
     }
     els.entry.innerHTML = '<div class="pagehead">' + pickHtml(t) + '<p>' + esc(HEAD[t][1]) + '</p></div>' + athleteCard() + (t === 'custom' ? batteryBarHtml() : testsBarHtml(t)) +
-      (t === 'str' ? strengthGroupHtml() : groupsHtml(t)) + (t === 'custom' ? batteryEmptyHtml() : '') + (t === 'acl' ? rtsCardHtml() : '') + coachCardHtml() + interpCardHtml() +
+      (t === 'str' ? strengthGroupHtml() : t === 'ankle' ? agoGroupsHtml() : groupsHtml(t)) + (t === 'custom' ? batteryEmptyHtml() : '') + (t === 'acl' ? rtsCardHtml() : '') + (t === 'ankle' ? agoCardHtml() : '') + coachCardHtml() + interpCardHtml() +
       '<span id="explainHint" hidden>Shows what this test measures.</span>';
     if (t === 'screen' && state.screen.importLog) showImportLog(state.screen.importLog);
     retest.tool = null;                                // work out afresh which rows "Only last time's tests" shows
@@ -1628,6 +1649,7 @@
     els.entry.classList.toggle('no-prev', !showPrev);
     if (ap) ap.hidden = showPrev;
     if (t === 'str') { refreshStrength(c); showTypo(typoFlags(t, c)); renderSummary(c); renderInterpState(c); saveDraft(); return; }
+    if (t === 'ankle') { refreshAnkle(c); showTypo(typoFlags(t, c)); renderSummary(c); renderInterpState(c); saveDraft(); return; }   // v42
     var S = setOf(t);
     if (t === 'custom') refreshBattery(c);              // v36: the battery bar's count and the empty state
     // context note under the athlete card
@@ -1744,6 +1766,27 @@
           if (cur === null) return;
           add(tt.id, [sd[0]], E.typoCheck(cur, tt.range, E.parseInput(v[sd[1]]), tt.jump), raw(v[sd[0]]), tt.input,
             raw(v[sd[0]]) + '~' + raw(v[sd[1]]), v.prevDate, sd[2]);
+        });
+      });
+      return out;
+    }
+    if (t === 'ankle') {                               // v42: each leg's box against the usual range; the injured leg's against its previous result too
+      var inj0 = s.meta.injured === 'Left' ? 'left' : (s.meta.injured === 'Right' ? 'right' : '');
+      DATA.ankle.groups.forEach(function (g) {
+        g.metrics.forEach(function (m) {
+          var v = s.values[m.name] || {};
+          if (m.kind === 'lr') {
+            [['left', 'Left '], ['right', 'Right ']].forEach(function (sd) {
+              var cur = E.parseInput(v[sd[0]]);
+              if (cur === null) return;
+              var pv = sd[0] === inj0 && m.role !== 'reach' && m.role !== 'len' ? E.parseInput(v.previous) : null;   // (a reach's previous is a %, the box takes cm)
+              add(m.name, [sd[0]], E.typoCheck(cur, m.range, pv, m.jump), raw(v[sd[0]]), m.unit === 'errors' ? '' : m.unit, raw(v[sd[0]]) + '~' + (pv === null ? '' : raw(v.previous)), v.prevDate, sd[1]);
+            });
+          } else if (m.kind === 'q') {
+            var r0 = E.parseInput(v.result), t0 = E.parseInput(v.total);
+            if (t0 !== null) add(m.name, ['total'], E.typoCheck(t0, [0, m.of], null, false), raw(v.total), '', raw(v.total), '', 'Total ');
+            else if (r0 !== null) add(m.name, ['result'], E.typoCheck(r0, m.range, E.parseInput(v.previous), m.jump), raw(v.result), '%', raw(v.result) + '~' + raw(v.previous), v.prevDate, '');
+          }
         });
       });
       return out;
@@ -1930,7 +1973,7 @@
 
   function autoTime(t) {
     var m = state[t].meta;
-    if (t === 'ham' && blank(m.weeks) && m.doi) {
+    if ((t === 'ham' || t === 'ankle') && blank(m.weeks) && m.doi) {   // v42: + Ankle-GO
       var d = daysBetween(m.doi, m.date);
       if (d !== null && d >= 0) return 'Weeks since injury will show as ' + Math.floor(d / 7) + ' on the report (from the injury and test dates).';
     }
@@ -2046,6 +2089,281 @@
       r.met + ' of ' + r.total + ' met' + (not.length ? '; not yet: ' + not.join(', ') : '') + (un.length ? '; not tested: ' + un.join(', ') : '') + '.';
   }
 
+  // ------------------------------------------------------------------ v42: Ankle-GO
+  // Matthew (6 Oct): "The next screening battery I want to get into the app is the ANKLE-GO". His choices: the scores are typed
+  // (a questionnaire as its %, or its total, which the app turns into the %); both legs are entered, the score is the injured
+  // leg's and the other leg is shown beside it with the difference; read for a lateral ankle sprain managed without surgery;
+  // its own battery (not in the Custom catalogue). ankle_go.json holds the rows, the points and the cut-offs (Picot et al.
+  // 2024); E.ankleGo scores them. The items are the scored rows (status from their points: all = On target, some = Close,
+  // none = Behind); the reaches and the leg length feed the composite. The score card and the summary's ring show the total
+  // out of 25 and its band; the band is decision support, the clinician decides.
+  var AGO_LOOK = { Green: 'g', Amber: 'a', Red: 'r' };
+  function agoItemOf(name) {                          // the item a row is scored as (null for the reaches and the leg length)
+    var hit = null;
+    (DATA.ankle.items || []).forEach(function (it) { if (!hit && it.metric === name) hit = it; });
+    return hit;
+  }
+  function agoBonusOf(name) {                         // a reach that earns a bonus point: { item, bonus } (or null)
+    var hit = null;
+    (DATA.ankle.items || []).forEach(function (it) { (it.bonus || []).forEach(function (b) { if (!hit && b.metric === name) hit = { item: it, bonus: b }; }); });
+    return hit;
+  }
+  function agoUnit(m) { return m.role === 'reach' ? '%' : m.unit; }   // the unit a row is scored (and recorded) in
+  function agoNum(x) { return String(Math.round(x * 100) / 100); }   // as typed: 9.5 (not 9.50), 91.7, 12
+  function agoVal(x, unit) {                           // '12.4 s', '2 errors', '91.7%'
+    if (x === null || x === undefined) return '';
+    var u = unit || '', n = agoNum(x);
+    return u === '%' ? n + '%' : (u === 'errors' ? n + (x === 1 ? ' error' : ' errors') : n + (u ? ' ' + u : ''));
+  }
+  function ptsText(p, max) { return p + ' of ' + max + (max === 1 ? ' pt' : ' pts'); }
+  // the other leg beside the injured one: '21% slower than the other leg', '2 more errors', '4% below the other leg'
+  function agoDiff(m, inj, oth) {
+    if (inj === null || oth === null || inj === undefined || oth === undefined) return '';
+    if (m.unit === 'errors') {
+      var d = inj - oth;
+      return d === 0 ? 'Same errors as the other leg' : Math.abs(d) + (Math.abs(d) === 1 ? ' error ' : ' errors ') + (d > 0 ? 'more' : 'fewer') + ' than the other leg';
+    }
+    if (!oth) return '';
+    var pct = (inj - oth) / Math.abs(oth) * 100, p = E.pyFixed(Math.abs(pct), 0);
+    if (p === '0') return 'Level with the other leg';
+    if (m.dir === 'Lower') return p + '% ' + (pct > 0 ? 'slower' : 'faster') + ' than the other leg';
+    return p + '% ' + (pct < 0 ? 'below' : 'above') + ' the other leg';
+  }
+  function computeAnkle() {
+    var s = state.ankle, S = DATA.ankle, g = E.ankleGo(S, s.values, s.meta.injured), inj = g.injured ? g.injured.toLowerCase() : '';
+    var items = {}, inputs = {}, groups = [];
+    g.items.forEach(function (it) { items[it.metric] = it; });
+    S.groups.forEach(function (gr) {
+      var rows = [];
+      gr.metrics.forEach(function (m) {
+        if (m.role === 'len') return;                  // the leg length is a means to the reaches, never a result
+        var v = s.values[m.name] || {}, prev = E.parseInput(v.previous);
+        var res = m.kind === 'q' ? g.q[m.name] : (inj ? g.sides[inj][m.name] : null);
+        if (res === null || res === undefined) return;
+        inputs[m.name] = { result: res, previous: prev };
+        var it = items[m.name];
+        if (!it) return;                               // a reach: its points are the composite's
+        var ch = E.change(res, prev, m.dir, m.thr);
+        rows.push({ name: m.name, unit: m.unit, result: res, status: it.status, guide: '', target: it.rule, source: '', norm: null, side: '',
+          change: ch[0], change_kind: ch[1], prev: E.num(prev), pts: it.pts, max: it.max, other: it.other, label: it.label, item: it });
+      });
+      if (rows.length) groups.push({ title: gr.title, rows: rows });
+    });
+    if (g.complete) inputs[S.score.name] = { result: g.total, previous: null };   // the total goes in the record (once every item is in)
+    // the previous total from the client's record, for the card and the AI
+    var cl = clientFor(s.meta.name), date = s.meta.date || todayIso();
+    var pv = cl ? E.previousFor(cl.sessions, 'ankle', S.score.name, date) : null;
+    if (pastAsOf && pv && pv.date >= pastAsOf) pv = null;
+    g.prev = pv ? { value: pv.value, date: pv.date } : null;
+    if (g.prev && g.complete) { var sc = E.change(g.total, g.prev.value, 'Higher', S.score.thr); g.change = sc[0]; g.change_kind = sc[1]; }
+    var byName = {};
+    E.flatten(groups).forEach(function (r) { byName[r.name] = r; });
+    return { key: 'ankle', ago: g, pnorms: {}, groups: groups, byName: byName, counts: E.counts(groups), prios: E.priorities(groups, 7), inputs: inputs };
+  }
+  // the page: one section per group, each row with the left and right boxes (a questionnaire: its % and its total)
+  function apprHtml(id, m, v) {
+    var a = v.appr === 'No' || v.appr === 'Yes' ? v.appr : '';
+    return '<div class="ago-appr"><span class="aa-l" id="' + id + '-al">Apprehension</span><div class="seg aa-seg" role="group" aria-labelledby="' + id + '-al" aria-describedby="' + id + '-ad">' +
+      ['No', 'Yes'].map(function (o) { return '<button type="button" data-appr="' + o + '" aria-pressed="' + (a === o) + '">' + o + '</button>'; }).join('') +
+      '</div><span class="vh" id="' + id + '-ad">Did the patient feel apprehension, a fear of the ankle giving way, during this test? No earns a point.</span></div>';
+  }
+  function agoRowHtml(m, gi, mi) {
+    var v = val('ankle', m.name), id = 'ankle-' + gi + '-' + mi, nm = esc(m.name), it = agoItemOf(m.name), q = m.kind === 'q', comp = m.kind === 'comp';
+    var uw = { s: 'seconds', cm: 'cm' }[m.unit] || '';
+    var hint = q ? m.hint + ' · % or the total of ' + m.of : (m.hint || '') + (uw && !comp ? ' · ' + uw : '');
+    var html = '<div class="metric lr ago' + (comp ? '' : ' has-bl') + (q ? ' ago-q' : '') + (it ? ' ago-item' : '') + '" data-metric="' + nm + '" data-status="" id="' + id + '">' +
+      '<div class="m-label">' + nameHtml('ankle', m.name, m.name, id) + '<div class="m-hint"><span class="m-unit">' + esc(hint) + '</span>' +
+      '<span class="m-target"></span><span class="m-calc"></span><span class="m-prevnote"></span><span class="m-spark"></span></div>' +
+      (it && it.appr ? apprHtml(id, m, v) : '') + '</div>' + (comp ? '' : boxLabels(q ? 'Score %' : 'Left', q ? 'Total' : 'Right'));
+    function box(f, cls, ph, label) {
+      return '<input class="m-in ' + cls + '" id="' + id + '-' + f + '" data-field="' + f + '" value="' + esc(v[f] == null ? '' : v[f]) + '" type="text" inputmode="decimal" enterkeyhint="next" autocomplete="off" placeholder="' +
+        esc(ph) + '" aria-label="' + nm + ', ' + esc(label) + '">';
+    }
+    if (comp) html += '<div class="m-auto" data-auto>Worked out from the three reaches</div>';
+    else if (q) html += box('result', 'm-left', '%', 'score as a percentage') + box('total', 'm-right', 'of ' + m.of, 'total score out of ' + m.of + ' (fills the percentage)');
+    else html += box('left', 'm-left', 'Left' + (m.unit === 'errors' ? '' : ' ' + m.unit), 'left ' + (m.role === 'reach' ? 'stance leg' : 'leg') + ', ' + m.unit) +
+      box('right', 'm-right', 'Right' + (m.unit === 'errors' ? '' : ' ' + m.unit), 'right ' + (m.role === 'reach' ? 'stance leg' : 'leg') + ', ' + m.unit);
+    return html + '<div class="m-out" aria-live="off"></div><div class="m-check" id="' + id + '-check" hidden></div></div>';
+  }
+  function agoGroupsHtml() {
+    var s = state.ankle, on = testsShown('ankle');
+    return DATA.ankle.groups.map(function (g, gi) {
+      if (!on[gi]) return '';
+      var collapsed = !!s.collapsed[gi], q = g.metrics.every(function (m) { return m.kind === 'q'; });
+      return '<section class="group' + (collapsed ? ' collapsed' : '') + '" data-group="' + gi + '">' +
+        '<button type="button" class="group-head" aria-expanded="' + !collapsed + '"><span class="gt">' + esc(groupTitle(g.title)) + '</span><span class="gc" data-count></span><span class="chev" aria-hidden="true"></span></button>' +
+        '<div class="cols lr" aria-hidden="true"><span class="c-left">' + (q ? 'Score %' : 'Left') + '</span><span class="c-right">' + (q ? 'Total' : 'Right') + '</span><span class="c-out">Points</span></div>' +
+        '<div class="group-body">' + g.metrics.map(function (m, mi) { return agoRowHtml(m, gi, mi); }).join('') + '</div></section>';
+    }).join('');
+  }
+  // a questionnaire's total typed: its % worked out into the % box (the box typed last wins: a % typed by hand clears the total)
+  function agoTotal(row, el) {
+    var m = agoMetricByName(row.dataset.metric);
+    if (!m || m.kind !== 'q') return;
+    var v = val('ankle', m.name);
+    if (el.dataset.field === 'total') {
+      var tot = E.parseInput(v.total);
+      v.result = tot !== null && m.of ? String(E.pyRound(tot / m.of * 100, 1)) : '';
+      var pc = row.querySelector('input[data-field="result"]');
+      if (pc && pc.value !== v.result) pc.value = v.result;
+    } else if (el.dataset.field === 'result' && !blank(v.total)) {
+      v.total = '';
+      var tb = row.querySelector('input[data-field="total"]');
+      if (tb) tb.value = '';
+    }
+  }
+  function agoMetricByName(name) {
+    var hit = null;
+    DATA.ankle.groups.forEach(function (g) { g.metrics.forEach(function (m) { if (!hit && m.name === name) hit = m; }); });
+    return hit;
+  }
+  function setAppr(b) {
+    var row = b.closest('.metric'), v = val('ankle', row.dataset.metric);
+    unmarkScanned(b.parentNode);
+    v.appr = v.appr === b.dataset.appr ? '' : b.dataset.appr;   // tapping the chosen one again clears it
+    b.parentNode.querySelectorAll('button').forEach(function (x) { x.setAttribute('aria-pressed', String(v.appr === x.dataset.appr)); });
+    refresh();
+    if (!blank(v.appr)) foldNow('ankle', true);
+  }
+  function refreshAnkle(c) {
+    var s = state.ankle, g = c.ago, inj = g.injured ? g.injured.toLowerCase() : '', note = $('ctxNote'), tr = trends('ankle', c);
+    note.hidden = false;
+    if (!inj) { note.className = 'note warn'; note.textContent = 'Choose the injured side: the score is the injured leg’s.'; }
+    else {
+      var auto = autoTime('ankle');
+      note.className = 'note';
+      note.textContent = 'Scored on the ' + inj + ' leg (injured); the other leg is shown beside it. Reaches are % of leg length.' + (auto ? ' ' + auto : '');
+    }
+    var items = {};
+    g.items.forEach(function (it) { items[it.metric] = it; });
+    els.entry.querySelectorAll('.group').forEach(function (gel) {
+      var gi = +gel.dataset.group, grp = DATA.ankle.groups[gi], entered = 0;
+      gel.querySelectorAll('.metric').forEach(function (el, mi) {
+        var m = grp.metrics[mi], v = s.values[m.name] || {}, it = items[m.name], out = el.querySelector('.m-out');
+        var target = el.querySelector('.m-target'), calc = el.querySelector('.m-calc'), html = '', status = '';
+        var bo = agoBonusOf(m.name);
+        target.textContent = it ? it.rule : (bo ? '+' + bo.bonus.pts + ' pt ' + bo.bonus.label.replace(/^\S+ /, '') : '');   // '+1 pt over 60%'
+        calc.textContent = '';
+        var typed = m.kind === 'q' ? !blank(v.result) || !blank(v.total) : (m.kind === 'lr' ? !blank(v.left) || !blank(v.right) : false);
+        if (m.kind === 'comp') {
+          var L = g.sides.left[m.name], R = g.sides.right[m.name];
+          el.querySelector('[data-auto]').innerHTML = L !== null || R !== null
+            ? '<span>' + [['L', L], ['R', R]].map(function (x) { return x[0] + ' <b>' + (x[1] === null ? '–' : esc(agoVal(x[1], '%'))) + '</b>'; }).join(' · ') + '</span>'   // (one span: a flex box drops the spaces round the dot)
+            : 'Worked out from the three reaches';
+        }
+        if (it) {                                      // a scored item: its points on the injured leg
+          if (it.tested) {
+            if (m.kind !== 'comp') entered++;          // (the composite is worked out, not entered)
+            status = it.status;
+            html += '<div class="lr-line ago-pts">' + (m.kind === 'q' ? '' : '<span class="lr-sd">' + g.injured.charAt(0) + '</span><span class="lr-v">' + esc(agoVal(it.value, m.unit)) + '</span>') + chip(it.status, ptsText(it.pts, it.max)) + '</div>';
+            var d = m.kind === 'q' ? '' : agoDiff(m, it.value, it.other);
+            if (d) html += '<div class="lr-diff">' + esc(d) + '</div>';
+            if (it.appr === '') html += '<div class="lr-wait">Apprehension? +1 if none</div>';
+            var row = c.byName[m.name];
+            if (row && row.change) html += '<div class="lr-chg m-change ' + row.change_kind + '">' + changeHtml(row.change, row.change_kind) + '</div>';
+            if (m.kind === 'q' && !blank(v.total)) calc.textContent = '= ' + agoVal(it.value, '%') + ' from ' + clean1(v.total) + ' of ' + m.of;
+          } else if (typed && !inj && m.kind !== 'q') html = '<div class="lr-wait">set the injured side</div>';
+          else if (typed && m.kind === 'q') html = '<span class="m-wait">not a number</span>';
+          else if (m.kind === 'comp' && inj && (g.sides.left[m.name] !== null || g.sides.right[m.name] !== null)) html = '<div class="lr-wait">' + g.injured + ' leg not complete</div>';
+          else if (typed) html = '<span class="m-wait">' + (inj ? 'not a number' : 'set the injured side') + '</span>';
+        } else if (m.role === 'reach') {               // each leg as % of its leg length; the bonus point on the injured leg
+          if (typed) entered++;
+          ['left', 'right'].forEach(function (sd) {
+            var x = g.sides[sd][m.name], rawx = E.parseInput(v[sd]);
+            if (rawx === null) return;
+            var mine = sd === inj;
+            html += '<div class="lr-line"><span class="lr-sd">' + sd.charAt(0).toUpperCase() + '</span><span class="lr-v">' + (x === null ? '<span class="lr-wait">needs leg length</span>' : esc(agoVal(x, '%'))) + '</span>' +
+              (bo && mine && x !== null ? chip(agoTest(bo.bonus, x) ? 'Green' : 'n/a', agoTest(bo.bonus, x) ? '+' + bo.bonus.pts + ' pt' : 'no pt') : '') + '</div>';
+          });
+        } else if (m.role === 'len') {
+          if (typed) entered++;
+          var l0 = E.parseInput(v.left), r0 = E.parseInput(v.right);
+          if ((l0 === null) !== (r0 === null) && (l0 > 0 || r0 > 0)) html = '<div class="lr-diff">Used for both legs</div>';
+        }
+        if (!html && typed && m.kind === 'lr' && E.parseInput(v.left) === null && E.parseInput(v.right) === null) html = '<span class="m-wait">not a number</span>';
+        out.innerHTML = html;
+        el.dataset.status = status;
+        var pn = el.querySelector('.m-prevnote');
+        if (pn) pn.textContent = v.prevDate && !blank(v.previous) && m.role !== 'len'
+          ? 'prev ' + agoVal(E.parseInput(v.previous), agoUnit(m)) + (m.kind === 'q' ? '' : ' injured') + ' (' + shortDate(v.prevDate, s.meta.date) + ')'
+          : '';
+        setSpark(el, tr[m.name] ? sparkSvg(tr[m.name], m.dir, '') : '');
+      });
+      var cnt = gel.querySelector('[data-count]'), ny = grp.metrics.filter(function (m) { return m.kind !== 'comp'; }).length;
+      var noun = grp.metrics.some(function (m) { return m.kind === 'q'; }) ? ['questionnaire', 'questionnaires'] : (grp.metrics.some(function (m) { return m.role === 'len'; }) ? ['measure', 'measures'] : ['test', 'tests']);
+      cnt.textContent = entered ? entered + ' of ' + ny + ' entered' : ny + ' ' + noun[ny === 1 ? 0 : 1];
+    });
+    refreshAgoCard(c);
+  }
+  function agoTest(b, x) { return b.op === '>' ? x > b.value : b.op === '>=' ? x >= b.value : b.op === '<' ? x < b.value : b.op === '<=' ? x <= b.value : false; }
+  // the score card under the tests: the total, its band, the previous total and each item's points
+  function agoCardHtml() {
+    return '<section class="card ago-card" id="agoCard" tabindex="-1" aria-labelledby="agoTitle">' +
+      '<div class="card-head"><h2 id="agoTitle">Ankle-GO score</h2><span class="ago-total" id="agoTotal"></span></div>' +
+      '<div class="ago-body" id="agoBody"></div><ul class="rts-list ago-list" id="agoList"></ul>' +
+      '<p class="fine rts-note">' + esc(DATA.ankle.note || '') + '</p></section>';
+  }
+  function agoBandHtml(g) {                            // the band (or why there is none yet), the apprehension still to answer, the previous total
+    var out = '';
+    if (g.band) out += '<div class="ago-band" data-look="' + g.band.look + '">' + chip(g.band.look, g.band.label + ' · ' + g.band.short) + '<p>' + esc(g.band.text) + '</p></div>';
+    else if (!g.injured) out += '<p class="ago-wait">Choose the injured side to score the tests.</p>';
+    else out += '<p class="ago-wait">' + (g.tested ? g.done + ' of ' + g.items.length + ' items complete. The band shows once the rest can’t change it.' : 'Enter the results to score them.') + '</p>';
+    if (g.noAppr.length) out += '<p class="ago-wait">Apprehension not answered: ' + esc(andList(g.noAppr.map(function (x) { return x.charAt(0).toLowerCase() + x.slice(1); }))) + '.</p>';
+    if (g.prev) out += '<p class="ago-prev">Previous: <b>' + esc(E.fmt(g.prev.value)) + ' of ' + g.max + '</b> on ' + esc(E.displayIso(g.prev.date)) +
+      (g.change ? ' <span class="m-change ' + g.change_kind + '">' + changeHtml(g.change, g.change_kind) + '</span>' : '') + '</p>';
+    return out;
+  }
+  function refreshAgoCard(c) {
+    var body = $('agoBody'), list = $('agoList');
+    if (!body) return;
+    var g = c.ago;
+    $('agoTotal').textContent = g.tested ? g.total + ' of ' + g.max + (g.complete ? '' : ' so far') : '';
+    var bh = agoBandHtml(g);
+    if (body._h !== bh) { body.innerHTML = bh; body._h = bh; }
+    var html = g.items.map(function (it) {
+      var m = agoMetricByName(it.metric) || {};
+      var sub = it.rule;
+      return '<li class="rts-row" data-status="' + (it.tested ? (it.status === 'Green' ? 'met' : 'not') : 'untested') + '"><div class="rts-l"><b>' + esc(it.label) + '</b><span class="rts-t">' + esc(sub) + '</span></div>' +
+        '<span class="rts-v">' + (it.tested ? esc(agoVal(it.value, m.kind === 'q' ? '%' : it.unit)) : 'up to ' + it.max) + '</span>' +
+        (it.tested ? chip(it.status, ptsText(it.pts, it.max)) : chip('n/a', 'Not tested')) + '</li>';
+    }).join('');
+    if (list._html !== html) { list.innerHTML = html; list._html = html; }
+  }
+  function agoSumHtml(c) {                             // in the summary panel: the band (taps through to the card)
+    var g = c.ago;
+    if (!g.tested) return '';
+    var word = g.band ? g.band.label + ' · ' + g.band.short : (g.complete ? '' : g.done + ' of ' + g.items.length + ' items complete');
+    return '<button type="button" class="quiet rts-sum ago-sum" data-action="goto-ago">' + (g.band ? chip(g.band.look, g.band.label) : '') +
+      '<span class="rts-sum-x"><span class="rts-sum-t">Ankle-GO' + (g.band ? '' : ' so far') + '</span><b>' + esc(g.band ? g.band.short.charAt(0).toUpperCase() + g.band.short.slice(1) : word) + '</b></span></button>';
+  }
+  function gotoAgo() {
+    var card = $('agoCard');
+    if (!card) return;
+    card.scrollIntoView({ behavior: reducedMotion() ? 'auto' : 'smooth', block: 'start' });
+    setTimeout(function () { try { card.focus({ preventScroll: true }); } catch (e) { card.focus(); } }, 350);
+  }
+  function agoLines(c) {                               // what Claude is told (no names, no dates)
+    var g = c.ago, S = DATA.ankle, L = [];
+    L.push('Ankle-GO items (test: injured leg | other leg | points | rule):');
+    g.items.forEach(function (it) {
+      var m = agoMetricByName(it.metric) || {}, u = m.kind === 'q' ? '%' : it.unit;
+      if (!it.tested) { L.push('- ' + it.label + ': not tested (up to ' + it.max + ' points)'); return; }
+      var bits = [it.label + ': ' + agoVal(it.value, u)];
+      if (m.kind !== 'q') bits.push(it.other === null ? 'other leg not tested' : 'other leg ' + agoVal(it.other, u) + (agoDiff(m, it.value, it.other) ? ' (' + agoDiff(m, it.value, it.other).toLowerCase() + ')' : ''));
+      bits.push(it.pts + ' of ' + it.max + ' points');
+      if (it.bonus.length) bits.push(it.bonus.map(function (b) { return b.label + ' ' + (b.value === null ? 'not tested' : (b.got ? 'yes (' + agoVal(b.value, '%') + ')' : 'no (' + agoVal(b.value, '%') + ')')); }).join(', '));
+      if (it.appr !== null) bits.push(it.appr === 'No' ? 'no apprehension' : (it.appr === 'Yes' ? 'apprehension reported' : 'apprehension not recorded'));
+      var row = c.byName[it.metric], cw = row ? changeWords(row) : '';
+      if (cw) bits.push(cw);
+      L.push('- ' + bits.join(' | ') + ' | ' + it.rule);
+    });
+    L.push('Ankle-GO score: ' + g.total + ' of ' + g.max + (g.complete ? '' : ' so far (' + g.done + ' of ' + g.items.length + ' items complete)') + '.' +
+      (g.band ? ' Band: ' + g.band.label.toLowerCase() + ' (' + g.band.short + ').' : '') +
+      (g.prev && g.complete ? ' Previous score ' + E.fmt(g.prev.value) + (g.change ? ', ' + changeWords({ change: g.change, change_kind: g.change_kind }) : '') + '.' : ''));
+    L.push('The developers’ reference points for a lateral ankle sprain managed without surgery (decision support only): under 8 = not yet ready to return to sport; 8 to 10 = further rehabilitation advised; 11 or more = on track for a full return to sport. A change of 2 points or more between tests is beyond measurement error.');
+    return L;
+  }
+
   // ------------------------------------------------------------------ trend sparklines
   // With the client's record loaded, a metric tested today and in at least two earlier sessions (of the last five, as
   // on the report's Progress table) gets a tiny line beside its "prev" note: missing values skipped, the available
@@ -2143,10 +2461,18 @@
       return '<div class="' + x[0] + (n ? ' on' : '') + '"><b>' + n + '</b><span>' + statusIcon(x[1]) + esc(labels[x[2]]) + '</span></div>';
     }).join('') + '</div>';
     var g = c.counts.Green, total = c.counts.Green + c.counts.Amber + c.counts.Red;
-    tally = '<div class="headline"><div class="ring-wrap"><div class="ring" role="img" aria-label="' + (total ? g + ' of ' + total + ' on target' : 'Nothing tested yet') + '">' +
-      ringSvg(96, 10, [['g', g], ['a', c.counts.Amber], ['r', c.counts.Red]], total) +
-      '<div class="ring-c" aria-hidden="true"><b>' + (total ? g : '–') + '</b>' + (total ? '<small>of ' + total + '</small>' : '') + '</div></div>' +
-      '<div class="ring-cap" aria-hidden="true">on target</div></div>' + tally + '</div>';
+    if (t === 'ankle') {                               // v42: the ring is the Ankle-GO total out of 25, coloured by its band once there is one
+      var ag = c.ago, look = ag.band ? AGO_LOOK[ag.band.look] : 'g';
+      tally = '<div class="headline"><div class="ring-wrap"><div class="ring" role="img" aria-label="' + (ag.tested ? 'Ankle-GO score ' + ag.total + ' of ' + ag.max + (ag.complete ? '' : ' so far') : 'Nothing tested yet') + '">' +
+        ringSvg(96, 10, [[look, ag.total]], ag.max) +
+        '<div class="ring-c" aria-hidden="true"><b>' + (ag.tested ? ag.total : '–') + '</b><small>of ' + ag.max + '</small></div></div>' +
+        '<div class="ring-cap" aria-hidden="true">' + (ag.tested && !ag.complete ? 'so far' : 'Ankle-GO') + '</div></div>' + tally + '</div>';
+    } else {
+      tally = '<div class="headline"><div class="ring-wrap"><div class="ring" role="img" aria-label="' + (total ? g + ' of ' + total + ' on target' : 'Nothing tested yet') + '">' +
+        ringSvg(96, 10, [['g', g], ['a', c.counts.Amber], ['r', c.counts.Red]], total) +
+        '<div class="ring-c" aria-hidden="true"><b>' + (total ? g : '–') + '</b>' + (total ? '<small>of ' + total + '</small>' : '') + '</div></div>' +
+        '<div class="ring-cap" aria-hidden="true">on target</div></div>' + tally + '</div>';
+    }
     var list;
     if (t === 'str') {
       if (!c.rows.length) {
@@ -2158,6 +2484,10 @@
           return prioItem(r.id, r.name, r.status, r.text + ' · target ' + r.target);
         }).join('') + '</ol>' + (c.prios.length > 6 ? '<p class="fine">+ ' + (c.prios.length - 6) + ' more in the report</p>' : '');
       }
+    } else if (t === 'ankle' && c.groups.length) {     // v42: the items short of full points, fewest points first
+      list = !c.prios.length ? '<p class="ok">Full points on every item tested.</p>' : '<ol class="prio">' + c.prios.map(function (r) {
+        return prioItem(r.name, r.label, r.status, agoVal(r.result, r.unit) + ' \u00b7 ' + ptsText(r.pts, r.max));
+      }).join('') + '</ol>';
     } else if (!c.groups.length) {
       // v18: example results are in the ⋯ menu. Results typed before the norms are chosen wait (the reason is said
       // once, under Create report)
@@ -2169,7 +2499,7 @@
         return prioItem(r.name, r.name, r.status, E.fmt(r.result) + ' ' + r.unit + (r.side ? ' (' + r.side + ' higher)' : '') + ' · target ' + r.target);
       }).join('') + '</ol>';
     }
-    var html = '<div class="sum"><div class="sum-scroll">' + head + tally + (t === 'acl' ? rtsSumHtml(c) : '') + '<h3>Top priorities <small>worst first</small></h3>' + list;
+    var html = '<div class="sum"><div class="sum-scroll">' + head + tally + (t === 'acl' ? rtsSumHtml(c) : '') + (t === 'ankle' ? agoSumHtml(c) : '') + '<h3>Top priorities <small>' + (t === 'ankle' ? 'fewest points first' : 'worst first') + '</small></h3>' + list;
     if (SL(t) && c.radarOptions.length) {              // v36: the Custom battery's profile chart too
       var full = c.radarPicked.length >= 6;
       html += '<h3>Profile chart <small>pick 3–6 for page 1</small></h3><div class="picks">' + c.radarOptions.map(function (o) {
@@ -2218,6 +2548,7 @@
       var row = el.closest('.metric'), v = val(t, row.dataset.metric);
       v[el.dataset.field] = el.value;
       if (el.dataset.field === 'previous') { v.prevDate = ''; v.prevMass = ''; }   // typed by hand now, no longer the saved record's value (v36: nor its body mass)
+      if (t === 'ankle') agoTotal(row, el);            // v42: a questionnaire's total fills its %
       refresh();
       if (!blank(el.value)) foldNow(t, true);          // results arriving: the details card folds into the strip (v11)
     }
@@ -2285,6 +2616,8 @@
     if (b.dataset.action === 'interp-own') { openInterp(); return; }
     if (b.dataset.action === 'add-prev') { addPrevious(); return; }     // v18: the Previous column on a first visit
     if (b.dataset.action === 'goto-rts') { gotoRts(); return; }
+    if (b.dataset.action === 'goto-ago') { gotoAgo(); return; }   // v42
+    if (b.dataset.appr && t === 'ankle') { setAppr(b); return; }
     if (b.dataset.action === 'typo-ok') { typoOk(b); return; }
     if (b.dataset.action === 'goto-check') { gotoCheck(); return; }
     if (b.dataset.action === 'goto-metric') { gotoMetric(b.dataset.goto); return; }
@@ -2406,6 +2739,14 @@
       var hx = { 'AKET deficit vs uninjured': ['4', '9'], 'SLR % of uninjured side': ['96', '88'], 'HHD 90° knee-flex % of uninjured': ['91', '80'],
         'Nordic peak force — injured': ['290', '245'], 'Nordic peak-force imbalance': ['22', '41'], '10 m sprint time': ['1.86', '1.95'], 'HaOS score': ['84', '70'] };
       Object.keys(hx).forEach(function (k) { var v = val('ham', k); v.result = hx[k][0]; v.previous = hx[k][1]; });
+    } else if (t === 'ankle') {                        // v42: about two months after a sprain, nearly there
+      Object.assign(s.meta, { name: 'Example Patient', injured: 'Right', weeks: '8', sport: 'Basketball', notes: 'Example data \u2014 not a real patient' });
+      var gx = { 'Single-leg stance': ['1', '0', 'No'], 'Leg length': ['91', '91'], 'SEBT anterior': ['58', '55'], 'SEBT posteromedial': ['88', '80'],
+        'SEBT posterolateral': ['84', '77'], 'SEBT composite': ['', '', 'No'], 'Side hop': ['9.8', '13.8', 'Yes'], 'Figure-of-8 hop': ['11.9', '13.6', 'No'] };
+      Object.keys(gx).forEach(function (k) { var v = val('ankle', k); v.left = gx[k][0]; v.right = gx[k][1]; if (gx[k][2]) v.appr = gx[k][2]; });
+      val('ankle', 'FAAM ADL').result = '94';
+      var fs = val('ankle', 'FAAM Sport'); fs.total = '26'; fs.result = '81.3';
+      val('ankle', 'ALR-RSI').result = '58';
     } else if (t === 'str') {
       Object.assign(s.meta, { name: 'Example Patient', mass: '80', sport: 'AFL', notes: 'Example data \u2014 not a real patient' });
       var sx = { split_squat: ['28', '25'], sl_seated_calf_vald: ['1650', '1540'], sl_seated_calf_smith: ['125', '118'],
@@ -2478,6 +2819,25 @@
       };
     }
     var auto = function (fromIso, div) { var d = daysBetween(fromIso, m.date); return d !== null && d >= 0 ? String(Math.floor(d / div)) : ''; };
+    if (t === 'ankle') {                               // v42
+      var A0 = DATA.ankle, metr = {};
+      A0.groups.forEach(function (gr) { gr.metrics.forEach(function (mm) { metr[mm.name] = mm; }); });
+      return {
+        file: fileName('_ankle-go.pdf', t),
+        rep: window.BHReport.ankle({
+          ago: c.ago, counts: c.counts, groups: c.groups, interp: interp, progress: progress, coach: coachData(t),
+          rows: A0.groups.map(function (gr) {           // every row as typed, each leg in the scored unit, for the results table
+            return { title: gr.title, rows: gr.metrics.map(function (mm) {
+              var v = state.ankle.values[mm.name] || {};
+              return { name: mm.name, kind: mm.kind, role: mm.role || '', unit: agoUnit(mm), raw: mm.unit, left: c.ago.sides.left[mm.name], right: c.ago.sides.right[mm.name],
+                rawLeft: E.parseInput(v.left), rawRight: E.parseInput(v.right), q: mm.kind === 'q' ? c.ago.q[mm.name] : null, total: E.parseInput(v.total), of: mm.of || null };
+            }) };
+          }),
+          bands: A0.bands, note: A0.note || '', sources: A0.sources || [], disclaimer: A0.disclaimer || '', title: A0.title || 'Ankle-GO',
+          meta: { name: m.name, date: E.displayIso(m.date), injured: m.injured, clinician: m.clinician, weeks: blank(m.weeks) ? auto(m.doi, 7) : m.weeks, sport: m.sport, notes: m.notes }
+        })
+      };
+    }
     if (t === 'ham') {
       return {
         file: fileName('_hamstring.pdf', t),
@@ -2947,6 +3307,7 @@
     str: homeSvg('<path d="M6.5 6.5v11M17.5 6.5v11M3.5 9.5v5M20.5 9.5v5M6.5 12h11"/>'),                                  // a dumbbell
     ham: homeSvg('<circle cx="15" cy="4.2" r="1.9"/><path d="M13.6 7.6 10.8 13l3.6 2.4-1.6 5.6"/><path d="M10.8 13 7 15.2 4.5 14"/><path d="M13.6 7.6 17 9.6l2.4-1.8"/><path d="M13.6 7.6 10 8.4 8.4 11"/>'),   // a sprinter: back to running
     acl: homeSvg('<path d="M9.5 3v5.8a2.6 2.6 0 0 0 5.2 0V3"/><path d="M9.5 21v-4.8a2.6 2.6 0 0 1 5.2 0V21"/><circle cx="18" cy="12.2" r="1.7"/><path d="M11 10.8l2.4 2.6"/>'),   // a knee: the bone ends, the kneecap and the ligament
+    ankle: homeSvg('<path d="M8.5 3v10.6c0 1.1-.5 2-1.1 2.8-1 1.4-.4 3.6 1.5 3.6h11.2a1.3 1.3 0 0 0 .6-2.4l-4.9-2.6a4.6 4.6 0 0 1-2.4-4V3"/><circle cx="11.2" cy="14.4" r="1.15"/>'),   // v42: a lower leg and foot, the ankle bone marked
     custom: homeSvg('<path d="M4 6.5h2.5M4 12h2.5M4 17.5h2.5"/><path d="M10 6.5h10M10 12h10M10 17.5h10"/><path d="M7.2 5.2 5.4 7.6 4.3 6.6"/><path d="M7.2 10.7 5.4 13.1 4.3 12.1"/>'),   // v36: a list with ticks: the tests chosen
     photo: homeSvg('<path d="M4 8h3l2-3h6l2 3h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="3.5"/>'),
     builder: homeSvg('<rect x="5" y="4.5" width="14" height="16.5" rx="2"/><path d="M9 3h6v3H9zM8.5 11h7M8.5 15h4.5"/>'),
@@ -2960,6 +3321,7 @@
     str: 'Each leg’s load, force or reps: asymmetry and capacity.',
     ham: 'Injured-limb results against the targets for the rehab phase.',
     acl: 'Injured-limb and symmetry results against ACLR norms for the phase.',
+    ankle: 'Lateral ankle sprain: four tests and three questionnaires, out of 25.',   // v42
     custom: 'Pick any tests, or photograph your notes, and score them against the norms.',   // v36
     photo: 'Photograph a handwritten program and get a neat, printable handout.',
     builder: 'Pick from the library, type exercises or start from a template.',
@@ -3618,6 +3980,8 @@
       var title = TOOL_NAMES[t] + (t === 'custom' && typeof x.batName === 'string' && !blank(x.batName) ? ' — ' + clean1(x.batName) : '');
       if (n) bits.push(cpCount(n, 'test', 'tests'));
       if ((t === 'ham' || t === 'acl') && typeof m.phase === 'string' && m.phase) bits.push(m.phase);
+      var sc = t === 'ankle' && DATA.ankle && x.results ? E.num(x.results[DATA.ankle.score.name]) : null;   // v42: the total, once every item was in
+      if (sc !== null) bits.push('score ' + E.fmt(sc) + ' of ' + DATA.ankle.max);
       var by = NAME_FIELDS[t] && typeof m[NAME_FIELDS[t]] === 'string' && !blank(m[NAME_FIELDS[t]]) ? m[NAME_FIELDS[t]] : (typeof x.savedBy === 'string' ? x.savedBy : '');
       if (!blank(by)) bits.push(clean1(by));
       var co = m.coach && typeof m.coach === 'object' ? m.coach.status : '';
@@ -3696,9 +4060,12 @@
     }
     if (t === 'ham' || t === 'acl') s.phase = DATA[t].phases.indexOf(m.phase) >= 0 ? m.phase : null;
     if (t === 'acl') s.sex = A.sexes.indexOf(m.normSex) >= 0 ? m.normSex : null;
+    if (t === 'ankle' && s.meta.injured !== 'Left' && s.meta.injured !== 'Right') s.meta.injured = '';   // v42
     Object.keys(x.values || {}).forEach(function (k) {
       var src = x.values[k] || {}, v = { result: '', previous: '', side: '', left: '', right: '' };
+      if (t === 'ankle') { v.appr = ''; v.total = ''; }   // v42
       Object.keys(v).forEach(function (f) { if (src[f] != null && typeof src[f] !== 'object') v[f] = String(src[f]); });
+      if (t === 'ankle' && v.appr !== 'No' && v.appr !== 'Yes') v.appr = '';
       s.values[k] = v;
     });
     s.interp = { text: typeof x.interp === 'string' ? x.interp : '', ai: x.interpAi === true, basis: '' };
@@ -4422,7 +4789,7 @@
   function joinBits(bits) { return bits.filter(function (b) { return b && !/:\s*$/.test(b); }).join(' · '); }
   function sinceText(t) {
     var m = state[t].meta;
-    if (t === 'ham') {
+    if (t === 'ham' || t === 'ankle') {                // v42: + Ankle-GO (weeks since the injury)
       if (!blank(m.weeks)) return clean1(m.weeks);
       var d = daysBetween(m.doi, m.date); return d !== null && d >= 0 ? String(Math.floor(d / 7)) : '';
     }
@@ -4431,7 +4798,7 @@
   }
   var READERS_PATIENT = 'Readers: the patient (and their coach or trainer, if they have one). Refer to the person as \u2018the patient\u2019.';
   function interpPayload(t, c) {
-    var m = state[t].meta, L = [], rehab = t === 'ham' || t === 'acl';
+    var m = state[t].meta, L = [], rehab = t === 'ham' || t === 'acl' || t === 'ankle';
     var totals = 'Totals: ' + (rehab
       ? c.counts.Green + ' on target, ' + c.counts.Amber + ' close, ' + c.counts.Red + ' behind.'
       : c.counts.Green + ' on target, ' + c.counts.Amber + ' close, ' + c.counts.Red + ' off target.');
@@ -4468,6 +4835,14 @@
         var diff = E.diffText(tt.diff);
         L.push('- ' + tt.name + (tt.detail ? ' (' + tt.detail + ')' : '') + ': ' + sides.join(' | ') + ' | target ' + tt.target + (diff ? ' | ' + diff : ''));
       });
+    } else if (t === 'ankle') {                        // v42
+      L.push(READERS_PATIENT);
+      L.push('Report: the Ankle-GO score after a lateral ankle sprain managed without surgery: four functional tests (single-leg stance, the modified star excursion balance test, the side hop and the figure-of-8 hop) and three questionnaires (FAAM ADL, FAAM Sport and ALR-RSI, readiness to return to sport), scored on the injured leg for a total out of 25. The other leg is given for comparison.');
+      var wk = sinceText(t);
+      L.push('Context: ' + joinBits([blank(m.injured) ? '' : 'injured side: ' + clean1(m.injured).toLowerCase(), wk ? 'weeks since injury: ' + wk : '', blank(m.sport) ? '' : 'sport: ' + clean1(m.sport)]) + '.');
+      L.push('Status key: On target = full points for the item; Close = some of its points; Behind = no points.');
+      L.push(totals);
+      L = L.concat(agoLines(c));
     } else {
       var S = DATA[t], acl = t === 'acl';
       L.push(READERS_PATIENT);
@@ -4834,6 +5209,13 @@
         if (tt.input === 'calc') return;
         list.push({ id: 't' + (++n), key: tt.id, name: tt.name, what: INPUT_WORD[tt.input] + (tt.detail ? ' (' + tt.detail + ')' : '') + ' for each leg', fields: ['left', 'right'] });
       });
+    } else if (t === 'ankle') {                        // v42: each leg for the tests, the % for a questionnaire (the composite is worked out)
+      DATA.ankle.groups.forEach(function (g) {
+        g.metrics.forEach(function (m) {
+          if (m.kind === 'comp') return;
+          list.push({ id: 't' + (++n), key: m.name, name: m.name, what: (m.scan || 'in ' + m.unit) + (m.dir === 'Lower' ? ', lower is better' : ''), fields: m.kind === 'q' ? ['result'] : ['left', 'right'] });
+        });
+      });
     } else {
       DATA[t].groups.forEach(function (g) {
         g.metrics.forEach(function (m) {
@@ -4848,6 +5230,7 @@
   function scanPrompt(t, list) {
     var L = ['Section of the app: ' + TOOL_NAMES[t] + '.'];
     if (t === 'custom') L.push('The clinician chose the tests themselves, so the paper may hold any of the tests listed below, and tests of the clinic\u2019s own that are not listed.');   // v36
+    if (t === 'ankle') L.push('Ankle-GO after a lateral ankle sprain: left and right are the legs (for a star excursion reach, the leg standing on the floor). Apprehension notes are for the clinician to enter; leave them out.');   // v42
     if (t === 'ham' || t === 'acl' || t === 'custom') {   // v37: the Custom battery's rehab tests too
       var inj = state[t].meta.injured;
       L.push(inj ? 'Injured side: ' + inj + '. Where a test asks for the injured side and both sides are written, use the ' + inj.toLowerCase() + ' value.'
@@ -5677,6 +6060,11 @@
     if (lt === 'str') {
       if (!c.rows.length) return null;
       list = c.prios.map(function (r) { return { key: r.id, name: r.name, status: r.status, detail: r.text + ' · target ' + r.target }; });
+    } else if (lt === 'ankle') {                       // v42: the items short of full points, with their points
+      if (!c.groups.length) return null;
+      list = c.prios.map(function (r) { return { key: r.name, name: r.label, status: r.status, detail: agoVal(r.result, r.unit) + ' \u00b7 ' + ptsText(r.pts, r.max) }; });
+      var n0 = c.counts;
+      return { tool: lt, list: list, guide: null, green: n0.Green, total: n0.Green + n0.Amber + n0.Red, ago: c.ago };
     } else {
       if (!c.groups.length) return null;
       list = E.priorities(c.groups, 999).map(function (r) {
@@ -5689,6 +6077,7 @@
     return { tool: lt, list: list, guide: guide, green: n.Green, total: n.Green + n.Amber + n.Red };
   }
   function exFindSub(d) {                              // 'Performance screen · 6 of 11 on target'
+    if (d.ago) return TOOL_NAMES[d.tool] + ' \u00b7 ' + d.ago.total + ' of ' + d.ago.max + (d.ago.complete ? '' : ' so far');   // v42: 'Ankle-GO · 10 of 25'
     return TOOL_NAMES[d.tool] + (d.total ? ' · ' + d.green + ' of ' + d.total + ' on target' : '');
   }
   function exFindItem(key, name, chipHtml, detail) {
@@ -6345,7 +6734,7 @@
   // v25 (Matthew: "the AI needs to consider how one might affect the other"): with a condition, Claude reads the report as a whole,
   // sorts the findings into those the condition explains and those that are separate, names the sections Rehab / Performance /
   // Keep up, says what leads the block, and writes a rationale for the physiotherapist that stays with the program (never printed).
-  var SUGGEST_TOOLS = ['screen', 'str', 'ham', 'acl', 'custom'];   // v36: + the Custom battery
+  var SUGGEST_TOOLS = ['screen', 'str', 'ham', 'acl', 'ankle', 'custom'];   // v36: + the Custom battery; v42: + Ankle-GO
   var EX_SUGGEST_DEFAULT = {
     effort: 'high', max_tokens: 32000, timeout_s: 480, max_per_day: 5, cache: '1h',   // v26: the cap is per training day; v28: room for a three-day program; v29: high effort (the JSON answer leaves Claude only its hidden thinking to reason in, which medium effort often skips), room for that thinking, and the reference documents cached for an hour
     system: [
@@ -6419,6 +6808,10 @@
   }
   function stageFor(lt, plan) {                        // the stage line for the request: a rehab report's phase, or the plan's stage
     if (lt === 'ham' || lt === 'acl') { var ph = clean1(state[lt].phase); return ph ? 'Rehab phase (set by the physiotherapist on the report): ' + ph + '.' : ''; }
+    if (lt === 'ankle') {                              // v42: no phase: the weeks since the injury and the Ankle-GO total stand in for the stage
+      var wk = sinceText('ankle'), ag = computeAnkle().ago;
+      return joinBits([wk ? 'Weeks since the sprain (from the report): ' + wk : '', ag.tested ? 'Ankle-GO ' + ag.total + ' of ' + ag.max + (ag.complete ? '' : ' so far') + (ag.band ? ' (' + ag.band.label.toLowerCase() + ': ' + ag.band.short + ')' : '') : '']).replace(/ · /, '; ') + (wk || ag.tested ? '.' : '');
+    }
     var s = plan && plan.stage, g = DATA.guideIndex, help = g && g.stage_help && typeof g.stage_help[s] === 'string' ? clean1(g.stage_help[s]) : '';
     return s ? 'Stage (set by the physiotherapist): ' + s.toLowerCase() + (help ? ' (' + help + ')' : '') + '.' : '';
   }
@@ -6431,7 +6824,7 @@
     return 'Layout: ' + d + ' training days a week, so write the program out by day (' + names.join(', ') + '), each a short session of 3 to 5 exercises with its own emphasis; the same exercise may appear on more than one day with different loads.';
   }
   function sideFor(lt, plan) {                         // v25: the condition's side for the request: the report's injured side, or the plan's ('' when not chosen)
-    var s = lt === 'ham' || lt === 'acl' ? clean1(state[lt].meta.injured) : (plan && plan.side) || '';
+    var s = lt === 'ham' || lt === 'acl' || lt === 'ankle' ? clean1(state[lt].meta.injured) : (plan && plan.side) || '';   // v42: + Ankle-GO
     return !s ? '' : (s === 'Both' ? 'both sides' : s.toLowerCase() + ' side');
   }
   function guideBundle(lt, plan, cfg) {                // { ids, titles, shorts, parts, chars } of the evidence guides for this request
@@ -6575,7 +6968,9 @@
     var cond = conditionFor(lt, plan), conds = conditionList();
     if (cond && cond.fixed) {                           // a rehab report: its condition, side and phase, shown, not chosen
       var ph = clean1(state[lt].phase), inj = clean1(state[lt].meta.injured);   // v25: the injured side too
-      rows.push('<div class="f cond"><span>Condition' + (inj ? ', side' : '') + ' and phase, from this report</span><p class="plan-fixed" id="planFixed">' + esc(cond.label) + (inj ? ' · ' + esc(inj) : '') + (ph ? ' · ' + esc(ph) : '') + '</p></div>');
+      var agw = lt === 'ankle' ? sinceText('ankle') : '';   // v42: Ankle-GO has no phase: the weeks since the sprain
+      if (agw) ph = agw + (agw === '1' ? ' week' : ' weeks') + ' since the sprain';
+      rows.push('<div class="f cond"><span>Condition' + (inj ? ', side' : '') + (lt === 'ankle' ? (agw ? ' and time since injury' : '') : ' and phase') + ', from this report</span><p class="plan-fixed" id="planFixed">' + esc(cond.label) + (inj ? ' · ' + esc(inj) : '') + (ph ? ' · ' + esc(ph) : '') + '</p></div>');
     } else if (conds.length) {
       rows.push('<div class="f cond"><label for="planCondition">Condition (optional: adds its evidence guide)</label><select id="planCondition" data-plan-select="condition">' +
         conds.map(function (c) { return '<option value="' + esc(c.id) + '"' + (c.id === plan.condition ? ' selected' : '') + '>' + esc(c.label) + '</option>'; }).join('') + '</select></div>');
@@ -8143,7 +8538,7 @@
   var HIST = 'bh-athlete-report-clients-v1';
   var clients = { v: 1, clients: {} };
   var SCORE_UNITS = { xBW: '× BW', xBWf: '× BW', pctBW: '% BW', Nkg: 'N/kg', reps: 'reps', ratio: '' };
-  var PREFILL = { screen: ['sex', 'age', 'sport', 'tester'], str: ['sport', 'tester'], ham: ['injured', 'doi', 'clinician', 'sport'], acl: ['injured', 'dos', 'graft', 'surgeon', 'sport'], custom: ['sex', 'age', 'sport', 'tester', 'injured'] };   // v36; v37: the injured side (from Custom sessions only, as SAME_TOOL_ONLY says)
+  var PREFILL = { screen: ['sex', 'age', 'sport', 'tester'], str: ['sport', 'tester'], ham: ['injured', 'doi', 'clinician', 'sport'], acl: ['injured', 'dos', 'graft', 'surgeon', 'sport'], ankle: ['injured', 'doi', 'clinician', 'sport'], custom: ['sex', 'age', 'sport', 'tester', 'injured'] };   // v36; v37: the injured side (from Custom sessions only, as SAME_TOOL_ONLY says)
   var SAME_TOOL_ONLY = { injured: true, doi: true, dos: true, graft: true, surgeon: true, clinician: true };
   function loadLocalClients() {                        // the records kept on this device (local mode; before v13 in cloud mode)
     try {
@@ -8180,7 +8575,7 @@
     var src = state[t].values, out = {};
     Object.keys(src).forEach(function (k) {
       var v = src[k] || {}, o = {};
-      ['result', 'previous', 'side', 'left', 'right'].forEach(function (f) { if (!blank(v[f])) o[f] = String(v[f]).trim(); });
+      ['result', 'previous', 'side', 'left', 'right', 'appr', 'total'].forEach(function (f) { if (!blank(v[f])) o[f] = String(v[f]).trim(); });   // v42: + Ankle-GO's apprehension and a questionnaire's total
       if (Object.keys(o).length) out[k] = o;
     });
     return out;
@@ -8411,7 +8806,7 @@
     } else {
       setOf(t).groups.forEach(function (g) {
         g.metrics.forEach(function (mm) {
-          if (mm.calc === 'RATIO') return;             // v37: worked out from the hip tests' previous results
+          if (mm.calc === 'RATIO' || mm.role === 'len') return;   // v37: worked out from the hip tests' previous results; v42: the leg length has none
           // v36: a load or force needs the value as typed (the record's result is the score): only sessions that kept it
           var src = t === 'custom' && /^(XBW|PCTBW|PERKG|PERBW)$/.test(mm.calc || '') ? hs.filter(function (x) { return x.values && x.values[mm.name] && !blank(x.values[mm.name].result); }) : hs;
           var v = val(t, mm.name), p = E.previousFor(src, t, mm.name, date);
@@ -8430,7 +8825,7 @@
     }
     // v18: a returning client starts on "Only last time's tests" (one tap shows them all); the same client reloaded keeps the choice
     // (v36: not on the Custom battery, where the battery is already the tests chosen for today: one added would hide)
-    if (!s.hist || s.hist.key !== key) s.onlyPrev = n > 0 && t !== 'custom';
+    if (!s.hist || s.hist.key !== key) s.onlyPrev = n > 0 && t !== 'custom' && t !== 'ankle';   // v42: nor on Ankle-GO (every item is in the score)
     s.hist = { key: key, name: cl.name, n: n, dates: Object.keys(dates).sort(), date: date };
     hideSuggest();
     if (picked || n) foldBeforeRender(t);
@@ -8478,7 +8873,7 @@
         ? ' — previous results loaded from ' + esc(h.dates.map(E.displayIso).join(', ')) + ' (' + h.n + (h.n === 1 ? ' test' : ' tests') + ')'
         : ' — no earlier ' + (t === 'custom' ? 'results this battery can use' : TOOL_NAMES[t] + ' sessions') + '; details filled in') +
         (h.date !== date ? ' <button type="button" class="quiet" data-action="reload-history">Reload for this date</button>' : '') +
-        (h.n ? ' <button type="button" class="quiet retest" data-action="retest">' + (on ? 'Show all tests' : 'Only last time’s tests') + '</button>' +
+        (h.n && t !== 'ankle' ? ' <button type="button" class="quiet retest" data-action="retest">' + (on ? 'Show all tests' : 'Only last time’s tests') + '</button>' +   // v42: Ankle-GO scores every item
           (on ? '<span class="retest-n">Showing ' + retest.n + ' of ' + retest.total + ' tests</span>' : '') : '');
     } else if (cl) {
       var earlier = earlierCount(cl, t, date), total = cl.sessions.length;
@@ -8512,7 +8907,8 @@
         ['L', 'R'].forEach(function (k) { var id = tt.id + '|' + k; label[id] = tt.name + ' — ' + (k === 'L' ? 'Left' : 'Right'); unit[id] = SCORE_UNITS[tt.score] || ''; dir[id] = tt.dir || 'Higher'; });
       });
     } else {
-      setOf(t).groups.forEach(function (g) { g.metrics.forEach(function (mm) { label[mm.name] = mm.name; unit[mm.name] = mm.unit || ''; dir[mm.name] = mm.dir || ''; }); });
+      setOf(t).groups.forEach(function (g) { g.metrics.forEach(function (mm) { label[mm.name] = mm.name; unit[mm.name] = mm.scoreUnit || mm.unit || ''; dir[mm.name] = mm.dir || ''; }); });   // v42: a reach is recorded as % of leg length
+      if (t === 'ankle') { var sc0 = DATA.ankle.score; label[sc0.name] = sc0.name; unit[sc0.name] = sc0.unit; dir[sc0.name] = sc0.dir; }
     }
     return {
       dates: p.dates.map(E.displayIso), sessions: p.sessions,
@@ -8954,8 +9350,13 @@
         DATA.guideIndex = ix; DATA.guides = texts2;
       });
     }).catch(function () { /* no guide library: Suggest says so */ });
-    Promise.all([fetchJson('norms.json'), fetchJson('hamstring_norms.json'), fetchJson('acl_norms.json'), fetchJson('strength_norms.json'), ai, explain, starter, guide]).then(function (r) {
+    // v42: Ankle-GO's rows, points and cut-offs (without them the battery is left out rather than the app failing to open)
+    var ankle = fetchJson('ankle_go.json').catch(function () { return null; });
+    Promise.all([fetchJson('norms.json'), fetchJson('hamstring_norms.json'), fetchJson('acl_norms.json'), fetchJson('strength_norms.json'), ai, explain, starter, guide, ankle]).then(function (r) {
       DATA.screen = r[0]; DATA.ham = r[1]; DATA.acl = r[2]; DATA.str = r[3]; DATA.ai = r[4];
+      var ag = r[8];
+      DATA.ankle = ag && Array.isArray(ag.groups) && Array.isArray(ag.items) && ag.score && Array.isArray(ag.bands) ? ag : null;
+      if (!DATA.ankle && TOOLS.indexOf('ankle') >= 0) TOOLS.splice(TOOLS.indexOf('ankle'), 1);
       DATA.guide = typeof r[7] === 'string' && r[7].indexOf('<') !== 0 ? r[7] : '';   // (an HTML 404 page from an older cache is not a guide)
       DATA.explain = r[5] && r[5].metrics && typeof r[5].metrics === 'object' ? r[5] : { metrics: {} };
       localLib = loadItems(LIB_STORE);                 // v15: local mode's library and templates (cloud mode reads the store's cache)
@@ -8964,7 +9365,7 @@
       setStarter(r[6]);
       clients = loadClients();
       testsPref = loadTestsPref();
-      state = loadDraft() || { v: 1, tool: 'screen', screen: freshTool('screen'), str: freshTool('str'), ham: freshTool('ham'), acl: freshTool('acl'), ex: freshEx() };
+      state = loadDraft() || { v: 1, tool: 'screen', screen: freshTool('screen'), str: freshTool('str'), ham: freshTool('ham'), acl: freshTool('acl'), ankle: freshTool('ankle'), ex: freshEx() };
       tidyState();
       if (CLOUD && CLOUD.signedIn()) fillPractitioner('');   // v13: blank Clinician boxes take this device's practitioner name
       els.entry.addEventListener('input', onInput);

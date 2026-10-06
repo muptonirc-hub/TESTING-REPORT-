@@ -271,6 +271,77 @@
     return groups;
   }
 
+  // ---------------------------------------------------------------- v42: Ankle-GO (Picot et al. 2024)
+  // set = ankle_go.json; values = the page's boxes as typed ({ name: { left, right, result, appr } }); injured = 'Left' |
+  // 'Right'. Each leg's value per row in the scored unit (a reach as % of that leg's length: the other leg's length when
+  // only one is typed; the composite the mean of its three reaches), then each item's points on the injured side: its
+  // steps (the first that holds), its bonus rows and the apprehension point ('No' = 1, 'Yes' = 0, '' = not answered).
+  // The total, its maximum, and the band: once every item is in, or before that when the points still to come can't
+  // move the total out of the band it is in.
+  function agoTest(op, a, b) { return op === '<' ? a < b : op === '<=' ? a <= b : op === '>' ? a > b : op === '>=' ? a >= b : false; }
+  function agoBand(set, total) {
+    var hit = null;
+    (set.bands || []).forEach(function (b) { if (!hit && total >= b.min && total <= b.max) hit = b; });
+    return hit;
+  }
+  function ankleGo(set, values, injured) {
+    values = values || {};
+    var inj = injured === 'Left' ? 'left' : (injured === 'Right' ? 'right' : ''), oth = inj === 'left' ? 'right' : (inj === 'right' ? 'left' : '');
+    var metrics = {}, order = [];
+    (set.groups || []).forEach(function (g) { g.metrics.forEach(function (m) { metrics[m.name] = m; order.push(m); }); });
+    function V(n) { return values[n] || {}; }
+    var len = { left: null, right: null }, lenName = '';
+    order.forEach(function (m) { if (m.role === 'len' && !lenName) lenName = m.name; });
+    if (lenName) {
+      var l0 = parseInput(V(lenName).left), r0 = parseInput(V(lenName).right);
+      len.left = l0 > 0 ? l0 : (r0 > 0 ? r0 : null);
+      len.right = r0 > 0 ? r0 : (l0 > 0 ? l0 : null);
+    }
+    var sides = { left: {}, right: {} }, raw = { left: {}, right: {} }, qs = {};
+    order.forEach(function (m) {
+      if (m.kind === 'q') { qs[m.name] = parseInput(V(m.name).result); return; }
+      ['left', 'right'].forEach(function (sd) {
+        if (m.kind === 'lr') {
+          var x = parseInput(V(m.name)[sd]);
+          raw[sd][m.name] = x;
+          if (m.role === 'reach') sides[sd][m.name] = x !== null && len[sd] ? pyRound(x / len[sd] * 100, 1) : null;
+          else sides[sd][m.name] = x;
+        } else if (m.kind === 'comp') {
+          var parts = (m.from || []).map(function (n) { var p = sides[sd][n]; return p === undefined ? null : p; });
+          sides[sd][m.name] = parts.length && parts.every(function (p) { return p !== null; }) ? pyRound(parts.reduce(function (a, b) { return a + b; }, 0) / parts.length, 1) : null;
+        }
+      });
+    });
+    function onInj(n) { var m = metrics[n]; if (!m) return null; if (m.kind === 'q') return qs[n]; return inj ? sides[inj][n] : null; }
+    function onOth(n) { var m = metrics[n]; if (!m || m.kind === 'q' || !oth) return null; return sides[oth][n]; }
+    var total = 0, max = 0, hi = 0, done = 0, items = [], noAppr = [];
+    (set.items || []).forEach(function (it) {
+      var v = onInj(it.metric), o = onOth(it.metric), base = 0, bonus = [], appr = null, pts = 0;
+      if (v !== null) for (var i = 0; i < (it.steps || []).length; i++) { if (agoTest(it.steps[i].op, v, it.steps[i].value)) { base = it.steps[i].pts; break; } }
+      (it.bonus || []).forEach(function (b) {
+        var bv = onInj(b.metric), got = bv !== null && agoTest(b.op, bv, b.value);
+        bonus.push({ metric: b.metric, label: b.label || b.metric, value: bv, got: got, pts: got ? b.pts : 0 });
+      });
+      if (it.appr) { var a = V(it.metric).appr; appr = a === 'No' ? 'No' : (a === 'Yes' ? 'Yes' : ''); }
+      if (v !== null) {
+        pts = base + bonus.reduce(function (s, b) { return s + b.pts; }, 0) + (appr === 'No' ? 1 : 0);
+      }
+      var tested = v !== null, complete = tested && (!it.appr || appr !== '');
+      if (tested && it.appr && appr === '') noAppr.push(it.label);
+      total += pts; max += it.max;
+      hi += complete ? pts : (tested ? pts + 1 : it.max);
+      if (complete) done++;
+      items.push({ id: it.id, label: it.label, metric: it.metric, unit: (metrics[it.metric] || {}).unit || '', dir: (metrics[it.metric] || {}).dir || '',
+        value: v, other: o, base: base, bonus: bonus, appr: it.appr ? appr : null, pts: pts, max: it.max, tested: tested, complete: complete,
+        status: !tested ? '' : (pts >= it.max ? 'Green' : (pts > 0 ? 'Amber' : 'Red')), rule: it.rule || '' });
+    });
+    var lo = agoBand(set, total), up = agoBand(set, hi);
+    var complete = done === items.length && items.length > 0;
+    return { injured: injured === 'Left' || injured === 'Right' ? injured : '', sides: sides, raw: raw, len: len, q: qs, items: items,
+      total: total, max: max, hi: hi, done: done, complete: complete, tested: items.filter(function (x) { return x.tested; }).length,
+      noAppr: noAppr, band: lo && up && lo === up && items.some(function (x) { return x.tested; }) ? lo : null };
+  }
+
   // ACL: limb symmetry index, operated / non-operated x 100 (app.py rule)
   function lsi(left, right, injured) {
     var l = num(left), r = num(right);
@@ -1015,7 +1086,7 @@
     radarOptions: radarOptions, radarDefault: radarDefault, radarSpokes: radarSpokes, SHORT_LABEL: SHORT_LABEL,
     scorecard: scorecard, shortDomain: shortDomain, meter: meter, meterAt: meterAt,
     STATUS_WORDS: STATUS_WORDS, TALLY_WORDS: TALLY_WORDS, statusWord: statusWord,
-    RTS_WORDS: RTS_WORDS, rtsCheck: rtsCheck, rtsSummary: rtsSummary,
+    RTS_WORDS: RTS_WORDS, rtsCheck: rtsCheck, rtsSummary: rtsSummary, ankleGo: ankleGo, agoBand: agoBand,
     TYPO_JUMP_PCT: TYPO_JUMP_PCT, typoCheck: typoCheck,
     buildStrength: buildStrength, strengthNorm: strengthNorm, strengthScore: strengthScore,
     strengthRawTarget: strengthRawTarget, formatScore: formatScore, diffText: diffText,

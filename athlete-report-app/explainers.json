@@ -1,5 +1,5 @@
 {
-  "about": "Plain-English explainers for every metric (the exact metric name, or the LL Strength test id). 'what' is for athletes, patients and coaches (20 words at most) and shows when a metric name is tapped and under each Top priority on the PDF; 'how' is an optional protocol reminder for the clinician, shown on the screen only. Edit the wording here; the app picks it up the next time it opens online.",
+  "about": "Plain-English explainers for every metric (the exact metric name, or the LL Strength test id; v42: + the Ankle-GO rows). 'what' is for athletes, patients and coaches (20 words at most) and shows when a metric name is tapped and under each Top priority on the PDF; 'how' is an optional protocol reminder for the clinician, shown on the screen only. Edit the wording here; the app picks it up the next time it opens online.",
   "metrics": {
     "Jump Height": {
       "what": "How high you jump from standing after a quick dip: a simple measure of lower-body power.",
@@ -376,6 +376,50 @@
     "hip_add_abd_ratio": {
       "what": "The balance between groin and outer-hip strength on each leg.",
       "how": "Worked out by the app: adduction ÷ abduction."
+    },
+    "Single-leg stance": {
+      "what": "Balancing on one leg with your eyes closed for 20 seconds: how steady the ankle is.",
+      "how": "Barefoot on a firm floor, knee bent about 10°, hands on hips, eyes closed, 20 s. Errors: hands off hips, eyes open, a step, stumble or fall, hip moved over 30°, forefoot or heel lifted, out of position over 5 s."
+    },
+    "Leg length": {
+      "what": "Your leg length, so reach distances can be compared between legs and people.",
+      "how": "Lying on the back: anterior superior iliac spine to the medial malleolus, in cm, each leg."
+    },
+    "SEBT anterior": {
+      "what": "How far you can reach forward with one foot while balancing on the other.",
+      "how": "Modified star excursion (three directions), barefoot, hands on hips: 4 practice reaches, then the mean of 3, in cm. Left/Right = the standing leg."
+    },
+    "SEBT posteromedial": {
+      "what": "How far you can reach back and across behind you while balancing on one leg.",
+      "how": "As the anterior reach: 4 practice reaches, then the mean of 3, in cm, for each standing leg."
+    },
+    "SEBT posterolateral": {
+      "what": "How far you can reach back and out to the side while balancing on one leg.",
+      "how": "As the anterior reach: 4 practice reaches, then the mean of 3, in cm, for each standing leg."
+    },
+    "SEBT composite": {
+      "what": "Your three reaches together, compared with your leg length: overall balance and control on one leg.",
+      "how": "Worked out: the mean of the three reaches, each as % of leg length."
+    },
+    "Side hop": {
+      "what": "How quickly you can hop side to side on one leg over a 30 cm gap.",
+      "how": "Single-leg hops out and back over two lines 30 cm apart, 10 each way, as fast as possible; seconds."
+    },
+    "Figure-of-8 hop": {
+      "what": "How quickly you can hop a figure of eight on one leg around two cones.",
+      "how": "Two laps of a figure of 8 around cones 5 m apart on one leg, as fast as possible; seconds."
+    },
+    "FAAM ADL": {
+      "what": "Your own rating of how the ankle copes with everyday activities, as a percentage.",
+      "how": "Foot and Ankle Ability Measure, ADL: 21 items scored 0–4; % = total ÷ (items answered × 4) × 100 (84 when every item is answered)."
+    },
+    "FAAM Sport": {
+      "what": "Your own rating of how the ankle copes with sport, as a percentage.",
+      "how": "Foot and Ankle Ability Measure, Sport: 8 items scored 0–4; % = total ÷ (items answered × 4) × 100 (32 when every item is answered)."
+    },
+    "ALR-RSI": {
+      "what": "How ready you feel to return to sport: confidence, feelings and worry about hurting the ankle again.",
+      "how": "Ankle Ligament Reconstruction–Return to Sport after Injury scale: 12 items scored 0–10; % = total ÷ 120 × 100."
     }
   }
 }
