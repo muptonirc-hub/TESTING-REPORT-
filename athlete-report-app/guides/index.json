@@ -17,6 +17,10 @@
     "acl": {
       "condition": "acl",
       "label": "ACL reconstruction"
+    },
+    "ankle": {
+      "condition": "ankle",
+      "label": "Lateral ankle sprain"
     }
   },
   "stages": [
