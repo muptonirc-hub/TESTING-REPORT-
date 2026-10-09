@@ -14,9 +14,10 @@
    v40: the client's training log (from their phone) on their page, the check-ins on Home (no new files).
    v41: Home's three buttons (Photo mode, Screening, Exercise programming) and their pages (no new files).
    v42: the Ankle-GO battery (its rows, points and cut-offs in ankle_go.json).
-   v43: the Battery builder: the clinic's own batteries and tests (kept in the clinic store; no new files). */
-var CACHE = 'bh-athlete-report-v43';
-var FILES = ['./', 'index.html', 'app.js?v=43', 'engine.js?v=43', 'qrcode.js?v=43', 'report.js?v=43', 'report-fonts.js?v=43', 'jspdf.umd.min.js?v=43', 'cloud-config.js?v=43', 'cloud.js?v=43',
+   v43: the Battery builder: the clinic's own batteries and tests (kept in the clinic store; no new files).
+   v44: the app notices a new version (Home updates by itself, elsewhere a bar offers Update; no new files). */
+var CACHE = 'bh-athlete-report-v44';
+var FILES = ['./', 'index.html', 'app.js?v=44', 'engine.js?v=44', 'qrcode.js?v=44', 'report.js?v=44', 'report-fonts.js?v=44', 'jspdf.umd.min.js?v=44', 'cloud-config.js?v=44', 'cloud.js?v=44',
   'norms.json', 'strength_norms.json', 'hamstring_norms.json', 'acl_norms.json', 'ankle_go.json', 'interpretation.json', 'explainers.json', 'exercise_library.json', 'programming_guide.md', 'manifest.webmanifest',
   'guides/index.json', 'guides/training-variables.md', 'guides/rehab-principles.md', 'guides/muscle-strains.md', 'guides/acl.md', 'guides/tendinopathy.md', 'guides/ankle-sprain.md',
   'guides/groin-pain.md', 'guides/rotator-cuff.md', 'guides/pfp-oa.md', 'guides/low-back-pain.md', 'guides/performance-tests.md', 'guides/rehab-performance.md', 'guides/block-design.md',
@@ -59,7 +60,9 @@ self.addEventListener('fetch', function (event) {
     fromNetwork(request, 4000).then(function (res) {
       if (res && res.ok) {
         var copy = res.clone();
-        caches.open(CACHE).then(function (cache) { cache.put(request, copy); });
+        // v44: only into this version's copy while it is still kept: once a newer version has taken over (and removed it),
+        // an answer still on its way here mustn't bring the old copy back
+        caches.has(CACHE).then(function (kept) { if (kept) return caches.open(CACHE).then(function (cache) { return cache.put(request, copy); }); }).catch(function () {});
       }
       return res;
     }).catch(function () {

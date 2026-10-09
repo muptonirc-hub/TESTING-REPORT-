@@ -40,7 +40,7 @@
     suggestDialog: $('suggestDialog'), suggestLead: $('suggestLead'), suggestPlan: $('suggestPlan'), suggestCancel: $('suggestCancel'), suggestGo: $('suggestGo'),   // v23
     photoAsk: $('photoAsk'), photoAskTitle: $('photoAskTitle'), photoAskFields: $('photoAskFields'), photoAskCancel: $('photoAskCancel'), photoAskSkip: $('photoAskSkip'), photoAskGo: $('photoAskGo'),   // v33
     // v13: the clinic store's sign-in card, status bar and dialogs
-    cloudBar: $('cloudBar'), signin: $('signin'), signinForm: $('signinForm'), signinEmail: $('signinEmail'), signinPassword: $('signinPassword'), signinShow: $('signinShow'),
+    cloudBar: $('cloudBar'), updBar: $('updBar'), signin: $('signin'), signinForm: $('signinForm'), signinEmail: $('signinEmail'), signinPassword: $('signinPassword'), signinShow: $('signinShow'),
     signinName: $('signinName'), signinBtn: $('signinBtn'), signinErr: $('signinErr'), accountTpl: $('accountTpl'),
     nameDialog: $('nameDialog'), nameBox: $('nameBox'), nameErr: $('nameErr'), nameCancel: $('nameCancel'), nameSave: $('nameSave'),
     signOutDialog: $('signOutDialog'), signOutText: $('signOutText'), signOutCancel: $('signOutCancel'), signOutConfirm: $('signOutConfirm'),
@@ -952,8 +952,11 @@
   function measureBar() {                              // --appbar-h: the app bar's height here (landscape, portrait and phone differ)
     var hb = Math.round(els.appbar.getBoundingClientRect().height);
     // v13: the store's status bar sticks under the app bar, so the strip and scroll padding sit under both
-    var hc = els.cloudBar && !els.cloudBar.hidden ? Math.round(els.cloudBar.getBoundingClientRect().height) : 0, h = hb + hc;
+    var hc = els.cloudBar && !els.cloudBar.hidden ? Math.round(els.cloudBar.getBoundingClientRect().height) : 0;
+    // v44: the new-version bar sticks under both
+    var hu = els.updBar && !els.updBar.hidden ? Math.round(els.updBar.getBoundingClientRect().height) : 0, h = hb + hc + hu;
     if (hc) document.documentElement.style.setProperty('--cloud-top', hb + 'px');
+    if (hu) document.documentElement.style.setProperty('--upd-top', (hb + hc) + 'px');
     if (h && h !== appbarH) { appbarH = h; document.documentElement.style.setProperty('--appbar-h', h + 'px'); }
     checkStuck();
   }
@@ -2697,6 +2700,128 @@
         if (lock.addEventListener) lock.addEventListener('release', function () { if (wake.lock === lock) wake.lock = null; });
       }, function () { wake.pending = false; });
     } catch (e) { wake.pending = false; }
+  }
+
+  // ------------------------------------------------------------------ v44: a new version of the app
+  // An open app keeps running the code it opened with until it is closed. So when it comes back to the front, when it comes
+  // back online, and every 30 minutes while it is open, it asks the server which version is live (index.html's app.js?v=).
+  // When that is newer: on Home itself, with nothing open or in progress and nobody using it (just brought to the front and
+  // not touched since, or left alone for 2 minutes), it reloads by itself; anywhere else a bar under the app bar offers
+  // Update (entries are saved first; it waits for Claude or an upload to finish) or Later (back the next time the app comes
+  // to the front). After an update the app says which version it now is.
+  var APP_V = (function () { var s = document.querySelector('script[src*="app.js"]'), m = s && /[?&]v=(\d+)/.exec(s.getAttribute('src') || ''); return m ? +m[1] : 0; })();
+  var UPD_STORE = 'bh-athlete-report-update-v1';      // { v, at }: the last reload made for version v (a slow server can't loop it)
+  var UPD_EVERY = 30 * 60000, UPD_IDLE = 2 * 60000, UPD_RETRY = 15 * 60000;
+  var upd = { v: 0, later: false, want: false, msg: '', key: '', checkAt: 0, frontAt: Date.now(), inputAt: 0, wait: null, busy: false };
+  function updTried() { try { var t = JSON.parse(localStorage.getItem(UPD_STORE) || 'null'); return t && typeof t === 'object' ? t : null; } catch (e) { return null; } }
+  function updCheck(front) {
+    var now = Date.now();
+    if (front) { upd.frontAt = now; upd.later = false; }   // Later lasts until the app next comes to the front
+    if (!APP_V || !window.fetch || navigator.onLine === false || document.visibilityState === 'hidden') { updMaybe(); return; }
+    if (upd.busy || now - upd.checkAt < 60000) { updMaybe(); return; }   // asked within the last minute
+    upd.checkAt = now; upd.busy = true;
+    try {   // the offline copy follows too: a new sw.js saves the new files and takes over (the page itself still needs a reload)
+      if (navigator.serviceWorker && navigator.serviceWorker.getRegistration) navigator.serviceWorker.getRegistration().then(function (r) { if (r && r.update) r.update().catch(function () {}); }).catch(function () {});
+    } catch (e) { /* no service worker here */ }
+    fetch('index.html', { cache: 'no-store' }).then(function (r) { return r.ok ? r.text() : ''; }).then(function (t) {
+      upd.busy = false;
+      var m = /app\.js\?v=(\d+)/.exec(t || ''), v = m ? +m[1] : 0;
+      if (v > APP_V && v > upd.v) { upd.v = v; upd.later = false; }
+      updMaybe();
+    }, function () { upd.busy = false; updMaybe(); });   // offline, or the server didn't answer: next time
+  }
+  // what the app is doing that a reload would cut short (the quiet update waits; Update waits for it, then reloads)
+  function updBusy() {
+    if (aiBusy) return 'Claude has finished the interpretation';
+    if (suggestBusy) return 'Claude has finished choosing exercises';
+    if (Object.keys(scanBusy).some(function (k) { return scanBusy[k]; })) return 'Claude has finished reading the photos';
+    if (libMediaBusy()) return 'the photo or video has uploaded';
+    if (signinBusy) return 'you are signed in';
+    return '';
+  }
+  function updBlock() {                                // + what only the clinician can finish
+    var b = updBusy();
+    if (b) return b;
+    if (homeView && homeSub === 'photo' && pm && (pm.r.length || pm.x.length)) return 'you have finished in Photo mode';
+    if (bld.edit && bld.edit.dirty) return 'the battery you are editing is saved or cancelled';
+    if (openModalEl) return 'the open window is closed';
+    if (!els.sheet.hidden) return 'the report is closed';
+    return '';
+  }
+  function updQuietOk() {
+    if (!homeView || homeSub || openModalEl || menuOpen() || !els.sheet.hidden || updBusy()) return false;
+    var a = document.activeElement;
+    if (a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)) return false;   // someone is typing (the client search, the sign-in)
+    var now = Date.now();                              // just brought to the front and not touched since, or left alone
+    return (upd.inputAt < upd.frontAt && now - upd.frontAt < 30000) || now - upd.inputAt > UPD_IDLE;
+  }
+  function updMaybe() {
+    if (!upd.v || upd.v <= APP_V) return;
+    if (upd.want) { updTry(); return; }
+    if (updQuietOk() && updReload(true)) return;
+    updBar();
+  }
+  function updReload(quiet) {
+    var t = updTried();
+    if (quiet && t && t.v === upd.v && Date.now() - (+t.at || 0) < UPD_RETRY) return false;   // tried lately and still old here: the bar
+    try { localStorage.setItem(UPD_STORE, JSON.stringify({ v: upd.v, at: Date.now() })); } catch (e) { /* storage unavailable */ }
+    clearTimeout(saveTimer);                           // the entries as they are now, so the new version opens with them
+    try { followReport(); localStorage.setItem(STORE, draftJson()); } catch (e) { /* storage unavailable */ }
+    try { history.replaceState(null, '', location.pathname + location.search + (homeView ? '' : '#continue')); } catch (e) { /* keep the address */ }
+    location.reload();
+    return true;
+  }
+  function updTry() {                                  // Update tapped: now, or as soon as what is under way has finished
+    clearTimeout(upd.wait);
+    var why = updBlock();
+    if (!why) { upd.want = false; updReload(false); return; }
+    upd.want = true; upd.msg = why;
+    updBar();
+    upd.wait = setTimeout(updTry, 1500);
+  }
+  function updBar() {
+    var bar = els.updBar;
+    if (!bar) return;
+    var show = !!upd.v && upd.v > APP_V && !upd.later, key = show ? upd.v + '|' + (upd.want ? upd.msg : '') : '';
+    if (show && key !== upd.key) {
+      var had = bar.contains(document.activeElement);
+      bar.innerHTML = '<span class="upd-dot" aria-hidden="true"></span>' + (upd.want
+        ? '<span class="upd-t">Version\u00a0' + upd.v + ' will load as soon as ' + esc(upd.msg) + '.</span>' +
+          '<button type="button" class="ghost upd-b" data-upd="later">Not now</button>'
+        : '<span class="upd-t">A new version of the app is ready (version\u00a0' + upd.v + ').</span>' +
+          '<button type="button" class="primary upd-b" data-upd="go">Update</button><button type="button" class="ghost upd-b" data-upd="later">Later</button>');
+      if (had) focusQuiet(bar.querySelector('button'));
+    }
+    upd.key = key;
+    var was = bar.hidden;
+    bar.hidden = !show;
+    if (was !== bar.hidden) measureBar();
+  }
+  function updLater() {
+    clearTimeout(upd.wait);
+    upd.want = false; upd.later = true;
+    updBar();
+  }
+  function wireUpdate() {
+    if (wireUpdate.done) return;
+    wireUpdate.done = true;
+    var t = updTried();                                // the reload made for this version worked: say so once
+    if (t && +t.v <= APP_V) {
+      try { localStorage.removeItem(UPD_STORE); } catch (e) { /* storage unavailable */ }
+      if (+t.v === APP_V) toast('Updated to version ' + APP_V);
+    }
+    if (els.updBar) els.updBar.addEventListener('click', function (e) {
+      var b = e.target.closest('button[data-upd]');
+      if (!b) return;
+      if (b.dataset.upd === 'go') updTry(); else updLater();
+    });
+    ['pointerdown', 'keydown'].forEach(function (ev) { document.addEventListener(ev, function () { upd.inputAt = Date.now(); }, { capture: true, passive: true }); });
+    document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible') updCheck(true); });
+    window.addEventListener('online', function () { updCheck(false); });
+    setInterval(function () {                          // every 30 minutes a check; meanwhile, a waiting version tries the quiet way
+      if (Date.now() - upd.checkAt >= UPD_EVERY) updCheck(false); else if (upd.v && !upd.want) updMaybe();
+    }, 30000);
+    setTimeout(function () { updCheck(false); }, 4000);   // opened from the offline copy and online now: the live version
   }
 
   function autoTime(t) {
@@ -5449,7 +5574,7 @@
     return { results: n, any: n > 0 || details || !!s.importLog, name: String(s.meta.name || '').trim() };
   }
   function setBackgroundInert(on) {
-    ['.appbar', '.workspace', '#dock', '#signin', '#cloudBar', '#home'].forEach(function (sel) {   // v30: and Home
+    ['.appbar', '.workspace', '#dock', '#signin', '#cloudBar', '#updBar', '#home'].forEach(function (sel) {   // v30: and Home; v44: the new-version bar
       var el = document.querySelector(sel);
       if (!el) return;
       if (on) el.setAttribute('inert', ''); else el.removeAttribute('inert');
@@ -7220,7 +7345,7 @@
   // the edges the page scrolls at: under the sticky bars at the top, above the dock (phones) at the bottom
   function dragEdges() {
     var top = 0, bottom = window.innerHeight;
-    [els.appbar, els.cloudBar, $('athleteStrip')].forEach(function (el) {
+    [els.appbar, els.cloudBar, els.updBar, $('athleteStrip')].forEach(function (el) {   // v44: + the new-version bar
       if (!el || el.hidden || !el.getClientRects().length) return;
       var r = el.getBoundingClientRect();
       if (r.top <= top + 2 && r.bottom > top) top = r.bottom;   // stuck at the top of the screen
@@ -10386,12 +10511,14 @@
       if (!homeView) document.documentElement.classList.remove('home-on');   // #continue: where the app left off
       render();
       if (homeView) syncTabs();
+      wireUpdate();                                    // v44: a newer version: by itself on Home, else the bar's Update
       if (CLOUD) initCloud();                          // v13: the sign-in card while signed out, else the first sync
     }).catch(function (err) {
       document.documentElement.classList.remove('home-on');   // v30: the message shows in the workspace
       els.entry.innerHTML = '<section class="card error-card"><div class="card-head"><h2>Norms not found</h2></div>' +
         '<p>The app couldn’t load its norms files (' + esc(err.message) + '). Check that norms.json, strength_norms.json, hamstring_norms.json and acl_norms.json sit next to index.html, then reload. ' +
         'If you are offline, open the app once while online so it can save a copy.</p></section>';
+      try { wireUpdate(); } catch (e) { /* the page above says what to do */ }   // v44: a fixed version can still arrive
     });
   }
 
