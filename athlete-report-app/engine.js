@@ -201,9 +201,10 @@
         var result;
         if (m.calc === 'DSI') {
           result = dsiVal;
-        } else if (m.calc === 'PERKG' || m.calc === 'PERBW' || m.calc === 'XBW' || m.calc === 'PCTBW') {
+        } else if (m.calc === 'PERKG' || m.calc === 'PERBW' || m.calc === 'XBW' || m.calc === 'PCTBW' || m.calc === 'NPCTBW') {
           // v36: XBW (a load in kg ÷ body mass) and PCTBW (the same × 100): the LL Strength tests inside a custom battery
-          var div = m.calc === 'PERBW' ? (mkg === null ? null : mkg * 9.81) : (m.calc === 'PCTBW' ? (mkg === null ? null : mkg / 100) : mkg);
+          // v43: NPCTBW (a force in N as % of body weight: N ÷ (kg × 9.81) × 100), a battery builder test's target as % BW
+          var div = mkg === null ? null : m.calc === 'PERBW' ? mkg * 9.81 : m.calc === 'NPCTBW' ? mkg * 9.81 / 100 : m.calc === 'PCTBW' ? mkg / 100 : mkg;
           var raw = num(inp.result);
           result = (raw && mkg) ? pyRound(raw / div, 2) : null;
           var pr = num(inp.previous);

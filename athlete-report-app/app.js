@@ -131,7 +131,7 @@
     if (tool === 'screen') return { meta: { name: '', date: todayIso(), sex: '', age: '', sport: '', tester: keep.tester || userName(), mass: '', notes: '' }, pop: 'general', values: {}, radar: null, collapsed: {}, importLog: null, interp: freshInterp(), coach: freshCoach(), cardOpen: true };
     // v36: the Custom battery: the population is chosen first (pop null until then), the tests are the battery's items
     // v37: + the injured side and the hamstring and ACL phases, for rehab tests in the battery (the client's, so never kept)
-    if (tool === 'custom') return { meta: { name: '', date: todayIso(), sex: '', age: '', sport: '', tester: keep.tester || userName(), mass: '', notes: '', injured: '' }, pop: null, battery: [], batName: '', hamPhase: null, aclPhase: null, values: {}, radar: null, collapsed: {}, interp: freshInterp(), coach: freshCoach(), cardOpen: true };
+    if (tool === 'custom') return { meta: { name: '', date: todayIso(), sex: '', age: '', sport: '', tester: keep.tester || userName(), mass: '', notes: '', injured: '' }, pop: null, battery: [], batName: '', batId: '', spot: null, hamPhase: null, aclPhase: null, values: {}, radar: null, collapsed: {}, interp: freshInterp(), coach: freshCoach(), cardOpen: true };
     if (tool === 'ham') return { meta: { name: '', date: todayIso(), injured: '', clinician: keep.clinician || userName(), doi: '', weeks: '', sport: '', notes: '' }, phase: null, values: {}, collapsed: {}, interp: freshInterp(), coach: freshCoach(), cardOpen: true };
     if (tool === 'str') return { meta: { name: '', date: todayIso(), mass: '', sport: '', tester: keep.tester || userName(), notes: '' }, values: {}, collapsed: {}, interp: freshInterp(), coach: freshCoach(), cardOpen: true };
     // v42: Ankle-GO: the injured side (the score is the injured leg's), the injury date or weeks since it
@@ -184,9 +184,14 @@
     if (!state.ankle || typeof state.ankle !== 'object' || !state.ankle.meta) state.ankle = freshTool('ankle');   // v42: drafts from v41 and earlier
     if (state.ankle.meta.injured !== 'Left' && state.ankle.meta.injured !== 'Right') state.ankle.meta.injured = '';
     var cu = state.custom;
-    if (cu.pop !== null && cu.pop !== 'general' && pops.indexOf(cu.pop) < 0) cu.pop = null;
+    if (cu.pop !== null && cu.pop !== 'general' && cu.pop !== 'none' && pops.indexOf(cu.pop) < 0) cu.pop = null;   // v43: + 'none' (the clinic's targets only)
     cu.battery = tidyBattery(cu.battery);
     cu.batName = typeof cu.batName === 'string' ? cu.batName : '';
+    // v43: the clinic's battery the page runs ('' : Custom on the spot) and, while one runs, the on-the-spot set-up to come back to
+    cu.batId = typeof cu.batId === 'string' && BAT_ID.test(cu.batId) ? cu.batId : '';
+    var sp = cu.spot;
+    cu.spot = cu.batId && sp && typeof sp === 'object' && !Array.isArray(sp) ? { pop: sp.pop === 'general' || sp.pop === 'none' || pops.indexOf(sp.pop) >= 0 ? sp.pop : null, battery: tidyBattery(sp.battery), batName: typeof sp.batName === 'string' ? sp.batName : '' } : null;
+    delete cu.libSnap;                                 // (only a report made again from a record has one)
     // v37: the rehab tests' phases and the injured side (drafts from v36 have none); chosen, never assumed
     if (H.phases.indexOf(cu.hamPhase) < 0) cu.hamPhase = null;
     if (A.phases.indexOf(cu.aclPhase) < 0) cu.aclPhase = null;
@@ -242,11 +247,12 @@
     var s = state[t], N = setOf(t);
     // v36: the Custom battery scores nothing until its population is chosen (null); the Performance screen defaults to general
     var pop = t === 'custom' && s.pop === null ? { population: null, ageBand: 'All ages', label: null, note: 'Choose the population to compare against.', level: 'warn' }
+      : t === 'custom' && s.pop === 'none' ? { population: POP_NONE, ageBand: 'All ages', label: POP_NONE, note: 'Rated against the clinic\u2019s targets (no population norms).', level: 'info' }   // v43
       : E.resolvePopulation(s.pop, s.meta.sex, s.meta.age);
     var inputs = {}, perMass = {}, massNow = E.parseInput(s.meta.mass);
     // v36: a previous load or force from the client's record was scored with that day's body mass: rescaled so that
     // dividing by today's mass gives the score it had then
-    if (t === 'custom') N.groups.forEach(function (g) { g.metrics.forEach(function (m) { if (/^(XBW|PCTBW|PERKG|PERBW)$/.test(m.calc || '')) perMass[m.name] = 1; }); });
+    if (t === 'custom') N.groups.forEach(function (g) { g.metrics.forEach(function (m) { if (/^(XBW|PCTBW|PERKG|PERBW|NPCTBW)$/.test(m.calc || '')) perMass[m.name] = 1; }); });
     Object.keys(s.values).forEach(function (name) {
       var v = s.values[name], prev = E.parseInput(v.previous), pm = perMass[name] ? E.parseInput(v.prevMass) : null;
       if (prev !== null && pm && massNow && pm > 0 && massNow > 0) prev = prev * massNow / pm;
@@ -369,12 +375,13 @@
   function andList(a) { return a.length > 1 ? a.slice(0, -1).join(', ') + ' and ' + a[a.length - 1] : (a[0] || ''); }
   // what the battery's rehab tests still need before they can be scored ('' when nothing, or there are none)
   function customRehabNeed() {
-    var s = state.custom, has = rehabIn(), need = [];
-    if (!has.ham && !has.acl) return '';
-    if (!s.meta.injured) need.push('the injured side');
+    var s = state.custom, has = rehabIn(), need = [], sexNeed = s.pop !== 'general' ? customSexNeed() : '';   // v43: + a builder test's targets by sex
+    if (!has.ham && !has.acl && !sexNeed) return '';
+    if ((has.ham || has.acl) && !s.meta.injured) need.push('the injured side');
     if (has.ham && !s.hamPhase) need.push('the hamstring phase');
     if (has.acl && !s.aclPhase) need.push('the ACL phase');
     if (has.acl && DATA.acl.sexes.indexOf(s.meta.sex) < 0) need.push('Male or Female (the ACL norms are by sex)');
+    else if (sexNeed) need.push(sexNeed);
     return need.length ? 'Choose ' + andList(need) : '';
   }
   // the rehab context for the report, the strip and Claude (null without rehab tests)
@@ -452,13 +459,14 @@
       if (it.k === 'screen') { if (!screenMetric(it.key)) return; key = 'screen|' + it.key; it = { k: 'screen', key: it.key }; }
       else if (it.k === 'str') { if (!strTest(it.id) && !(it.id === RATIO_ID && ratioTest())) return; key = 'str|' + it.id; it = { k: 'str', id: it.id }; }
       else if (it.k === 'ham' || it.k === 'acl') { if (!rehabMetric(it.k, it.key)) return; key = it.k + '|' + it.key; it = { k: it.k, key: it.key }; }   // v37
+      else if (it.k === 'lib') { if (typeof it.id !== 'string' || !TEST_ID.test(it.id)) return; key = 'lib|' + it.id; it = { k: 'lib', id: it.id }; }   // v43: one of the clinic's tests (kept while not synced yet)
       else if (it.k === 'own') {
         it = tidyOwn(it);
         if (!it) return;
         // an own test may not take a catalogue test's name: it becomes that test (v37: so an own test saved in v36 under a
         // name the catalogue has since gained, e.g. IKDC, is kept as the catalogue's, its results under the same name)
         var hit = catalogueByName(it.name);
-        it = !hit ? it : hit.k === 'screen' ? { k: 'screen', key: hit.name } : hit.k === 'str' ? { k: 'str', id: hit.def.id } : { k: hit.k, key: hit.name };
+        it = !hit ? it : hit.k === 'screen' ? { k: 'screen', key: hit.name } : hit.k === 'str' ? { k: 'str', id: hit.def.id } : hit.k === 'lib' ? { k: 'lib', id: hit.def.id } : { k: hit.k, key: hit.name };   // v43: or one of the clinic's tests
         key = batteryKey(it);
       }
       else return;
@@ -475,13 +483,14 @@
     }
     return out;
   }
-  function batteryKey(it) { return it.k === 'screen' ? 'screen|' + it.key : it.k === 'str' ? 'str|' + it.id : (it.k === 'ham' || it.k === 'acl') ? it.k + '|' + it.key : 'own|' + it.id; }
+  function batteryKey(it) { return it.k === 'screen' ? 'screen|' + it.key : it.k === 'str' ? 'str|' + it.id : (it.k === 'ham' || it.k === 'acl') ? it.k + '|' + it.key : it.k === 'lib' ? 'lib|' + it.id : 'own|' + it.id; }
   function batteryHas(key) { return state.custom.battery.some(function (it) { return batteryKey(it) === key; }); }
   // the tests a battery can hold, in the order the Choose tests list shows them (v38: by category, type then region); each
   // { key, k, name, unit, group (the category's title), glabel (its name on screen), type, region, rank, ord, def }
   var catMemo = null;
   function catalogue() {
-    if (catMemo && catMemo.screen === DATA.screen && catMemo.str === DATA.str && catMemo.ham === DATA.ham && catMemo.acl === DATA.acl) return catMemo.list;
+    var lt = ltAll();                                  // v43: + the clinic's own tests (the battery builder's)
+    if (catMemo && catMemo.screen === DATA.screen && catMemo.str === DATA.str && catMemo.ham === DATA.ham && catMemo.acl === DATA.acl && catMemo.lt === lt) return catMemo.list;
     var out = [];
     DATA.screen.groups.forEach(function (g) {
       g.metrics.forEach(function (m) { if (m.calc !== 'DSI') out.push({ key: 'screen|' + m.name, k: 'screen', name: m.name, unit: m.unit, group: g.title, def: m }); });
@@ -496,13 +505,14 @@
         g.metrics.forEach(function (m) { out.push({ key: rt + '|' + m.name, k: rt, name: m.name, unit: m.unit, group: REHAB_GROUP[rt] + ' \u2014 ' + g.title, glabel: label, def: m }); });
       });
     });
+    lt.list.forEach(function (tt) { out.push({ key: 'lib|' + tt.id, k: 'lib', name: tt.name, unit: ltUnit(tt), def: tt }); });
     out.forEach(function (c, i) {                      // v38: each test's category
-      var cat = catOf(c.key);
+      var cat = c.k === 'lib' ? { type: c.def.type || '', region: c.def.region || '', ord: 150000 } : catOf(c.key);   // v43: a clinic test's own, after the app's
       c.type = cat.type; c.region = cat.region; c.ord = cat.ord + i / 1000; c.rank = catRank(cat.type, cat.region);
       c.group = catTitle(cat.type, cat.region); c.glabel = catLabel(cat.type, cat.region);
     });
     out.sort(function (a, b) { return a.rank - b.rank || a.ord - b.ord; });
-    catMemo = { screen: DATA.screen, str: DATA.str, ham: DATA.ham, acl: DATA.acl, list: out };
+    catMemo = { screen: DATA.screen, str: DATA.str, ham: DATA.ham, acl: DATA.acl, lt: lt, list: out };
     return out;
   }
   // a catalogue test (or an LL Strength test's side) with this name, matched ignoring case and spaces; failing that, the
@@ -515,8 +525,8 @@
     catalogue().forEach(function (c) {
       if (hit) return;
       if (E.libKey(c.name) === k) hit = c;
-      else if (c.k === 'str' && (E.libKey(strSideName(c.def, 'Left')) === k || E.libKey(strSideName(c.def, 'Right')) === k)) hit = c;
-      else if (kb && (bare(c.name) === kb || (c.k === 'str' && (bare(strSideName(c.def, 'Left')) === kb || bare(strSideName(c.def, 'Right')) === kb)))) loose.push(c);
+      else if ((c.k === 'str' || (c.k === 'lib' && c.def.legs)) && (E.libKey(strSideName(c.def, 'Left')) === k || E.libKey(strSideName(c.def, 'Right')) === k)) hit = c;   // v43: + a clinic test's leg
+      else if (kb && (bare(c.name) === kb || ((c.k === 'str' || (c.k === 'lib' && c.def.legs)) && (bare(strSideName(c.def, 'Left')) === kb || bare(strSideName(c.def, 'Right')) === kb)))) loose.push(c);
     });
     return hit || (loose.length === 1 ? loose[0] : null);
   }
@@ -527,10 +537,12 @@
   function customSet() {
     var s = state && state.custom, b = s ? s.battery : [];
     // v37: the rehab tests' targets follow the phases chosen (and the ACL norms the sex)
-    var sig = JSON.stringify([b, s ? s.hamPhase || '' : '', s ? s.aclPhase || '' : '', s ? s.meta.sex || '' : '']);
+    // v43: and the clinic's tests in it (as they are now, or as a record kept them) with the Close %
+    var libs = b.filter(function (it) { return it.k === 'lib'; }).map(function (it) { return ltFor(it.id); }), pctNow = closePct();
+    var sig = JSON.stringify([b, s ? s.hamPhase || '' : '', s ? s.aclPhase || '' : '', s ? s.meta.sex || '' : '', libs, pctNow]);
     if (customMemo && customMemo.sig === sig) return customMemo.set;
     var keys = {}, strIds = [], own = [], reh = { ham: {}, acl: {} };
-    b.forEach(function (it) { if (it.k === 'screen') keys[it.key] = 1; else if (it.k === 'str') strIds.push(it.id); else if (it.k === 'ham' || it.k === 'acl') reh[it.k][it.key] = 1; else own.push(it); });
+    b.forEach(function (it) { if (it.k === 'screen') keys[it.key] = 1; else if (it.k === 'str') strIds.push(it.id); else if (it.k === 'ham' || it.k === 'acl') reh[it.k][it.key] = 1; else if (it.k === 'own') own.push(it); });
     var items = [];                                    // v38: { m: the metric, type, region, ord }, sorted into the categories below
     function put(m, key, sub) { var c = catOf(key); items.push({ m: m, type: c.type, region: c.region, ord: c.ord + (sub || 0) }); }
     DATA.screen.groups.forEach(function (g) {
@@ -572,6 +584,16 @@
         });
       });
     });
+    libs.forEach(function (tt, i) {                    // v43: the battery builder's tests: a metric each (each leg), the clinic's target, Close from its %
+      if (!tt) return;                                 // (not synced to this device yet, or deleted since)
+      var norm = ltNorm(tt, s ? s.meta.sex : '', ltPct(tt));
+      var base = { unit: ltUnit(tt), calc: ltCalc(tt), dir: tt.dir, thr: norm && norm.green ? Math.abs(norm.green) * 0.05 : null, range: null, lib: tt.id, xkey: tt.id, input: tt.unit };
+      (tt.legs ? ['Left', 'Right'] : ['']).forEach(function (side, j) {
+        var name = side ? ltSideName(tt, side) : tt.name;
+        items.push({ m: Object.assign({ name: name, side: side }, base), type: tt.type || '', region: tt.region || '', ord: 150000 + i + j * 0.1 });
+        if (norm) extra[name] = norm;
+      });
+    });
     own.forEach(function (o, i) {                      // the clinic's own tests, in their own category (v38; none: Other tests)
       items.push({ m: { name: o.name, unit: o.unit, calc: null, dir: o.dir, thr: null, range: null, own: o.id, xkey: o.id }, type: o.type || '', region: o.region || '', ord: 100000 + i });
       if (o.green !== null) extra[o.name] = { dir: o.dir, green: o.green, amber: o.amber === null ? o.green : o.amber, source: '\u2605\u2606\u2606 Clinic target, typed with the test' };
@@ -585,6 +607,7 @@
     });
     var pops = {}, N = DATA.screen;
     Object.keys(N.populations || {}).forEach(function (p) { pops[p] = Object.assign({}, N.populations[p], extra); });
+    pops[POP_NONE] = Object.assign({}, extra);         // v43: the clinic's targets only (no population norms)
     var set = { population_order: N.population_order, groups: groups, populations: pops, age_bands: N.age_bands, age_norms: N.age_norms };
     customMemo = { sig: sig, set: set };
     return set;
@@ -746,7 +769,7 @@
         field(t, 'age', 'Age (years)', { mode: 'decimal' }) + field(t, 'mass', 'Mass (kg)', { mode: 'decimal' }) +
         field(t, 'sport', 'Sport', { words: true }) + field(t, 'tester', 'Clinician', { words: true }) +
         field(t, 'notes', 'Notes', { cls: 'full' });
-      var cpops = [['general', 'General population (auto by age & sex)']].concat(E.sportPopulations(DATA.screen).map(function (p) { return [p, p]; }));
+      var cpops = [['general', 'General population (auto by age & sex)']].concat(E.sportPopulations(DATA.screen).map(function (p) { return [p, p]; }), [['none', 'The clinic\u2019s targets only']]);   // v43: + none (no population norms)
       out += select('custom-pop', 'Compare against', cpops, s.pop || 'general', 'data-choice="pop"', 'wide');
       var rh = rehabIn();                              // v37: what the battery's rehab tests are scored against
       if (rh.ham || rh.acl) out += seg(t, 'injured', 'Injured side', ['Left', 'Right']);
@@ -940,6 +963,7 @@
   var explainOpen = {};                               // which explainers are open (this visit only)
   function explainer(key) {
     var x = DATA.explain && DATA.explain.metrics && DATA.explain.metrics[key];
+    if (!x && typeof key === 'string' && TEST_ID.test(key)) { var tt = ltFor(key); if (tt && tt.what) x = { what: tt.what, how: tt.how }; }   // v43: a clinic test's own words
     return x && typeof x.what === 'string' && x.what.trim() ? x : null;
   }
   function nameHtml(tool, key, label, id) {
@@ -979,11 +1003,12 @@
     var v = val(tool, m.name), id = tool + '-' + gi + '-' + mi, nm = esc(m.name);
     var asym = SL(tool) && E.isAsym(m.name);
     var hint = '<span class="m-unit">' + esc(m.unit) + '</span>';
-    if (m.calc === 'PERKG' || m.calc === 'PERBW') hint = '<span class="m-unit">enter force in N · scored as ' + esc(m.unit) + ' using mass</span>';
+    if (m.calc === 'PERKG' || m.calc === 'PERBW' || m.calc === 'NPCTBW') hint = '<span class="m-unit">enter force in N · scored as ' + esc(m.unit) + ' using mass</span>';   // v43: + a builder test as % BW
     if (m.calc === 'XBW' || m.calc === 'PCTBW') hint = '<span class="m-unit">' + esc((m.detail ? m.detail + ' · ' : '') + 'enter load in kg · scored as ' + m.unit + ' using mass') + '</span>';   // v36: LL Strength tests in a custom battery
     else if (m.str && m.input === 'N') hint = '<span class="m-unit">' + esc((m.detail ? m.detail + ' · ' : '') + 'enter force in N · scored as ' + m.unit + ' using mass') + '</span>';
     else if (m.str) hint = '<span class="m-unit">' + esc((m.detail ? m.detail + ' · ' : '') + 'reps') + '</span>';
     else if (m.own) hint = '<span class="m-unit">' + esc(m.unit || 'your own test') + '</span>';
+    else if (m.lib && !m.calc) hint = '<span class="m-unit">' + esc((m.unit && m.unit !== 'score' ? m.unit : 'score') + (m.side ? ', ' + m.side.toLowerCase() + ' leg' : '')) + '</span>';   // v43: a clinic test
     else if (m.ratio) hint = '<span class="m-unit">adduction \u00f7 abduction, ' + esc(String(m.side).toLowerCase()) + ' leg</span>';   // v37
     if (m.calc === 'LSI') hint = '<span class="m-unit">enter left & right · LSI = injured ÷ other side</span>';
     // the same words as the column headings: Result (Injured on the hamstring tab) and Previous; Left and Right for an LSI
@@ -1171,11 +1196,12 @@
       '<p class="pop-lead">The norms this battery is scored against. Pick first; the tests come next. It can be changed later in the athlete card.</p><div class="pop-choices">' +
       choice('general', 'General population', 'By sex and age band (VALD norms and the clinic’s own). Sex is asked for next.');
     sports.forEach(function (p) { html += choice(p, p, Object.keys(N.populations[p] || {}).length + ' metrics with norms · all ages'); });
+    html += choice('none', 'The clinic\u2019s targets only', 'No population norms: LL Strength, rehab and your own tests against their targets. Sex only if a target needs it.');   // v43
     return html + '</div></section>';
   }
   function choosePopulation(p) {
     var s = state.custom, pops = E.sportPopulations(DATA.screen);
-    if (p !== 'general' && pops.indexOf(p) < 0) return;
+    if (p !== 'general' && p !== 'none' && pops.indexOf(p) < 0) return;   // v43: + the clinic's targets only
     s.pop = p;
     render();
     var first = els.entry.querySelector('#custom-name');
@@ -1185,10 +1211,15 @@
     var n = batteryCount(), s = state.custom;
     return (n ? n + (n === 1 ? ' test' : ' tests') : 'No tests yet') + (s.batName ? ' · ' + s.batName : '');
   }
+  // v43: a clinic battery's page has Edit battery (the builder) in place of Saved batteries
+  function batSecondBtn(cls) {
+    return runBat() ? '<button type="button" class="ghost' + cls + '" data-action="bat-edit">Edit battery</button>'
+      : '<button type="button" class="ghost' + cls + '" data-action="bat-saved" aria-haspopup="dialog">Saved batteries</button>';
+  }
   function batteryBarHtml() {
     return '<div class="tests-bar bat-bar" id="batBar">' +
       '<button type="button" class="ghost tests-btn" data-action="bat-choose" aria-haspopup="dialog">Choose tests<span class="chev-s" aria-hidden="true"></span></button>' +
-      '<button type="button" class="ghost bat-saved" data-action="bat-saved" aria-haspopup="dialog">Saved batteries</button>' +
+      batSecondBtn(' bat-saved') +
       '<span class="tests-hidden bat-count" id="batCount">' + esc(batteryLine()) + '</span>' +
       '<button type="button" class="quiet add-prev" id="addPrev" data-action="add-prev"' + (prevShown('custom') ? ' hidden' : '') + '>+ Add previous results</button></div>';
   }
@@ -1197,7 +1228,7 @@
       '<h2 id="batEmptyH">Build the battery</h2>' +
       '<p>Choose tests from the catalogue (the Performance screen’s, LL Strength’s and the Hamstring and ACL rehab tests, or your own), start from a saved battery, or photograph your handwritten results with <b>Scan notes</b> in the athlete card: the app matches what you wrote to the tests it knows and fills the results in.</p>' +
       '<div class="bat-empty-acts"><button type="button" class="primary" data-action="bat-choose" aria-haspopup="dialog">Choose tests</button>' +
-      '<button type="button" class="ghost" data-action="bat-saved" aria-haspopup="dialog">Saved batteries</button></div></section>';
+      batSecondBtn('') + '</div></section>';
   }
   function refreshBattery() {
     var cnt = $('batCount'), empty = $('batEmpty');
@@ -1251,7 +1282,7 @@
     $('ownOk').textContent = '';
     catErr('');
     var c = computeScreen('custom');
-    $('catLead').textContent = (c.pop.label ? 'Targets shown are for ' + c.pop.label + '. Tests with results stay ticked unless you untick them (their results go).'
+    $('catLead').textContent = (c.pop.label ? (c.pop.label === POP_NONE ? 'Compared against the clinic’s targets only (no population norms).' : 'Targets shown are for ' + c.pop.label + '.') + ' Tests with results stay ticked unless you untick them (their results go).'   // v43
       : 'Tick the tests in this battery. Targets show once the sex (or a sport population) is chosen.') + ' Rehab tests are rated for the phase chosen in the details card.';   // v37
     renderCatList();
     openModal(els.catDialog, $('catSearch'), function (restore) { catPick = null; if (restore) focusQuiet(els.entry.querySelector('[data-action="bat-choose"]')); return true; });
@@ -1263,6 +1294,7 @@
     return nk.indexOf(k) >= 0 || nk.split(' ').some(function (w) { return k.split(' ').every(function (qw) { return nk.indexOf(qw) >= 0; }) && w.indexOf(k.split(' ')[0]) === 0; });
   }
   function catTargetText(c, pop) {                     // what the row says under the name: the unit and the target for this population
+    if (c.k === 'lib') return 'Clinic test \u00b7 ' + ltHow(c.def) + ' \u00b7 ' + ltTargetLine(c.def);   // v43: the battery builder's
     if (c.ratio) return 'worked out from Hip adduction and Hip abduction (ticked with it) \u00b7 each leg \u00b7 target ' + (c.def.target_text || '');   // v37
     if (c.k === 'ham' || c.k === 'acl') return REHAB_LABEL[c.k] + ' \u00b7 ' + rehabTargetText(c);   // v37; v38: whose test it is (the categories mix them)
     if (c.k === 'str') return (c.detail ? c.detail + ' · ' : '') + c.unit + ' each leg · target ' + (c.def.target_text || '');
@@ -1295,7 +1327,7 @@
         var sub = 'Your own test · ' + (o.unit ? o.unit + ' · ' : '') + (o.green === null ? 'no target' : 'target ' + (o.dir === 'Lower' ? '≤ ' : '≥ ') + E.fmt(o.green) + (o.amber !== null && o.amber !== o.green ? ' · close ' + (o.dir === 'Lower' ? '≤ ' : '≥ ') + E.fmt(o.amber) : ''));
         html += row(c.key, o.name, sub, !!has[o.name]);
       } else {
-        var hasRes = c.k === 'str' ? !!(has[strSideName(c.def, 'Left')] || has[strSideName(c.def, 'Right')]) : !!has[c.name];
+        var hasRes = c.k === 'str' || (c.k === 'lib' && c.def.legs) ? !!(has[strSideName(c.def, 'Left')] || has[strSideName(c.def, 'Right')]) : !!has[c.name];
         html += row(c.key, c.name, catTargetText(c, pop), hasRes);
       }
       shown++;
@@ -1341,7 +1373,7 @@
     var green = ownNum($('ownGreen').value), amber = ownNum($('ownAmber').value);
     if (!name) { catErr('Give the test a name.'); $('ownName').focus(); return; }
     var inCat = catalogueByName(name);
-    if (inCat) { catPick.on[inCat.key] = true; renderCatList(); catErr(''); setOwnOpen(false); $('ownOk').textContent = inCat.name + ' is in the catalogue: ticked above.'; $('ownName').value = ''; focusQuiet($('ownOpen')); return; }
+    if (inCat) { catPick.on[inCat.key] = true; renderCatList(); catErr(''); setOwnOpen(false); $('ownOk').textContent = inCat.name + (inCat.k === 'lib' ? ' is one of the clinic\u2019s tests: ticked above.' : ' is in the catalogue: ticked above.'); $('ownName').value = ''; focusQuiet($('ownOpen')); return; }
     var k = E.libKey(name);
     if (catPick.own.some(function (o) { return E.libKey(o.name) === k; })) { catErr('There is already an own test called that.'); $('ownName').focus(); return; }
     if (!blank($('ownGreen').value) && green === null) { catErr('The target should be a number.'); $('ownGreen').focus(); return; }
@@ -1362,7 +1394,7 @@
   function catApply() {
     if (!catPick) return;
     var on = catPick.on, items = [];
-    catalogue().forEach(function (c) { if (on[c.key]) items.push(c.k === 'screen' ? { k: 'screen', key: c.name } : c.k === 'str' ? { k: 'str', id: c.def.id } : { k: c.k, key: c.name }); });   // v37: + rehab tests
+    catalogue().forEach(function (c) { if (on[c.key]) items.push(c.k === 'screen' ? { k: 'screen', key: c.name } : c.k === 'str' ? { k: 'str', id: c.def.id } : c.k === 'lib' ? { k: 'lib', id: c.def.id } : { k: c.k, key: c.name }); });   // v37: + rehab tests; v43: + the clinic's
     catPick.own.forEach(function (o) { if (on['own|' + o.id]) items.push(o); });
     var was = JSON.stringify(state.custom.battery), old = {};
     state.custom.battery.forEach(function (it) { old[batteryKey(it)] = 1; });
@@ -1384,7 +1416,9 @@
     if (!name) return null;
     var items = tidyBattery(o.items);
     if (!items.length) return null;
-    return { id: o.id, name: name, items: items, pop: typeof o.pop === 'string' ? o.pop.slice(0, 80) : '', updatedBy: cap(o.updatedBy, 120), updatedAt: typeof o.updatedAt === 'string' ? o.updatedAt.slice(0, 40) : '' };
+    // v43: + its tile on the Screening page (shown unless hidden in the builder) and the line on it
+    return { id: o.id, name: name, items: items, pop: typeof o.pop === 'string' ? o.pop.slice(0, 80) : '', tile: o.tile !== false, about: cap(o.about, 140),
+      updatedBy: cap(o.updatedBy, 120), updatedAt: typeof o.updatedAt === 'string' ? o.updatedAt.slice(0, 40) : '' };
   }
   function batAll() {
     var src = storedItems('batteries');
@@ -1410,7 +1444,7 @@
     $('batSaveGo').textContent = 'Save';
     $('batSaveRow').hidden = !state.custom.battery.length;
     batErr('');
-    $('batLead').textContent = (CLOUD ? 'Shared by every signed-in device. ' : 'Saved on this device. ') + (state.custom.battery.length ? 'Save the tests on the page as a battery to start from next time, or use a saved one.' : 'Use a saved battery to fill the page with its tests.');
+    $('batLead').textContent = (CLOUD ? 'Shared by every signed-in device. ' : 'Saved on this device. ') + (state.custom.battery.length ? 'Save the tests on the page as a battery (it gets its own tile on the Screening page), or use a saved one.' : 'Use a saved battery to fill the page with its tests.');   // v43
     renderBatList();
     openModal(els.batDialog, state.custom.battery.length ? $('batName') : (els.batDialog.querySelector('[data-action="bat-use"]') || $('batClose')),
       function (restore) { if (restore) focusQuiet(els.entry.querySelector('[data-action="bat-saved"]')); return true; });
@@ -1426,7 +1460,13 @@
         '<button type="button" class="quiet tpl-del bat-del" data-action="bat-del">Delete<span class="vh"> ' + nm + '</span></button></div></div>';
     }).join('') + '</div>';
   }
-  function afterBatChange() { if (openModalEl === els.batDialog) renderBatList(); }
+  function afterBatChange() {
+    if (openModalEl === els.batDialog) renderBatList();
+    if (!state) return;
+    // v43: the Screening page's tiles and the builder; the Custom page when its battery's tests changed (a test renamed, the Close %)
+    if (homeView && (homeSub === 'screening' || homeSub === 'builder')) renderHome();
+    if (state.tool === 'custom' && state.custom.pop !== null) { if (customShape() !== pageShape) renderPage(); else refresh(); }
+  }
   function batSaveGo() {
     var s = state.custom, name = cap($('batName').value, 80);
     if (!name) { batErr('Give the battery a name.'); $('batName').focus(); return; }
@@ -1438,14 +1478,14 @@
       batErr('A battery is already called that. Tap Replace to save over it.');
       return;
     }
-    var b = { id: dup ? dup.id : newId('b-'), name: name, items: tidyBattery(s.battery), pop: s.pop || '', updatedBy: CLOUD ? userName() : '', updatedAt: new Date().toISOString() };
+    var b = { id: dup ? dup.id : newId('b-'), name: name, items: tidyBattery(s.battery), pop: s.pop || '', tile: dup ? dup.tile : true, about: dup ? dup.about : '', updatedBy: CLOUD ? userName() : '', updatedAt: new Date().toISOString() };   // v43: its tile and line kept
     var ok = writeItem('batteries', b.id, b);
     s.batName = name;
     saveDraft();
     refreshBattery();
     syncCard(compute());
     closeModal();
-    toast(ok ? 'Saved battery ' + name : 'This device wouldn’t save the battery (storage is full or blocked).');
+    toast(ok ? 'Saved battery ' + name + (dup ? '' : ': it has its own tile on the Screening page') : 'This device wouldn’t save the battery (storage is full or blocked).');
   }
   function batUse(id) {
     var b = batGet(id);
@@ -1473,6 +1513,7 @@
   }
   function wireCustomDialogs() {
     els.catDialog = $('catDialog'); els.batDialog = $('batDialog');
+    wireBuilder();                                     // v43: the test editor
     // v38: the own-test form's Type and Region menus (blank: Other tests, no region)
     $('ownType').innerHTML = '<option value="">Other</option>' + CAT_TYPES.map(function (t) { return '<option value="' + t[0] + '">' + esc(t[1]) + '</option>'; }).join('');
     $('ownRegion').innerHTML = '<option value="">Not set</option>' + CAT_REGIONS.map(function (r) { return '<option value="' + r[0] + '">' + esc(r[1]) + '</option>'; }).join('');
@@ -1507,6 +1548,682 @@
     $('batName').addEventListener('input', function () { batErr(''); batArmed = ''; $('batSaveGo').textContent = 'Save'; });
   }
 
+  // ------------------------------------------------------------------ v43: the battery builder
+  // Matthew (8 Oct): "I want to create a testing battery builder - this is where we would create new testing batteries - add
+  // new tests (ones that are not currently saved) and add the norm we want for each of those tests - it the once having the
+  // norms would use the traffic light system based on the % rule we have." and "Also the measurement for the norms for
+  // example if its a gross number in newtons or a % of body weight". His choices: each battery its own tile on the
+  // Screening page (a Battery builder tile makes and changes them; Custom stays for working on the spot); one target for
+  // everyone or one by sex; Close within 10% of the target, one setting for the clinic; one value or each leg (each leg
+  // rated, the difference shown), the target as measured (gross N, kg, s…) or relative to body weight.
+  // The clinic's tests ('bt-…') and the Close setting ('bx-close') are kept in the store's `batteries` collection beside the
+  // batteries ('b-…'): no new Firestore rule, and v42 apps skip them (BAT_ID). A battery's item { k: 'lib', id } is one of
+  // these tests; customSet() turns it into a metric (one per leg) rated against its target, Close from the clinic's %.
+  var TEST_ID = /^bt-[a-z0-9]{1,40}$/, CLOSE_ID = 'bx-close', CLOSE_DEF = 10, POP_NONE = 'Clinic targets';
+  var LT_UNITS = [['N', 'N (force)'], ['kg', 'kg (load)'], ['s', 's (time)'], ['ms', 'ms (time)'], ['cm', 'cm'], ['m', 'm'], ['reps', 'reps'], ['%', '%'], ['°', '° (angle)'], ['score', 'score / points'], ['other', 'Other…']];
+  var LT_SCORE = { pctbw: '% BW', xbw: '× BW', perkg: 'N/kg' };
+  function ltScoreOk(unit, score) {
+    return score === '' || ((unit === 'N' || unit === 'kg') && (score === 'pctbw' || score === 'xbw')) || (unit === 'N' && score === 'perkg');
+  }
+  // how it is scored: a force in N as % BW (NPCTBW), × BW (PERBW) or N/kg (PERKG); a load in kg as % BW (PCTBW) or × BW (XBW)
+  function ltCalc(tt) { return tt.score === 'pctbw' ? (tt.unit === 'N' ? 'NPCTBW' : 'PCTBW') : tt.score === 'xbw' ? (tt.unit === 'N' ? 'PERBW' : 'XBW') : tt.score === 'perkg' ? 'PERKG' : null; }
+  function ltUnit(tt) { return tt.score ? LT_SCORE[tt.score] : tt.unit; }   // the unit it is scored (and its target set) in
+  function closeClamp(p) { return Math.min(50, Math.max(1, Math.round(p * 10) / 10)); }
+  function ownPctClamp(p) { return Math.min(90, Math.max(1, Math.round(p * 10) / 10)); }   // a test's own Close: 1 to 90%
+  // the Close % a test is rated with: as kept with a session, else its own rule, else the clinic's
+  function ltPct(tt) { return tt.pct != null ? tt.pct : tt.closePct != null ? tt.closePct : closePct(); }
+  // the clinic's Close % for a battery's tests: as a record kept it (a test without its own rule), else now
+  function libBasePct(tests) { var base = tests.filter(function (tt) { return tt.pct != null && tt.closePct == null; })[0]; return base ? base.pct : closePct(); }
+  function batLibTests() { return state.custom.battery.map(function (it) { return it.k === 'lib' ? ltFor(it.id) : null; }).filter(Boolean); }
+  function closePct() {                                // the clinic's Close: within this % of the target (10 until changed)
+    var o = storedItems('batteries')[CLOSE_ID], p = o && typeof o === 'object' && o.deleted !== true ? Number(o.pct) : NaN;
+    return isFinite(p) && p > 0 ? closeClamp(p) : CLOSE_DEF;
+  }
+  function ltFmt(n) { return String(Math.round(n * 100) / 100); }
+  function ltWithUnit(n, unit) {                       // '250% BW', '2.5 × BW', '12.4 s', '35°', '7'
+    var v = ltFmt(n);
+    if (!unit || unit === 'score') return v;
+    return unit === '%' || unit === '°' || unit === '% BW' ? v + unit : v + ' ' + unit;
+  }
+  function tidyLibTest(o) {
+    if (!o || typeof o !== 'object' || Array.isArray(o) || typeof o.id !== 'string' || !TEST_ID.test(o.id)) return null;
+    var name = cap(o.name, 80);
+    if (!name) return null;
+    var unit = cap(o.unit, 12), score = typeof o.score === 'string' ? o.score : '';
+    if (!ltScoreOk(unit, score)) score = '';
+    function n(v) { var x = ownNum(v); return x === null || !isFinite(x) ? null : x; }
+    var t = { id: o.id, kind: 'test', name: name, unit: unit, score: score, dir: o.dir === 'Lower' ? 'Lower' : 'Higher', legs: o.legs === true, bySex: o.bySex === true,
+      target: n(o.target), targetM: n(o.targetM), targetF: n(o.targetF), what: cap(o.what, 400), how: cap(o.how, 400) };
+    if (t.bySex) t.target = null; else { t.targetM = null; t.targetF = null; }
+    if (catKeyIndex(CAT_TYPES, o.type) >= 0) t.type = o.type;
+    if (catKeyIndex(CAT_REGIONS, o.region) >= 0) t.region = o.region;
+    var was = Array.isArray(o.was) ? o.was.map(function (x) { return cap(x, 80); }).filter(Boolean).slice(0, 10) : [];
+    if (was.length) t.was = was;                       // its earlier names: results saved under them still count as previous
+    // Matthew (9 Oct): "we should be able to make our own rules for each custom test too": its own Close % (null: the clinic's)
+    var own = n(o.closePct);
+    t.closePct = own !== null && own > 0 ? ownPctClamp(own) : null;
+    if (typeof o.pct === 'number' && isFinite(o.pct) && o.pct > 0) t.pct = ownPctClamp(o.pct);   // a copy kept with a session: the Close it was rated with
+    t.updatedBy = cap(o.updatedBy, 120);
+    t.updatedAt = typeof o.updatedAt === 'string' ? o.updatedAt.slice(0, 40) : '';
+    return t;
+  }
+  var ltMemo = null;
+  function ltAll() {
+    var src = storedItems('batteries');
+    if (ltMemo && ltMemo.ver === libVer && ltMemo.src === src) return ltMemo;
+    var byId = {};
+    Object.keys(src).forEach(function (id) {
+      var o = src[id];
+      if (!TEST_ID.test(id) || !o || typeof o !== 'object' || o.deleted === true) return;
+      var t = tidyLibTest(o);
+      if (t && t.id === id) byId[id] = t;
+    });
+    ltMemo = { ver: libVer, src: src, byId: byId, list: Object.keys(byId).map(function (k) { return byId[k]; }).sort(nameOrder) };
+    return ltMemo;
+  }
+  function ltList() { return ltAll().list; }
+  function ltGet(id) { return typeof id === 'string' && TEST_ID.test(id) ? ltAll().byId[id] || null : null; }
+  function ltByName(name, butId) {
+    var k = E.libKey(name);
+    return k ? ltList().filter(function (t) { return t.id !== butId && E.libKey(t.name) === k; })[0] || null : null;
+  }
+  // the test as the page scores it: a report made again from a record uses the copy kept with that session (its target and
+  // Close then), anything else the clinic's tests as they are now
+  function ltFor(id) {
+    var snap = state && state.custom && state.custom.libSnap, o = snap && typeof snap === 'object' && !Array.isArray(snap) ? snap[id] : null;
+    return (o && typeof o === 'object' ? tidyLibTest(Object.assign({}, o, { id: id })) : null) || ltGet(id);
+  }
+  function ltSnapshot(tt) {                            // what a session keeps of a test it used
+    var o = JSON.parse(JSON.stringify(tt));
+    delete o.updatedBy; delete o.updatedAt; delete o.was;
+    o.pct = ltPct(tt);
+    return o;
+  }
+  function ltTarget(tt, sex) { return !tt.bySex ? tt.target : sex === 'Male' ? tt.targetM : sex === 'Female' ? tt.targetF : null; }
+  function ltClose(tt, g, p) { var d = Math.abs(g) * p / 100; return Math.round((tt.dir === 'Lower' ? g + d : g - d) * 10000) / 10000; }
+  function ltNorm(tt, sex, pct) {                      // null: no target (for this sex)
+    var g = ltTarget(tt, sex);
+    if (g === null) return null;
+    var p = pct == null ? ltPct(tt) : pct;
+    return { dir: tt.dir, green: g, amber: ltClose(tt, g, p),
+      label: (tt.dir === 'Lower' ? '≤ ' : '≥ ') + ltWithUnit(g, ltUnit(tt)) + (tt.bySex ? ' (' + String(sex).toLowerCase() + ')' : '') + (tt.closePct != null ? ' · Close within ' + ltFmt(p) + '%' : ''),   // v43: its own rule shown
+      source: '★☆☆ Clinic target (battery builder) · Close within ' + ltFmt(p) + '%' };
+  }
+  function ltTargetLine(tt, pct) {                     // 'target ≥ 250% BW · Close from 225', 'targets by sex: M ≥ 250 · F ≥ 200', 'no target'
+    var u = ltUnit(tt), op = tt.dir === 'Lower' ? '≤ ' : '≥ ', own = tt.closePct != null && tt.pct == null ? ' (its own ' + ltFmt(tt.closePct) + '%)' : '';   // v43: a test's own Close rule
+    if (tt.bySex) {
+      var bits = [];
+      if (tt.targetM !== null) bits.push('M ' + op + ltWithUnit(tt.targetM, u));
+      if (tt.targetF !== null) bits.push('F ' + op + ltWithUnit(tt.targetF, u));
+      return bits.length ? 'targets by sex: ' + bits.join(' · ') + own : 'no target yet (tracked, not rated)';
+    }
+    if (tt.target === null) return 'no target (tracked, not rated)';
+    return 'target ' + op + ltWithUnit(tt.target, u) + ' · Close ' + (tt.dir === 'Lower' ? 'up to ' : 'from ') + ltFmt(ltClose(tt, tt.target, pct == null ? ltPct(tt) : pct)) + own;
+  }
+  function ltHow(tt) {                                 // 'force in N, scored as % BW · each leg', 's · one value · lower is better'
+    var bits = [];
+    if (tt.score) bits.push((tt.unit === 'N' ? 'force in N' : 'load in kg') + ', scored as ' + LT_SCORE[tt.score]);
+    else if (tt.unit) bits.push(tt.unit === 'score' ? 'a score' : tt.unit);
+    bits.push(tt.legs ? 'each leg' : 'one value');
+    if (tt.dir === 'Lower') bits.push('lower is better');
+    return bits.join(' · ');
+  }
+  function ltSideName(tt, side) { return tt.name + ' — ' + side; }
+  function ltScanWhat(tt) {
+    return (tt.score ? (tt.unit === 'N' ? 'force in N (the app scales it by body mass)' : 'load in kg (the app scales it by body mass)') : tt.unit && tt.unit !== 'score' ? 'in ' + tt.unit : 'number') +
+      (tt.legs ? ' for each leg' : '') + (tt.dir === 'Lower' ? ', lower is better' : '');
+  }
+  // a test made on the Custom page (+ Your own test) as one of the clinic's tests: its target stays, Close follows the %
+  function ownToLib(o) {                               // (the Close typed with it becomes its own %)
+    var own = o.green !== null && o.amber !== null && o.amber !== o.green && o.green !== 0 ? Math.abs(o.green - o.amber) / Math.abs(o.green) * 100 : null;
+    return tidyLibTest({ id: newId('bt-'), name: o.name, unit: o.unit, score: '', dir: o.dir, legs: false, bySex: false, target: o.green, closePct: own, type: o.type, region: o.region,
+      updatedBy: CLOUD ? userName() : '', updatedAt: new Date().toISOString() });
+  }
+  // the metric a battery item draws, as its key in a battery ('lib|bt-…', 'str|…', …)
+  function metricItemKey(m) {
+    return m.str ? 'str|' + m.str : m.ratio ? 'str|' + m.ratio : m.own ? 'own|' + m.own : m.lib ? 'lib|' + m.lib : m.rehab ? m.rehab + '|' + m.name : 'screen|' + m.name;
+  }
+  // v43: tests with targets by sex while no sex is chosen ('' otherwise; the general population asks for sex anyway)
+  function customSexNeed() {
+    var s = state.custom;
+    if (s.meta.sex === 'Male' || s.meta.sex === 'Female') return '';
+    return s.battery.some(function (it) { var tt = it.k === 'lib' ? ltFor(it.id) : null; return !!(tt && tt.bySex); }) ? 'Male or Female (some targets are by sex)' : '';
+  }
+  // a builder test measured on each leg, both legs typed: how far apart they are (% of the higher leg) and which leg is behind
+  function legDiff(t, base, dir) {
+    var vs = state[t].values, L = E.parseInput((vs[base + ' — Left'] || {}).result), R = E.parseInput((vs[base + ' — Right'] || {}).result);
+    if (L === null || R === null || L <= 0 || R <= 0) return null;
+    var pct = E.pyRound(Math.abs(L - R) / Math.max(L, R) * 100, 1);
+    return { name: base, L: L, R: R, pct: pct, higher: L === R ? '' : L > R ? 'L' : 'R', behind: L === R ? '' : (dir === 'Lower' ? (L > R ? 'Left' : 'Right') : (L < R ? 'Left' : 'Right')) };
+  }
+  function legDiffs(t) {                               // every such test in the battery (for the report and Claude)
+    var out = [], seen = {};
+    setOf(t).groups.forEach(function (g) {
+      g.metrics.forEach(function (m) {
+        if (!m.lib || !m.side || seen[m.lib]) return;
+        seen[m.lib] = 1;
+        var tt = ltFor(m.lib), d = tt ? legDiff(t, tt.name, tt.dir) : null;
+        if (d) { d.unit = tt.unit; d.dir = tt.dir; out.push(d); }
+      });
+    });
+    return out;
+  }
+  function legDiffText(d, side) {                      // on the leg behind: '12% below the right leg' ('' on the other leg)
+    if (!d || !d.behind || d.behind !== side || Math.round(d.pct) < 1) return '';
+    var other = side === 'Left' ? 'right' : 'left';
+    return E.fmt(Math.round(d.pct)) + '% ' + (d.higher === (side === 'Left' ? 'L' : 'R') ? 'above' : 'below') + ' the ' + other + ' leg';
+  }
+
+  // ---- the clinic's batteries as their own pages: the Custom page runs a battery (state.custom.batId) or the on-the-spot
+  // set-up ('' ; kept in state.custom.spot while a battery runs, so Custom comes back as it was left)
+  function builtPop(b) {                               // who a battery compares against: null = asked when it starts
+    var hasScreen = b.items.some(function (it) { return it.k === 'screen'; }), pops = E.sportPopulations(DATA.screen);
+    if (b.pop === 'general' || pops.indexOf(b.pop) >= 0) return b.pop;
+    if (b.pop === 'none' || !hasScreen) return 'none';
+    return null;
+  }
+  function batPopLabel(b) { var p = builtPop(b); return p === null ? 'population chosen each time' : p === 'none' ? 'the clinic’s targets' : p === 'general' ? 'general population' : p; }
+  function tileBats() { return batList().filter(function (b) { return b.tile; }); }
+  function runBat() { var id = state.custom.batId; return id ? batGet(id) : null; }   // the battery on the Custom page (null: on the spot, or deleted since)
+  function toolName(t) { return t === 'custom' && state.custom.batId && state.custom.batName ? state.custom.batName : TOOL_NAMES[t]; }
+  function toolHead(t) { return t === 'custom' && state.custom.batId && state.custom.batName ? state.custom.batName : HEAD[t][0]; }
+  function toolBlurb(t) {
+    if (t !== 'custom' || !state.custom.batId) return HEAD[t][1];
+    var b = runBat();
+    return b && b.about ? b.about : 'The clinic’s battery. Enter the results: each test is rated against its norms or the clinic’s target.';
+  }
+  function customSetup() { var c = state.custom; return { pop: c.pop, battery: c.battery, batName: c.batName, batId: c.batId || '', spot: c.spot || null }; }
+  // the page set up for a battery ('' : the on-the-spot set-up); the page is empty or was just cleared
+  function switchBattery(id) {
+    var s = state.custom, b = id ? batGet(id) : null;
+    if (id && !b) return false;
+    if (!id && !s.batId) return true;                  // on the spot already
+    if (b) {
+      if (!s.batId) s.spot = { pop: s.pop, battery: s.battery, batName: s.batName };
+      s.batId = b.id; s.batName = b.name; s.battery = tidyBattery(b.items); s.pop = builtPop(b);
+    } else {
+      var sp = s.spot || { pop: null, battery: [], batName: '' };
+      s.batId = ''; s.pop = sp.pop; s.battery = tidyBattery(sp.battery); s.batName = sp.batName || ''; s.spot = null;
+    }
+    customMemo = null;
+    var keep = {};
+    customSet().groups.forEach(function (g) { g.metrics.forEach(function (m) { keep[m.name] = 1; }); });
+    Object.keys(s.values).forEach(function (k) { if (!keep[k]) delete s.values[k]; });
+    retest.tool = null;
+    saveDraft();
+    return true;
+  }
+  // a battery's tile (id) or Custom's ('' ): straight in when the page is free, else ask first (Continue / Start new)
+  function openBattery(id) {
+    if (id && !batGet(id)) return;
+    var same = (state.custom.batId || '') === id;
+    if (homeBusy('custom')) { askHalfDone(same ? { tool: 'custom', page: null, bat: id } : { tool: 'custom', bat: id, swap: true }); return; }
+    switchBattery(id);                                 // (a battery: as saved now, should it have changed)
+    openTool('custom', null);
+  }
+  function batStartNew(id) {                           // Start new on a battery's question: the page cleared, then set up for it
+    var undo = clearForClient('custom');
+    switchBattery(id);
+    openTool('custom', null);
+    toast('New ' + toolName('custom') + ' started', { label: 'Undo', run: undo });
+  }
+  // a battery from the page's heading menu ('' : Custom on the spot)
+  function pickBattery(id) {
+    if (id && !batGet(id)) return;
+    if ((state.custom.batId || '') !== id && homeBusy('custom')) { askHalfDone({ tool: 'custom', bat: id, swap: true }); return; }
+    switchBattery(id);
+    state.tool = 'custom'; state.screenTool = 'custom';
+    render();
+    window.scrollTo(0, 0);
+    focusQuiet(pickBtn());
+  }
+  // a client chosen with a battery (+ New test, the Choose a test list): theirs carries on; anyone else's asks first
+  function clientGoBattery(id, c) {
+    if (id && !batGet(id)) return;
+    var want = c.key || E.nameKey(c.name), cur = E.nameKey(state.custom.meta.name), same = (state.custom.batId || '') === id;
+    if (homeBusy('custom')) {
+      if (same && cur && cur === want) { openTool('custom', null); return; }
+      askHalfDone({ tool: 'custom', client: c, bat: id, swap: !same });
+      return;
+    }
+    switchBattery(id);
+    homeClientOpen('custom', c, false);
+  }
+  // a battery saved in the builder while the page runs it: its tests and name follow (tests holding results stay for now)
+  function bldApplyToPage(b) {
+    var s = state.custom;
+    if (s.batId !== b.id) return;
+    var held = {}, now = {};
+    customSet().groups.forEach(function (g) { g.metrics.forEach(function (m) {
+      var v = s.values[m.name]; if (v && ['result', 'previous', 'side', 'left', 'right'].some(function (f) { return !blank(v[f]); })) held[metricItemKey(m)] = 1;
+    }); });
+    b.items.forEach(function (it) { now[batteryKey(it)] = 1; });
+    var stay = s.battery.filter(function (it) { var k = batteryKey(it); return held[k] && !now[k]; });
+    s.batName = b.name;
+    s.battery = tidyBattery(b.items.concat(stay));
+    if (!homeBusy('custom')) s.pop = builtPop(b);
+    customMemo = null;
+    saveDraft();
+    render();
+  }
+  var pageShape = '';                                  // the Custom page's rows as drawn (a test renamed elsewhere redraws them)
+  function customShape() { return customSet().groups.map(function (g) { return g.title + ':' + g.metrics.map(function (m) { return m.name; }).join('|'); }).join('/'); }
+
+  // ---- the Battery builder (Home › Screening › Battery builder; homeSub 'builder'): the clinic's batteries, its own tests
+  // and the Close %. bld.view 'list', or 'bat' with bld.edit (a battery being made or changed: { id ('' new), name, about,
+  // pop, tile, on: { catalogue key: true }, own: [tests made on the Custom page], dirty }); bld.from 'page' when it came
+  // from Edit battery on the battery's page (Save and Cancel go back there). The test editor is a pop-up (#testDialog).
+  function freshBld() { return { view: 'list', edit: null, q: '', from: '', err: '', delArmed: false }; }
+  var bld = freshBld(), bldDelTimer = null;
+  function bldStartEdit(id, from) {
+    var b = id ? batGet(id) : null;
+    if (id && !b) return;
+    var on = {}, own = [];
+    (b ? b.items : []).forEach(function (it) { on[batteryKey(it)] = true; if (it.k === 'own') own.push(JSON.parse(JSON.stringify(it))); });
+    bld = freshBld();
+    bld.view = 'bat';
+    bld.from = from || '';
+    bld.edit = { id: b ? b.id : '', name: b ? b.name : '', about: b ? b.about : '', pop: b && (b.pop === 'general' || E.sportPopulations(DATA.screen).indexOf(b.pop) >= 0) ? b.pop : '',
+      tile: b ? b.tile : true, on: on, own: own, dirty: false, isNew: !b };
+  }
+  // the catalogue (with the clinic's tests) and the battery's tests made on the Custom page, in Choose tests' order
+  function bldEntries() {
+    var e = bld.edit, list = catalogue().slice();
+    e.own.forEach(function (o, i) {
+      list.push({ key: 'own|' + o.id, k: 'own', name: o.name, own: o, group: catTitle(o.type, o.region), glabel: catLabel(o.type, o.region), rank: catRank(o.type, o.region), ord: 100000 + i });
+    });
+    list.sort(function (a, b) { return a.rank - b.rank || a.ord - b.ord; });
+    return list;
+  }
+  function bldSub(c) {                                 // a test's line in the builder: its unit and how it is rated
+    if (c.k === 'lib') return 'Clinic test · ' + ltHow(c.def) + ' · ' + ltTargetLine(c.def);
+    if (c.k === 'own') { var o = c.own; return 'Made on the Custom page · ' + (o.unit ? o.unit + ' · ' : '') + (o.green === null ? 'no target' : 'target ' + (o.dir === 'Lower' ? '≤ ' : '≥ ') + E.fmt(o.green)); }
+    if (c.ratio || c.k === 'str') return catTargetText(c, { population: null });
+    if (c.k === 'ham' || c.k === 'acl') return REHAB_LABEL[c.k] + ' · ' + (c.def.calc === 'LSI' ? 'left & right → LSI %' : c.unit && c.unit !== 'AU' ? c.unit : 'score') + ' · targets by rehab phase';
+    var p = bld.edit.pop;
+    if (p && p !== 'general' && E.sportPopulations(DATA.screen).indexOf(p) >= 0) return catTargetText(c, { population: p, ageBand: 'All ages', label: p });
+    var unit = c.unit && c.unit !== 'AU' ? c.unit : (c.unit === 'AU' ? 'score' : '');
+    return (unit ? unit + ' · ' : '') + (p === 'general' ? 'general norms by sex and age' : 'norms for the population chosen');
+  }
+  function bldOnKeys() { var e = bld.edit; return bldEntries().filter(function (c) { return e.on[c.key]; }); }
+  function bldHasScreen() { return bldOnKeys().some(function (c) { return c.k === 'screen'; }); }
+  function bldCountText() { var n = bldOnKeys().length; return n ? '(' + n + (n === 1 ? ' test)' : ' tests)') : ''; }
+  function bldCatHtml() {
+    var q = bld.q, e = bld.edit, html = '', last = null, shown = 0;
+    bldEntries().forEach(function (c) {
+      if (!catMatches(c.name, q)) return;
+      if (c.group !== last) { html += '<li class="cat-group" aria-hidden="true">' + esc(c.glabel || groupTitle(c.group)) + '</li>'; last = c.group; }
+      html += '<li><label class="tests-row cat-row"><input type="checkbox" data-bcat="' + esc(c.key) + '"' + (e.on[c.key] ? ' checked' : '') + '>' +
+        '<span class="tr-main"><span class="tr-t">' + esc(c.name) + '</span><span class="tr-n">' + esc(bldSub(c)) + '</span></span></label></li>';
+      shown++;
+    });
+    return shown ? html : '<li class="cat-none">No tests match “' + esc(clean1(q)) + '”. + New test adds it, with your target.</li>';
+  }
+  function bldChosenHtml() {
+    var rows = bldOnKeys(), html = '', last = null;
+    if (!rows.length) return '<li class="bld-empty">No tests yet. Tick them in the list above, or make a new one with + New test.</li>';
+    rows.forEach(function (c) {
+      if (c.group !== last) { html += '<li class="bc-group" aria-hidden="true">' + esc(c.glabel || groupTitle(c.group)) + '</li>'; last = c.group; }
+      html += '<li class="bc-row"><span class="bc-t"><b>' + esc(c.name) + '</b><small>' + esc(bldSub(c)) + '</small></span>' +
+        '<button type="button" class="quiet bc-rm" data-bld="rm:' + esc(c.key) + '">Remove<span class="vh"> ' + esc(c.name) + '</span></button></li>';
+    });
+    if (rows.some(function (c) { return c.k === 'own'; })) html += '<li class="bld-note">Saving makes the tests made on the Custom page the clinic’s own tests: the target stays, and so does the Close typed with it (as a % of the target; none typed: the clinic’s ' + ltFmt(closePct()) + '%).</li>';
+    return html;
+  }
+  function builderHtml() {
+    if (bld.view === 'bat' && bld.edit) return bldEditHtml();
+    var bats = batList(), tests = ltList(), pct = closePct(), strPct = DATA.str.amber_pct == null ? 5 : DATA.str.amber_pct;
+    var html = subHeadHtml('Battery builder', 'The clinic’s own batteries, each with its own tile on the Screening page, and tests the app doesn’t have, each rated against the target you set.', 'data-home="hub:screening"', 'Screening');
+    html += '<section class="bld-sec" aria-labelledby="bldBatsH"><div class="bld-head"><h2 id="bldBatsH">Batteries</h2><button type="button" class="primary" data-bld="newbat">+ New battery</button></div>' +
+      (bats.length ? '<div class="tpl-list bld-list">' + bats.map(function (b) {
+        var nm = esc(b.name), upd = tplUpdLine(b), sub = batteryLineFor(b.items) + ' · ' + batPopLabel(b) + (b.tile ? '' : ' · not on the Screening page');
+        return '<div class="tpl-row" data-bat="' + esc(b.id) + '"><div class="tpl-main"><b>' + nm + '</b><span>' + esc(sub) + '</span>' + (b.about ? '<span class="tpl-upd">' + esc(b.about) + '</span>' : '') +
+          (upd ? '<span class="tpl-upd">' + esc(upd) + '</span>' : '') + '</div>' +
+          '<div class="tpl-acts"><button type="button" class="ghost" data-bld="edit:' + esc(b.id) + '">Edit<span class="vh"> ' + nm + '</span></button></div></div>';
+      }).join('') + '</div>' : '<p class="client-none bld-none">No batteries yet. + New battery picks its tests (any of the app’s, or tests of your own) and gives it a tile on the Screening page.</p>') + '</section>';
+    html += '<section class="bld-sec" aria-labelledby="bldTestsH"><div class="bld-head"><h2 id="bldTestsH">The clinic’s tests</h2><button type="button" class="ghost" data-bld="newtest">+ New test</button></div>' +
+      (tests.length ? '<div class="tpl-list bld-list">' + tests.map(function (tt) {
+        var nm = esc(tt.name), cat = catLabel(tt.type || '', tt.region || '');
+        return '<div class="tpl-row" data-test="' + esc(tt.id) + '"><div class="tpl-main"><b>' + nm + '</b><span>' + esc(ltHow(tt)) + '</span><span>' + esc(ltTargetLine(tt)) + '</span><span class="tpl-upd">' + esc(cat) + '</span></div>' +
+          '<div class="tpl-acts"><button type="button" class="ghost" data-bld="test:' + esc(tt.id) + '">Edit<span class="vh"> ' + nm + '</span></button></div></div>';
+      }).join('') + '</div>' : '<p class="client-none bld-none">No tests of your own yet. + New test adds one: what it is measured in, whether higher or lower is better, one value or each leg, and its target (as measured, or relative to body weight).</p>') + '</section>';
+    var eg = 'With a target of 100 (higher is better): On target 100 or more · Close ' + ltFmt(100 - pct) + ' to 100 · Off target below ' + ltFmt(100 - pct) + '.';
+    html += '<section class="bld-sec bld-close" aria-labelledby="bldCloseH"><h2 id="bldCloseH" class="bld-h">Traffic lights</h2>' +
+      '<p class="bld-lead">For every test made here: <b>On target</b> at or beyond its target, <b>Close</b> within this % of it, <b>Off target</b> further away. One setting for the clinic; a test can have its own % instead (set in the test), and LL Strength keeps its own ' + esc(ltFmt(strPct)) + '%.</p>' +
+      '<div class="bld-pct"><label class="f" for="bldPct"><span>Close is within (% of the target)</span><input id="bldPct" type="text" inputmode="decimal" autocomplete="off" value="' + esc(ltFmt(pct)) + '" enterkeyhint="done"></label>' +
+      '<button type="button" class="ghost" data-bld="pct">Save</button></div>' +
+      '<p class="bld-eg" id="bldEg">' + esc(eg) + '</p><p class="ai-err" id="bldPctErr" role="alert" hidden></p></section>';
+    return html;
+  }
+  function bldEditHtml() {
+    var e = bld.edit, hasScreen = bldHasScreen();
+    var pops = [['', 'Ask each time it starts'], ['general', 'General population (by sex and age)']].concat(E.sportPopulations(DATA.screen).map(function (p) { return [p, p]; }));
+    var html = subHeadHtml(e.isNew ? 'New battery' : 'Edit battery', e.isNew ? 'Name it, tick its tests (or make new ones), then save. It gets its own tile on the Screening page.' : '', 'data-bld="cancel"', bld.from === 'page' ? 'Back' : 'Battery builder');
+    html += '<section class="card bld-card" aria-labelledby="bldDetH"><h2 id="bldDetH" class="bld-h">The battery</h2><div class="bld-fields">' +
+      '<label class="f wide" for="bldName"><span>Name</span><input id="bldName" type="text" maxlength="80" autocapitalize="sentences" autocomplete="off" placeholder="e.g. Netball pre-season" value="' + esc(e.name) + '" enterkeyhint="next"></label>' +
+      '<label class="f wide" for="bldAbout"><span>About (optional: the line on its tile)</span><input id="bldAbout" type="text" maxlength="140" autocapitalize="sentences" autocomplete="off" placeholder="e.g. The squad’s pre-season screen" value="' + esc(e.about) + '" enterkeyhint="done"></label>' +
+      '<label class="f wide" for="bldPop" id="bldPopF"' + (hasScreen ? '' : ' hidden') + '><span>Compare the Performance screen tests against</span><select id="bldPop">' +
+      pops.map(function (o) { return '<option value="' + esc(o[0]) + '"' + (e.pop === o[0] ? ' selected' : '') + '>' + esc(o[1]) + '</option>'; }).join('') + '</select></label>' +
+      '<label class="bld-tick" for="bldTile"><input id="bldTile" type="checkbox"' + (e.tile ? ' checked' : '') + '><span>Show it on the Screening page</span></label></div></section>';
+    html += '<section class="card bld-card" aria-labelledby="bldAddH"><div class="bld-head"><h2 id="bldAddH" class="bld-h">Add tests</h2><button type="button" class="ghost" data-bld="newtest">+ New test</button></div>' +
+      '<p class="bld-lead">The app’s tests by type and region, and the clinic’s own. A test the app doesn’t have: + New test, with its target.</p>' +
+      '<label class="client-search" for="bldFind">' + HOME_ICON.search + '<span class="vh">Search tests</span><input id="bldFind" type="search" placeholder="Search tests" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" enterkeyhint="search" value="' + esc(bld.q) + '"></label>' +
+      '<ul class="tests-list cat-list bld-cat" id="bldCat">' + bldCatHtml() + '</ul></section>';
+    html += '<section class="card bld-card" aria-labelledby="bldInH"><h2 id="bldInH" class="bld-h">In this battery <span class="bld-n" id="bldCount">' + esc(bldCountText()) + '</span></h2>' +
+      '<ul class="bld-chosen" id="bldChosen">' + bldChosenHtml() + '</ul></section>';
+    html += '<p class="ai-err bld-err" id="bldErr" role="alert"' + (bld.err ? '' : ' hidden') + '>' + esc(bld.err) + '</p>' +
+      '<div class="bld-acts"><button type="button" class="primary" data-bld="save">Save battery</button><button type="button" class="ghost" data-bld="cancel">Cancel</button>' +
+      (e.isNew ? '' : '<button type="button" class="quiet tpl-del bld-del' + (bld.delArmed ? ' armed' : '') + '" data-bld="delbat">' + (bld.delArmed ? 'Tap again to delete' : 'Delete battery') + '</button>') + '</div>';
+    return html;
+  }
+  // the parts of the editor that follow a tick, drawn in place (the list stays where it is under the finger)
+  function bldRefreshParts() {
+    var cnt = $('bldCount'), ch = $('bldChosen'), pf = $('bldPopF');
+    if (cnt) cnt.textContent = bldCountText();
+    if (ch) ch.innerHTML = bldChosenHtml();
+    if (pf) pf.hidden = !bldHasScreen();
+    hsubDrawn = builderHtml();
+  }
+  function bldToggle(key, on) {                        // as Choose tests: the hip ratio comes with its two hip tests
+    var e = bld.edit;
+    if (!e) return;
+    var rt = ratioTest(), rk = 'str|' + RATIO_ID;
+    if (on) {
+      e.on[key] = true;
+      if (key === rk && rt) rt.from.forEach(function (id) { e.on['str|' + id] = true; });
+    } else {
+      delete e.on[key];
+      if (rt && rt.from.some(function (id) { return key === 'str|' + id; })) delete e.on[rk];
+    }
+    e.dirty = true;
+    bld.err = '';
+    var err = $('bldErr');
+    if (err) err.hidden = true;
+    document.querySelectorAll('#bldCat input[data-bcat]').forEach(function (x) { x.checked = !!e.on[x.dataset.bcat]; });
+    bldRefreshParts();
+  }
+  function bldFail(msg, focusId) {
+    bld.err = msg;
+    var p = $('bldErr');
+    if (p) { p.textContent = msg; p.hidden = false; }
+    hsubDrawn = builderHtml();
+    focusQuiet((focusId && $(focusId)) || p);
+    return false;
+  }
+  function bldSave() {
+    var e = bld.edit;
+    if (!e) return;
+    var name = cap(e.name, 80);
+    if (!name) return bldFail('Give the battery a name.', 'bldName');
+    var k = E.libKey(name), dup = batList().filter(function (b) { return b.id !== e.id && E.libKey(b.name) === k; })[0];
+    if (dup) return bldFail('There is already a battery called ' + dup.name + '. Give this one another name.', 'bldName');
+    var items = [], made = [];
+    bldOnKeys().forEach(function (c) {
+      if (c.k === 'screen') items.push({ k: 'screen', key: c.name });
+      else if (c.k === 'str') items.push({ k: 'str', id: c.def.id });
+      else if (c.k === 'ham' || c.k === 'acl') items.push({ k: c.k, key: c.name });
+      else if (c.k === 'lib') items.push({ k: 'lib', id: c.def.id });
+      else if (c.k === 'own') {                        // made on the Custom page: one of the clinic's tests from now on
+        var tt = ltByName(c.own.name) || made.filter(function (x) { return E.libKey(x.name) === E.libKey(c.own.name); })[0] || ownToLib(c.own);
+        if (!tt) return;
+        if (!ltGet(tt.id) && made.indexOf(tt) < 0) made.push(tt);
+        items.push({ k: 'lib', id: tt.id });
+      }
+    });
+    if (!items.length) return bldFail('Tick at least one test.', 'bldFind');
+    made.forEach(function (tt) { writeItem('batteries', tt.id, tt); });
+    items = tidyBattery(items);
+    var hasScreen = items.some(function (it) { return it.k === 'screen'; });
+    var b = { id: e.id || newId('b-'), name: name, items: items, pop: hasScreen ? e.pop : 'none', tile: !!e.tile, about: cap(e.about, 140), updatedBy: CLOUD ? userName() : '', updatedAt: new Date().toISOString() };
+    var was = e.id ? batGet(e.id) : null, ok = writeItem('batteries', b.id, b);
+    bldApplyToPage(b);
+    var from = bld.from;
+    bld = freshBld();
+    toast(ok ? 'Saved ' + b.name + (b.tile ? (was && was.tile ? '' : ': its tile is on the Screening page') : '') : 'This device wouldn’t save the battery (storage is full or blocked).');
+    bldLeave(from, '[data-bld="edit:' + b.id + '"]');
+  }
+  function bldLeave(from, focusSel) {                  // back from the editor: to the battery's page, or the builder's list
+    if (from === 'page') { setHomeSub(''); openTool('custom', null); return; }
+    renderHome();
+    window.scrollTo(0, 0);
+    focusQuiet((focusSel && els.homeSec.querySelector(focusSel)) || $('hsubH'));
+  }
+  function bldCancel() {
+    var keep = bld, e = bld.edit;
+    bld = freshBld();
+    if (e && e.dirty) toast('Changes to ' + (clean1(e.name) || 'the new battery') + ' not saved', { label: 'Undo', run: function () {
+      bld = keep; keep.from = '';
+      openHomeSub('builder');
+    } });
+    bldLeave(keep.from, e && e.id ? '[data-bld="edit:' + e.id + '"]' : '[data-bld="newbat"]');
+  }
+  function bldDeleteTap() {
+    var e = bld.edit, b = e && e.id ? batGet(e.id) : null;
+    if (!b) return;
+    if (!bld.delArmed) {
+      bld.delArmed = true;
+      renderHome();
+      focusQuiet(els.homeSec.querySelector('[data-bld="delbat"]'));
+      clearTimeout(bldDelTimer);
+      bldDelTimer = setTimeout(function () { if (bld.delArmed) { bld.delArmed = false; if (homeView && homeSub === 'builder') renderHome(); } }, 4000);
+      return;
+    }
+    clearTimeout(bldDelTimer);
+    writeItem('batteries', b.id, null);
+    var from = bld.from;
+    bld = freshBld();
+    toast('Deleted ' + b.name, { label: 'Undo', run: function () { writeItem('batteries', b.id, b); afterBatChange(); } });
+    bldLeave(from === 'page' ? '' : from, '[data-bld="newbat"]');
+  }
+  function bldPctSave() {
+    var inp = $('bldPct'), err = $('bldPctErr'), p = inp ? E.parseInput(inp.value) : null;
+    if (p === null || p < 1 || p > 50) { if (err) { err.textContent = 'Type a % from 1 to 50.'; err.hidden = false; } if (inp) inp.focus(); return; }
+    p = closeClamp(p);
+    var was = closePct();
+    if (err) err.hidden = true;
+    if (p !== was) writeItem('batteries', CLOSE_ID, { id: CLOSE_ID, name: 'Traffic lights', pct: p, updatedBy: CLOUD ? userName() : '', updatedAt: new Date().toISOString() });
+    afterBatChange();
+    toast('Close is within ' + ltFmt(p) + '% of the target for every test made here without its own %', p !== was ? { label: 'Undo', run: function () {
+      writeItem('batteries', CLOSE_ID, { id: CLOSE_ID, name: 'Traffic lights', pct: was, updatedBy: CLOUD ? userName() : '', updatedAt: new Date().toISOString() });
+      afterBatChange();
+    } } : null);
+  }
+  function onBuilderClick(k) {
+    var i = k.indexOf(':'), kind = i < 0 ? k : k.slice(0, i), arg = i < 0 ? '' : k.slice(i + 1);
+    if (kind === 'newbat' || kind === 'edit') { bldStartEdit(kind === 'edit' ? arg : '', ''); renderHome(); window.scrollTo(0, 0); focusQuiet($('hsubH')); return; }
+    if (kind === 'newtest') { openTestDialog(''); return; }
+    if (kind === 'test') { openTestDialog(arg); return; }
+    if (kind === 'pct') { bldPctSave(); return; }
+    if (!bld.edit) return;
+    if (kind === 'rm') { bldToggle(arg, false); focusQuiet(els.homeSec.querySelector('#bldChosen .bc-rm') || $('bldInH')); return; }
+    if (kind === 'save') { bldSave(); return; }
+    if (kind === 'cancel') { bldCancel(); return; }
+    if (kind === 'delbat') bldDeleteTap();
+  }
+  function onBuilderInput(el) {
+    var e = bld.edit;
+    if (el.id === 'bldFind') { bld.q = el.value.slice(0, 80); var box = $('bldCat'); if (box) box.innerHTML = bldCatHtml(); hsubDrawn = builderHtml(); return; }
+    if (!e) return;
+    if (el.id === 'bldName' || el.id === 'bldAbout') {
+      e[el.id === 'bldName' ? 'name' : 'about'] = el.value.slice(0, el.id === 'bldName' ? 80 : 140);
+      e.dirty = true;
+      if (bld.err) { bld.err = ''; var p = $('bldErr'); if (p) p.hidden = true; }
+      hsubDrawn = builderHtml();
+    }
+  }
+  function onBuilderChange(el) {
+    var e = bld.edit;
+    if (!e) return false;
+    if (el.matches('input[data-bcat]')) { bldToggle(el.dataset.bcat, el.checked); return true; }
+    if (el.id === 'bldTile') { e.tile = el.checked; e.dirty = true; hsubDrawn = builderHtml(); return true; }
+    if (el.id === 'bldPop') {                          // the screen tests' targets follow the population chosen
+      e.pop = el.value; e.dirty = true;
+      var box = $('bldCat'); if (box) box.innerHTML = bldCatHtml();
+      bldRefreshParts();
+      return true;
+    }
+    return false;
+  }
+
+  // ---- the test editor (#testDialog): a test the app doesn't have, with its target
+  var ltEdit = null;                                   // { id ('' new), was: the test as it was, dir, legs, bySex, armed }
+  function ltErr(msg) { var p = $('ltErr'); p.textContent = msg || ''; p.hidden = !msg; }
+  function ltFail(msg, id) { ltErr(msg); if (id && $(id)) $(id).focus(); return false; }
+  function ltReadUnit() { var u = $('ltUnit').value; return u === 'other' ? cap($('ltUnitOther').value, 12) : u; }
+  function ltScoreOptions(cur) {
+    var u = $('ltUnit').value, sel = $('ltScore'), opts = null;
+    if (u === 'N') opts = [['', 'N, as measured (gross force)'], ['pctbw', '% of body weight'], ['xbw', '× body weight'], ['perkg', 'N per kg of body mass']];
+    else if (u === 'kg') opts = [['', 'kg, as measured (gross load)'], ['pctbw', '% of body weight'], ['xbw', '× body weight']];
+    $('ltScoreF').hidden = !opts;
+    sel.dataset.for = u;
+    sel.innerHTML = opts ? opts.map(function (o) { return '<option value="' + o[0] + '">' + esc(o[1]) + '</option>'; }).join('') : '';
+    if (opts) sel.value = opts.some(function (o) { return o[0] === cur; }) ? cur : '';
+  }
+  function ltDraft() {                                 // the form as a test (unchecked)
+    var unit = ltReadUnit(), score = $('ltScoreF').hidden ? '' : $('ltScore').value;
+    var own = ownNum($('ltPct').value);
+    return { unit: unit, score: ltScoreOk(unit, score) ? score : '', dir: ltEdit.dir, legs: ltEdit.legs, bySex: ltEdit.bySex,
+      target: ownNum($('ltTarget').value), targetM: ownNum($('ltTargetM').value), targetF: ownNum($('ltTargetFe').value),
+      closePct: own !== null && own >= 1 && own <= 90 ? own : null };   // v43: its own Close % (blank: the clinic's)
+  }
+  function ltBandsHtml(d) {
+    var p = ltPct(d), su = ltUnit(d), low = d.dir === 'Lower';
+    function one(g, who) {
+      if (g === null) return '';
+      var c = ltClose(d, g, p);
+      return '<span class="lt-line">' + (who ? '<b>' + who + '</b> ' : '') + '<span class="lt-g">On target ' + (low ? '≤ ' : '≥ ') + esc(ltWithUnit(g, su)) + '</span> · ' +
+        '<span class="lt-a">Close ' + esc(low ? ltFmt(g) + ' to ' + ltFmt(c) : ltFmt(c) + ' to ' + ltFmt(g)) + '</span> · <span class="lt-r">Off target ' + (low ? 'above ' : 'below ') + esc(ltFmt(c)) + '</span></span>';
+    }
+    var lines = d.bySex ? [one(d.targetM, 'Male'), one(d.targetF, 'Female')].filter(Boolean) : [one(d.target, '')].filter(Boolean);
+    var html = lines.length ? lines.join('') : '<span class="lt-line">No target: the results are kept and compared over time, not rated.</span>';
+    if (d.score) html += '<span class="lt-line lt-how">You type the ' + (d.unit === 'N' ? 'force in N' : 'load in kg') + '; the app works it out as ' + esc(LT_SCORE[d.score]) + ' from the body mass on the page.</span>';
+    if (d.legs) html += '<span class="lt-line lt-how">Each leg is rated, and the difference between the legs is shown.</span>';
+    return html + '<span class="lt-line lt-how">' + (d.closePct != null ? 'Close = within ' + esc(ltFmt(p)) + '% of the target: this test’s own rule (blank it for the clinic’s ' + esc(ltFmt(closePct())) + '%).'
+      : 'Close = within ' + esc(ltFmt(p)) + '% of the target: the clinic’s rule (Traffic lights, in the Battery builder), unless you give this test its own %.') + '</span>';
+  }
+  function ltSync() {
+    if (!ltEdit) return;
+    var u = $('ltUnit').value;
+    $('ltUnitOtherF').hidden = u !== 'other';
+    if (($('ltScore').dataset.for || '') !== u) ltScoreOptions($('ltScore').value);
+    els.testDialog.querySelectorAll('[data-lt-dir]').forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.ltDir === ltEdit.dir)); });
+    els.testDialog.querySelectorAll('[data-lt-legs]').forEach(function (b) { b.setAttribute('aria-pressed', String((b.dataset.ltLegs === 'each') === ltEdit.legs)); });
+    els.testDialog.querySelectorAll('[data-lt-sex]').forEach(function (b) { b.setAttribute('aria-pressed', String((b.dataset.ltSex === 'sex') === ltEdit.bySex)); });
+    var d = ltDraft(), su = ltUnit(d), w = su && su !== 'score' ? ' (' + su + ')' : '';
+    $('ltTargetF').hidden = d.bySex; $('ltTargetMF').hidden = !d.bySex; $('ltTargetFF').hidden = !d.bySex;
+    $('ltTargetW').textContent = 'Target' + w + ', optional';
+    $('ltTargetMW').textContent = 'Male target' + w;
+    $('ltTargetFW').textContent = 'Female target' + w;
+    $('ltBands').innerHTML = ltBandsHtml(d);
+  }
+  function openTestDialog(id) {
+    var tt = id ? ltGet(id) : null;
+    if (id && !tt) return;
+    ltEdit = { id: tt ? tt.id : '', was: tt, dir: tt ? tt.dir : 'Higher', legs: tt ? tt.legs : false, bySex: tt ? tt.bySex : false, armed: false };
+    $('testTitle').textContent = tt ? 'Edit test' : 'New test';
+    $('testLead').textContent = tt ? 'Changes apply wherever it is used. Results already saved keep their values.'
+      : 'A test the app doesn’t have. It can go in any battery and in Custom’s Choose tests, rated against your target.';
+    $('ltName').value = tt ? tt.name : (bld.view === 'bat' && bld.edit ? clean1(bld.q) : '');   // what was searched for, as its name
+    var known = tt ? LT_UNITS.some(function (u) { return u[0] !== 'other' && u[0] === tt.unit; }) : false;
+    $('ltUnit').value = tt ? (known ? tt.unit : 'other') : '';
+    $('ltUnitOther').value = tt && !known ? tt.unit : '';
+    ltScoreOptions(tt ? tt.score : '');
+    $('ltType').value = tt && tt.type ? tt.type : '';
+    $('ltRegion').value = tt && tt.region ? tt.region : '';
+    $('ltTarget').value = tt && tt.target !== null ? ltFmt(tt.target) : '';
+    $('ltTargetM').value = tt && tt.targetM !== null ? ltFmt(tt.targetM) : '';
+    $('ltTargetFe').value = tt && tt.targetF !== null ? ltFmt(tt.targetF) : '';
+    $('ltPct').value = tt && tt.closePct != null ? ltFmt(tt.closePct) : '';   // v43: its own Close % (blank: the clinic's)
+    $('ltPct').placeholder = ltFmt(closePct()) + ' (the clinic’s)';
+    $('ltWhat').value = tt ? tt.what : '';
+    $('ltHow').value = tt ? tt.how : '';
+    var del = $('ltDelete');
+    del.hidden = !tt; del.classList.remove('armed'); del.textContent = 'Delete test';
+    ltErr('');
+    ltSync();
+    var back = tt ? '[data-bld="test:' + tt.id + '"]' : '[data-bld="newtest"]';
+    openModal(els.testDialog, tt ? $('ltName') : ($('ltName').value ? $('ltUnit') : $('ltName')), function (restore) {
+      ltEdit = null;
+      if (restore) focusQuiet(els.homeSec.querySelector(back) || $('hsubH'));
+      return true;
+    });
+  }
+  function ltSave() {
+    if (!ltEdit) return;
+    var name = cap($('ltName').value, 80);
+    if (!name) return ltFail('Give the test a name.', 'ltName');
+    var inCat = catalogueByName(name);
+    if (inCat && inCat.k !== 'lib') return ltFail(inCat.name + ' is already one of the app’s tests: tick it in the list instead.', 'ltName');
+    var dup = ltByName(name, ltEdit.id);
+    if (dup) return ltFail('There is already a test called ' + dup.name + '.', 'ltName');
+    if (!$('ltUnit').value) return ltFail('Choose what it is measured in.', 'ltUnit');
+    var d = ltDraft(), boxes = d.bySex ? [['ltTargetM', 'The male target'], ['ltTargetFe', 'The female target']] : [['ltTarget', 'The target']];
+    for (var i = 0; i < boxes.length; i++) if (!blank($(boxes[i][0]).value) && ownNum($(boxes[i][0]).value) === null) return ltFail(boxes[i][1] + ' should be a number.', boxes[i][0]);
+    var ownP = ownNum($('ltPct').value);
+    if (!blank($('ltPct').value) && (ownP === null || ownP < 1 || ownP > 90)) return ltFail('Close should be a % from 1 to 90, or blank for the clinic’s ' + ltFmt(closePct()) + '%.', 'ltPct');
+    // renamed (letter for letter: the results are kept under the name as it was): results under the old name still count
+    var was = ltEdit.was, names = was ? (was.was || []).slice() : [];
+    if (was && was.name !== name) names.unshift(was.name);
+    var tt = tidyLibTest(Object.assign({ id: ltEdit.id || newId('bt-'), kind: 'test', name: name, type: $('ltType').value, region: $('ltRegion').value, what: $('ltWhat').value, how: $('ltHow').value,
+      was: names.filter(function (x, i) { return x !== name && names.indexOf(x) === i; }), updatedBy: CLOUD ? userName() : '', updatedAt: new Date().toISOString() }, d));
+    if (!tt) return ltFail('That test couldn’t be saved.', null);
+    var isNew = !ltEdit.id, inEditor = isNew && bld.view === 'bat' && !!bld.edit;
+    var ok = writeItem('batteries', tt.id, tt);
+    if (inEditor) { bld.edit.on['lib|' + tt.id] = true; bld.edit.dirty = true; bld.q = ''; }
+    closeModal(false);
+    afterBatChange();
+    toast(!ok ? 'This device wouldn’t save the test (storage is full or blocked).' : (isNew ? 'Added ' + tt.name + (inEditor ? ', ticked in this battery' : '') : 'Saved ' + tt.name));
+    focusQuiet(els.homeSec.querySelector(inEditor ? '#bldInH' : '[data-bld="test:' + tt.id + '"]') || $('hsubH'));
+  }
+  function ltDeleteTap() {
+    var tt = ltEdit && ltEdit.was, btn = $('ltDelete');
+    if (!tt) return;
+    var users = batList().filter(function (b) { return b.items.some(function (it) { return it.k === 'lib' && it.id === tt.id; }); });
+    if (!ltEdit.armed) {
+      ltEdit.armed = true;
+      btn.classList.add('armed');
+      btn.textContent = 'Tap again to delete';
+      ltErr(users.length ? 'It is in ' + andList(users.map(function (b) { return b.name; })) + ': deleting it takes it out of ' + (users.length === 1 ? 'that battery' : 'those batteries') + ' too. Results already saved stay in the records.' : '');
+      return;
+    }
+    var restore = users.map(function (b) { return JSON.parse(JSON.stringify(b)); });
+    writeItem('batteries', tt.id, null);
+    users.forEach(function (b) { writeItem('batteries', b.id, Object.assign({}, b, { items: b.items.filter(function (it) { return !(it.k === 'lib' && it.id === tt.id); }) })); });
+    if (bld.edit) delete bld.edit.on['lib|' + tt.id];
+    closeModal(false);
+    afterBatChange();
+    toast('Deleted ' + tt.name, { label: 'Undo', run: function () {
+      writeItem('batteries', tt.id, tt);
+      restore.forEach(function (b) { writeItem('batteries', b.id, b); });
+      afterBatChange();
+    } });
+    focusQuiet(els.homeSec.querySelector('[data-bld="newtest"]') || $('hsubH'));
+  }
+  function wireBuilder() {
+    els.testDialog = $('testDialog');
+    $('ltUnit').innerHTML = '<option value="">Choose…</option>' + LT_UNITS.map(function (u) { return '<option value="' + esc(u[0]) + '">' + esc(u[1]) + '</option>'; }).join('');
+    $('ltType').innerHTML = '<option value="">Other</option>' + CAT_TYPES.map(function (t) { return '<option value="' + t[0] + '">' + esc(t[1]) + '</option>'; }).join('');
+    $('ltRegion').innerHTML = '<option value="">Not set</option>' + CAT_REGIONS.map(function (r) { return '<option value="' + r[0] + '">' + esc(r[1]) + '</option>'; }).join('');
+    els.testDialog.addEventListener('click', function (e) {
+      var b = e.target.closest('button');
+      if (e.target === els.testDialog) { closeModal(); return; }
+      if (!b || !ltEdit) return;
+      if (b.dataset.ltDir) { ltEdit.dir = b.dataset.ltDir === 'Lower' ? 'Lower' : 'Higher'; ltSync(); }
+      else if (b.dataset.ltLegs) { ltEdit.legs = b.dataset.ltLegs === 'each'; ltSync(); }
+      else if (b.dataset.ltSex) { ltEdit.bySex = b.dataset.ltSex === 'sex'; ltSync(); }
+      else if (b.id === 'ltSave') ltSave();
+      else if (b.id === 'ltCancel') closeModal();
+      else if (b.id === 'ltDelete') ltDeleteTap();
+    });
+    ['ltUnit', 'ltScore', 'ltType', 'ltRegion'].forEach(function (id) { $(id).addEventListener('change', function () { ltErr(''); ltSync(); }); });
+    ['ltName', 'ltUnitOther', 'ltTarget', 'ltTargetM', 'ltTargetFe', 'ltPct', 'ltWhat', 'ltHow'].forEach(function (id) {
+      $(id).addEventListener('input', function () { ltErr(''); if (ltEdit && ltEdit.armed) { ltEdit.armed = false; $('ltDelete').classList.remove('armed'); $('ltDelete').textContent = 'Delete test'; } ltSync(); });
+    });
+    ['ltName', 'ltUnitOther', 'ltTarget', 'ltTargetM', 'ltTargetFe', 'ltPct'].forEach(function (id) {
+      $(id).addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); ltSave(); } });
+    });
+  }
+
   // v14: the two tabs in the bar (Screening holds the four tools, Exercises the program builder); inside Screening the
   // page heading is the tool picker: a menu button listing the tools, the current one ticked
   var TOOL_BLURB = {
@@ -1521,15 +2238,21 @@
   // are #pick-ex-<page> with data-pick-page). Only one picker is ever on screen, so the ids are shared.
   function pickHtml(t) {
     var ex = t === 'ex', cur = ex ? state.exPage : t, keys = ex ? EX_PAGES : TOOLS;
+    // v43: the clinic's batteries (their tiles) after Custom: 'bat:<id>'; Custom is ticked only on the spot
+    var run = ex ? '' : state.custom.batId || '', bats = ex ? [] : tileBats();
+    if (!ex && run && !bats.some(function (b) { return b.id === run; }) && runBat()) bats.push(runBat());
+    if (!ex && bats.length) keys = keys.concat(bats.map(function (b) { return 'bat:' + b.id; }));
+    var curKey = ex ? cur : t === 'custom' && run ? 'bat:' + run : t;
     return '<div class="pick-wrap"><h1 class="pick-h"><button type="button" class="tool-pick" id="toolPick" data-tool="' + t + '"' + (ex ? ' data-page="' + cur + '"' : '') +
       ' aria-haspopup="menu" aria-expanded="false" aria-controls="toolMenu" title="' + (ex ? 'Choose an Exercises page' : 'Choose a screening tool') + '">' +
-      '<span class="pick-text">' + esc(ex ? EX_PAGE_TITLE[cur] : HEAD[t][0]) + '</span>' +
+      '<span class="pick-text">' + esc(ex ? EX_PAGE_TITLE[cur] : toolHead(t)) + '</span>' +
       '<span class="pick-chev" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></span></button></h1>' +
       '<div class="menu tool-menu" id="toolMenu" role="menu" aria-label="' + (ex ? 'Exercises pages' : 'Screening tools') + '" hidden>' +
       keys.map(function (k) {
-        return '<button type="button" class="menu-item tool-item" id="pick-' + (ex ? 'ex-' : '') + k + '" role="menuitemradio" aria-checked="' + (k === cur) + '" ' + (ex ? 'data-pick-page' : 'data-pick') + '="' + k + '" tabindex="-1">' +
+        var b = k.indexOf('bat:') === 0 ? batGet(k.slice(4)) : null;
+        return '<button type="button" class="menu-item tool-item" id="pick-' + (ex ? 'ex-' : '') + (b ? b.id : k) + '" role="menuitemradio" aria-checked="' + (k === curKey) + '" ' + (ex ? 'data-pick-page' : 'data-pick') + '="' + esc(k) + '" tabindex="-1">' +
           '<svg class="ti-tick" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>' +
-          '<span class="ti-text"><b>' + esc(ex ? EX_PAGE_TITLE[k] : HEAD[k][0]) + '</b><small>' + esc(ex ? exPageBlurb(k) : TOOL_BLURB[k]) + '</small></span></button>';
+          '<span class="ti-text"><b>' + esc(ex ? EX_PAGE_TITLE[k] : b ? b.name : HEAD[k][0]) + '</b><small>' + esc(ex ? exPageBlurb(k) : b ? batTileLine(b) : TOOL_BLURB[k]) + '</small></span></button>';
       }).join('') + '</div></div>';
   }
   // v30: the page in use is drawn even while Home shows (hidden underneath), so every refresh keeps working; Home redraws too
@@ -1543,13 +2266,14 @@
     followReport();                                    // v19: a linked program shows the report's name and date
     if (t === 'ex') { renderExPage(); return; }
     if (t === 'custom' && state.custom.pop === null) {   // v36: the population first, nothing else until it is chosen
-      els.entry.innerHTML = '<div class="pagehead">' + pickHtml(t) + '<p>' + esc(HEAD[t][1]) + '</p></div>' + popStepHtml();
+      els.entry.innerHTML = '<div class="pagehead">' + pickHtml(t) + '<p>' + esc(toolBlurb(t)) + '</p></div>' + popStepHtml();
       document.documentElement.classList.remove('has-strip');
       renderSummary(compute());
       saveDraft();
       return;
     }
-    els.entry.innerHTML = '<div class="pagehead">' + pickHtml(t) + '<p>' + esc(HEAD[t][1]) + '</p></div>' + athleteCard() + (t === 'custom' ? batteryBarHtml() : testsBarHtml(t)) +
+    if (t === 'custom') pageShape = customShape();     // v43
+    els.entry.innerHTML = '<div class="pagehead">' + pickHtml(t) + '<p>' + esc(toolBlurb(t)) + '</p></div>' + athleteCard() + (t === 'custom' ? batteryBarHtml() : testsBarHtml(t)) +
       (t === 'str' ? strengthGroupHtml() : t === 'ankle' ? agoGroupsHtml() : groupsHtml(t)) + (t === 'custom' ? batteryEmptyHtml() : '') + (t === 'acl' ? rtsCardHtml() : '') + (t === 'ankle' ? agoCardHtml() : '') + coachCardHtml() + interpCardHtml() +
       '<span id="explainHint" hidden>Shows what this test measures.</span>';
     if (t === 'screen' && state.screen.importLog) showImportLog(state.screen.importLog);
@@ -1663,7 +2387,7 @@
         (gen && c.pop.ageBand !== 'All ages' ? ' IMTP and DSI use all-ages norms.' : '') +
         (t === 'custom' && c.pop.population && S.groups.some(function (g) { return g.metrics.some(function (m) { return m.str; }); }) ? ' Strength tests are scored relative to body mass.' : '');   // v38: wherever they sit
       var rneed = t === 'custom' ? customRehabNeed() : '', rinfo = t === 'custom' ? customRehabInfo() : null;   // v37: the rehab tests
-      if (rneed) { note.className = 'note warn'; note.textContent += ' ' + rneed + ' to score the rehab tests.'; }
+      if (rneed) { note.className = 'note warn'; note.textContent += ' ' + rneed + ' to score ' + (t === 'custom' && customSexNeed() && state.custom.pop !== 'general' ? 'every test' : 'the rehab tests') + '.'; }
       else if (rinfo) note.textContent += ' Rehab tests against the typical case at ' + andList([rinfo.ham ? 'the hamstring phase ' + rinfo.ham : '', rinfo.acl ? 'the ACL phase ' + rinfo.acl : ''].filter(Boolean)) + '.';
     } else if (rehabNeed(t)) {
       var since = sinceText(t), unit = t === 'ham' ? (since === '1' ? ' week since injury.' : ' weeks since injury.') : (since === '1' ? ' month since surgery.' : ' months since surgery.');
@@ -1699,8 +2423,12 @@
         if (m.calc === 'RATIO') {                      // v37: the hip ratio, this leg
           el.querySelector('[data-auto]').innerHTML = row ? 'ADD ÷ ABD =<b>' + esc(E.fmt(row.result)) + '</b>' : 'Worked out: adduction \u00f7 abduction';
         }
-        if ((m.calc === 'PERBW' || m.calc === 'PERKG' || m.calc === 'XBW' || m.calc === 'PCTBW') && typed) {   // v36: + the strength kinds
+        if ((m.calc === 'PERBW' || m.calc === 'PERKG' || m.calc === 'XBW' || m.calc === 'PCTBW' || m.calc === 'NPCTBW') && typed) {   // v36: + the strength kinds; v43: + NPCTBW
           calc.textContent = row ? '= ' + E.fmt(row.result) + ' ' + m.unit : (E.parseInput(state[t].meta.mass) ? '' : 'add mass to score');
+        }
+        if (m.lib && m.side) {                         // v43: a clinic test on each leg: the leg behind says by how much
+          var dt = legDiffText(legDiff(t, m.name.slice(0, -(' \u2014 ' + m.side).length), m.dir), m.side);
+          if (dt) calc.textContent = (calc.textContent ? calc.textContent + ' \u00b7 ' : '') + dt;
         }
         if (m.calc === 'LSI' && typed) {
           // the chip carries the status word. v18: worked out from the two boxes (c.inputs), so it shows before the
@@ -1723,7 +2451,7 @@
         } else {
           el.dataset.status = '';
           meter.innerHTML = '';
-          out.innerHTML = typed && E.parseInput(v.result) === null && m.calc !== 'LSI' && m.calc !== 'PERBW' && m.calc !== 'XBW' && m.calc !== 'PCTBW' ? '<span class="m-wait">not a number</span>' : '';
+          out.innerHTML = typed && E.parseInput(v.result) === null && m.calc !== 'LSI' && m.calc !== 'PERBW' && m.calc !== 'XBW' && m.calc !== 'PCTBW' && m.calc !== 'NPCTBW' ? '<span class="m-wait">not a number</span>' : '';
         }
         seen[m.name] = 1;
       });
@@ -1804,7 +2532,7 @@
         }
         var cur = E.parseInput(v.result);
         if (cur === null) return;
-        var unit = m.calc === 'PERBW' || m.calc === 'PERKG' ? 'N' : (m.calc === 'XBW' || m.calc === 'PCTBW' ? 'kg' : (m.str ? 'reps' : m.unit));   // force is typed in N, a load in kg (v36)
+        var unit = m.calc === 'PERBW' || m.calc === 'PERKG' || m.calc === 'NPCTBW' ? 'N' : (m.calc === 'XBW' || m.calc === 'PCTBW' ? 'kg' : (m.str ? 'reps' : m.unit));   // force is typed in N, a load in kg (v36)
         add(m.name, ['result'], E.typoCheck(cur, m.range, E.parseInput(v.previous), m.jump), raw(v.result), unit,
           raw(v.result) + '~' + raw(v.previous), v.prevDate, '');
       });
@@ -2587,6 +3315,7 @@
     if (b.dataset.pop) { choosePopulation(b.dataset.pop); return; }          // v36: the Custom battery's population step
     if (b.dataset.action === 'bat-choose') { openCatDialog(); return; }
     if (b.dataset.action === 'bat-saved') { openBatDialog(); return; }
+    if (b.dataset.action === 'bat-edit') { var rb = runBat(); if (rb) { bldStartEdit(rb.id, 'page'); openHomeSub('builder'); } return; }   // v43
     if (b.dataset.action === 'add-program') { linkProgram(t); return; }          // v19: the report and the program together
     if (b.dataset.action === 'goto-program') { gotoProgram(); return; }
     if (b.dataset.action === 'back-to-report') { backToReport(); return; }
@@ -2712,7 +3441,7 @@
   // ------------------------------------------------------------------ example data (clearly labelled)
   // v18: from the ⋯ menu, and only on an empty page (until v17 the summary offered it after a client was loaded, where it
   // renamed them Example Athlete and replaced their previous results)
-  function demoAllowed() { return !homeView && TOOLS.indexOf(state.tool) >= 0 && !clientContent(state.tool); }   // v30: not on Home
+  function demoAllowed() { return !homeView && TOOLS.indexOf(state.tool) >= 0 && !clientContent(state.tool) && !(state.tool === 'custom' && state.custom.batId); }   // v30: not on Home; v43: nor on a clinic battery (its own tests)
   function fillExample() {
     if (!demoAllowed()) return;
     var t = state.tool, s = state[t];
@@ -2811,6 +3540,10 @@
         file: fileName(t === 'custom' ? '_battery.pdf' : '_report.pdf', t),
         rep: window.BHReport.screening({
           kind: t, battery: t === 'custom' ? (state.custom.batName || '') : '',   // v36: the Custom battery (its saved name, if any)
+          built: t === 'custom' && state.custom.batId ? state.custom.batName || '' : '',   // v43: a clinic battery: the report goes by its name
+          legs: t === 'custom' ? legDiffs(t).map(function (x) { return Object.assign({}, x, { pct: Math.round(x.pct) }); }) : [],   // v43: the clinic's tests measured on each leg: left vs right (whole %)
+          closePct: t === 'custom' && batLibTests().length ? libBasePct(batLibTests()) : null,
+          closeOwn: t === 'custom' && batLibTests().some(function (tt) { return ltPct(tt) !== libBasePct(batLibTests()); }),   // v43: a test with its own Close %
           rehab: t === 'custom' ? customRehabInfo() : null,   // v37: the injured side and the phases, while it has rehab tests
           meta: { name: m.name, date: E.displayIso(m.date), sport: m.sport, tester: m.tester, age: m.age, sex: m.sex, mass: m.mass, notes: m.notes },
           popLabel: c.pop.label, groups: c.groups, counts: c.counts, prios: explained(c.prios, function (r) { return explainKey(t, r.name); }),
@@ -2899,7 +3632,7 @@
     saveDraft();
     focusQuiet(pickBtn());                             // the page heading (no keyboard, no scroll)
     if (undo) toast('Cleared ' + (was || 'the last client') + '’s program for ' + (clean1(m.name) || 'this client'), { label: 'Undo', run: undo });
-    else if (moved) toast('The program now prints after the ' + TOOL_NAMES[t] + ' report', { label: 'Undo', run: function () {
+    else if (moved) toast('The program now prints after the ' + toolName(t) + ' report', { label: 'Undo', run: function () {
       if (state.ex !== x || x.link !== t) return;
       x.link = moved; followReport(); render(); saveDraft();
     } });
@@ -3167,7 +3900,7 @@
     var keep = {}, f = NAME_FIELDS[t];
     if (f && !blank(state[t].meta[f])) keep[f] = state[t].meta[f];
     // v36: the Custom battery's population and tests are the clinic's set-up for the session, not the client's: they stay
-    var cu = t === 'custom' ? { pop: state.custom.pop, battery: state.custom.battery, batName: state.custom.batName } : null;
+    var cu = t === 'custom' ? customSetup() : null;   // v43: + the clinic battery it runs
     state[t] = freshTool(t, keep);
     if (cu) Object.assign(state[t], cu);
   }
@@ -3211,7 +3944,7 @@
     var list = unsavedTools();
     if (!list.length) { goHome(false); return; }
     els.homeList.innerHTML = list.map(function (t) {
-      return '<li class="has-data"><span class="cl-t">' + TOOL_NAMES[t] + '</span><span class="cl-d">' + esc(contentLine(t)) + '</span></li>';
+      return '<li class="has-data"><span class="cl-t">' + esc(toolName(t)) + '</span><span class="cl-d">' + esc(contentLine(t)) + '</span></li>';
     }).join('');
     openModal(els.homeDialog, els.homeKeep);
   }
@@ -3310,6 +4043,8 @@
     ankle: homeSvg('<path d="M8.5 3v10.6c0 1.1-.5 2-1.1 2.8-1 1.4-.4 3.6 1.5 3.6h11.2a1.3 1.3 0 0 0 .6-2.4l-4.9-2.6a4.6 4.6 0 0 1-2.4-4V3"/><circle cx="11.2" cy="14.4" r="1.15"/>'),   // v42: a lower leg and foot, the ankle bone marked
     custom: homeSvg('<path d="M4 6.5h2.5M4 12h2.5M4 17.5h2.5"/><path d="M10 6.5h10M10 12h10M10 17.5h10"/><path d="M7.2 5.2 5.4 7.6 4.3 6.6"/><path d="M7.2 10.7 5.4 13.1 4.3 12.1"/>'),   // v36: a list with ticks: the tests chosen
     photo: homeSvg('<path d="M4 8h3l2-3h6l2 3h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="3.5"/>'),
+    bat: homeSvg('<path d="M12 3.5 3.5 8 12 12.5 20.5 8z"/><path d="M3.5 12 12 16.5 20.5 12"/><path d="M3.5 16 12 20.5 20.5 16"/>'),   // v43: a clinic battery: stacked layers
+    bbuild: homeSvg('<path d="M4 6.5h9M4 12h9M4 17.5h6"/><path d="M18 13.5v7M14.5 17h7"/>'),   // v43: the Battery builder: a list and a plus
     builder: homeSvg('<rect x="5" y="4.5" width="14" height="16.5" rx="2"/><path d="M9 3h6v3H9zM8.5 11h7M8.5 15h4.5"/>'),
     library: homeSvg('<path d="M3 5.5c3-1 6-1 9 1 3-2 6-2 9-1v13c-3-1-6-1-9 1-3-2-6-2-9-1z"/><path d="M12 6.5v13"/>'),
     templates: homeSvg('<rect x="8" y="7" width="12" height="14" rx="2"/><path d="M5 17V5.5A2.5 2.5 0 0 1 7.5 3H16"/>'),
@@ -3329,7 +4064,7 @@
   };
   function homeLine(k) { return k === 'templates' ? (CLOUD ? 'Saved programs to start from, shared by the clinic.' : 'Saved programs to start from, kept on this device.') : HOME_LINE[k]; }
   function syncTabs() {
-    var section = homeView ? (homeSub === 'screening' || homeSub === 'ex' ? homeSub : 'home') : state && state.tool === 'ex' ? 'ex' : 'screening';   // v41: Home's Screening and Exercise programming pages
+    var section = homeView ? (homeSub === 'screening' || homeSub === 'builder' ? 'screening' : homeSub === 'ex' ? 'ex' : 'home') : state && state.tool === 'ex' ? 'ex' : 'screening';   // v41: Home's Screening and Exercise programming pages; v43: the Battery builder is Screening's
     document.querySelectorAll('.tools button').forEach(function (b) { b.setAttribute('aria-selected', String(b.dataset.section === section)); });
   }
   // what a tile would find: entries of a client's (the practitioner's own name and the date don't count); a program that
@@ -3381,8 +4116,8 @@
     var cont = homeInProgress(), cs = $('homeCont');
     cs.hidden = !cont.length;
     cs.innerHTML = !cont.length ? '' : '<h2 id="homeContH">Continue where you left off</h2><div class="cont-list">' + cont.map(function (t) {
-      return '<button type="button" class="cont-card" data-home="cont:' + t + '"><span class="tile-ic">' + HOME_ICON[t === 'ex' ? 'builder' : t] + '</span>' +
-        '<span class="cont-text"><b><span class="vh">Continue: </span>' + esc(t === 'ex' ? 'Exercise program' : HEAD[t][0]) + '</b><small>' + esc(contentLine(t)) + '</small></span>' +
+      return '<button type="button" class="cont-card" data-home="cont:' + t + '"><span class="tile-ic">' + HOME_ICON[t === 'ex' ? 'builder' : t === 'custom' && state.custom.batId ? 'bat' : t] + '</span>' +
+        '<span class="cont-text"><b><span class="vh">Continue: </span>' + esc(t === 'ex' ? 'Exercise program' : toolHead(t)) + '</b><small>' + esc(contentLine(t)) + '</small></span>' +
         '<span class="cont-go">' + HOME_ICON.go + '</span></button>';
     }).join('') + '</div>';
     $('homeHubs').innerHTML = hubsHtml();               // v41: until v40 the tiles of every tool and Exercises page
@@ -3445,7 +4180,7 @@
     if (box && !sub) box.innerHTML = '';
   }
   function openHomeSub(sub) {
-    if (['photo', 'screening', 'ex'].indexOf(sub) < 0) return;
+    if (['photo', 'screening', 'ex', 'builder'].indexOf(sub) < 0) return;   // v43: + the Battery builder
     closePick(false);
     hideSuggest();
     if (!homeView) { homeView = true; document.documentElement.classList.add('home-on'); }
@@ -3470,24 +4205,38 @@
   }
   // the page drawn only when it changed (a sync redraws Home: Photo mode's search box and its keyboard stay put)
   function renderHomeSub() {
-    var box = $('hsub'), html = homeSub === 'photo' ? photoModeHtml() : homeSub === 'ex' ? exHubHtml() : screenHubHtml();
+    var box = $('hsub'), html = homeSub === 'photo' ? photoModeHtml() : homeSub === 'ex' ? exHubHtml() : homeSub === 'builder' ? builderHtml() : screenHubHtml();
     if (html === hsubDrawn && box.innerHTML) return;
     var a = document.activeElement, inBox = a && box.contains(a);
-    var keep = inBox ? (a.id || a.getAttribute('data-pm') || a.getAttribute('data-home') || (a.getAttribute('data-pm-files') ? 'files:' + a.getAttribute('data-pm-files') : '')) : '';
+    var keep = inBox ? (a.id || a.getAttribute('data-pm') || a.getAttribute('data-home') || (a.getAttribute('data-pm-files') ? 'files:' + a.getAttribute('data-pm-files') : '') ||
+      (a.getAttribute('data-bld') ? 'bld:' + a.getAttribute('data-bld') : '') || (a.getAttribute('data-bcat') ? 'bcat:' + a.getAttribute('data-bcat') : '')) : '';   // v43: + the builder's
     box.innerHTML = html;
     hsubDrawn = html;
     var find = $('pmFind');
     if (find && pm) find.value = pm.q;
     if (!keep) return;
-    var to = $(keep) || box.querySelector('[data-pm="' + keep + '"]') || box.querySelector('[data-home="' + keep + '"]') || (keep.indexOf('files:') === 0 ? box.querySelector('[data-pm-files="' + keep.slice(6) + '"]') : null);
+    function by(attr, v) { var hit = null; box.querySelectorAll('[' + attr + ']').forEach(function (x) { if (!hit && x.getAttribute(attr) === v) hit = x; }); return hit; }
+    var to = (/^[A-Za-z][\w-]*$/.test(keep) ? $(keep) : null) || by('data-pm', keep) || by('data-home', keep) || (keep.indexOf('files:') === 0 ? by('data-pm-files', keep.slice(6)) : null) ||
+      (keep.indexOf('bld:') === 0 ? by('data-bld', keep.slice(4)) : null) || (keep.indexOf('bcat:') === 0 ? by('data-bcat', keep.slice(5)) : null);
     focusQuiet(to || $('hsubH'));
-    if (to && to.id === 'pmFind') { try { to.setSelectionRange(to.value.length, to.value.length); } catch (e) { /* not a text box */ } }
+    if (to && (to.id === 'pmFind' || to.id === 'bldFind' || to.id === 'bldName' || to.id === 'bldAbout' || to.id === 'bldPct')) { try { to.setSelectionRange(to.value.length, to.value.length); } catch (e) { /* not a text box */ } }
   }
+  // v43: the clinic's batteries (each its own tile) and the Battery builder, under the app's six. The Custom page runs one of
+  // them or Custom on the spot: the In progress badge goes on the one it holds
+  function batTileLine(b) { return b.about || (batteryLineFor(b.items) + ' \u00b7 ' + batPopLabel(b)); }
   function screenHubHtml() {
+    var bats = tileBats(), run = state.custom.batId || '', cbusy = homeBusy('custom'), runShown = !!run && bats.some(function (b) { return b.id === run; });
     return subHeadHtml('Screening', 'Choose the battery. Results on paper or in the VALD app? Photo mode reads them for you.') +
       '<div class="home-tiles" id="homeTests">' + TOOLS.map(function (t) {
-        return '<button type="button" class="tile" data-home="tool:' + t + '">' + homeTile(HEAD[t][0], homeLine(t), HOME_ICON[t], homeBusy(t) ? 'In progress' : '') + '</button>';
+        var busy = t === 'custom' ? cbusy && !runShown : homeBusy(t);
+        return '<button type="button" class="tile" data-home="tool:' + t + '">' + homeTile(HEAD[t][0], homeLine(t), HOME_ICON[t], busy ? 'In progress' : '') + '</button>';
       }).join('') + '</div>' +
+      '<section class="hsub-sec" aria-labelledby="homeBatsH"><h2 class="hsub-h2" id="homeBatsH">The clinic\u2019s batteries</h2>' +
+      '<div class="home-tiles" id="homeBats">' + bats.map(function (b) {
+        return '<button type="button" class="tile" data-home="bat:' + esc(b.id) + '">' + homeTile(b.name, batTileLine(b), HOME_ICON.bat, cbusy && run === b.id ? 'In progress' : '') + '</button>';
+      }).join('') +
+      '<button type="button" class="tile tile-bld" data-home="builder">' + homeTile('Battery builder', bats.length ? 'Make or change the clinic\u2019s batteries, and add tests with your own targets.'
+        : 'Make the clinic\u2019s own batteries, and add tests the app doesn\u2019t have, each with your own target.', HOME_ICON.bbuild, '') + '</button></div></section>' +
       '<p class="hsub-note">Photographed results? <button type="button" class="quiet hsub-link" data-home="hub:photo">Open Photo mode</button></p>';
   }
   function exHubHtml() {
@@ -3551,7 +4300,7 @@
   }
   function pmStepValue(st) {
     if (st === 'client') return pm.who ? (pm.who.name || 'No name yet') : '';
-    if (st === 'battery') return pm.tool ? TOOL_NAMES[pm.tool] : '';
+    if (st === 'battery') return pm.tool ? (pm.tool === 'custom' && pm.bat ? (batGet(pm.bat) || { name: TOOL_NAMES.custom }).name : TOOL_NAMES[pm.tool]) : '';   // v43: + the clinic's batteries
     var n = pm[st === 'results' ? 'r' : 'x'].length;
     return n ? n + (n === 1 ? ' photo' : ' photos') : 'Skipped';
   }
@@ -3602,10 +4351,15 @@
         var bits = [];
         if (last[t]) bits.push('Last tested ' + E.displayIso(last[t]));
         else if (cl) bits.push('Not done yet');
-        if (t === 'custom') bits.push(state.custom.pop === null ? 'You choose who to compare against first' : 'Tests the photo holds are added');
-        return '<button type="button" class="pm-row" data-pm="bat:' + t + '" aria-pressed="' + (pm.tool === t) + '"><span class="tile-ic">' + HOME_ICON[t] + '</span>' +
+        var spotPop = state.custom.batId ? (state.custom.spot ? state.custom.spot.pop : null) : state.custom.pop;   // v43: Custom on the spot's
+        if (t === 'custom') bits.push(spotPop === null ? 'You choose who to compare against first' : 'Tests the photo holds are added');
+        return '<button type="button" class="pm-row" data-pm="bat:' + t + '" aria-pressed="' + (pm.tool === t && (t !== 'custom' || !pm.bat)) + '"><span class="tile-ic">' + HOME_ICON[t] + '</span>' +
           '<span class="pm-row-text"><b>' + esc(HEAD[t][0]) + '</b>' + (bits.length ? '<small>' + esc(bits.join(' · ')) + '</small>' : '') + '</span>' +
-          (t === used ? '<span class="cp-tag cur">Last used</span>' : '') + HOME_ICON.go + '</button>';
+          (t === used ? '<span class="cp-tag cur">Last used</span>' : '') + HOME_ICON.go + '</button>' +
+          (t === 'custom' ? tileBats().map(function (b) {   // v43: the clinic's batteries
+            return '<button type="button" class="pm-row" data-pm="cbat:' + esc(b.id) + '" aria-pressed="' + (pm.tool === 'custom' && pm.bat === b.id) + '"><span class="tile-ic">' + HOME_ICON.bat + '</span>' +
+              '<span class="pm-row-text"><b>' + esc(b.name) + '</b><small>' + esc(batTileLine(b)) + '</small></span>' + HOME_ICON.go + '</button>';
+          }).join('') : '');
       }).join('') + '</div>';
   }
   function pmPhotosHtml(k) {
@@ -3638,7 +4392,8 @@
     if (kind === 'client' && clients.clients[arg]) { pm.who = { key: arg, name: clients.clients[arg].name }; pmNextStep(); return; }
     if (kind === 'new') { var nm = clean1(pm.q); if (nm.length >= 2) { pm.who = { key: '', name: nm }; pmNextStep(); } return; }
     if (kind === 'noname') { pm.who = { key: '', name: '' }; pmNextStep(); return; }
-    if (kind === 'bat' && TOOLS.indexOf(arg) >= 0) { pm.tool = arg; pmNextStep(); return; }
+    if (kind === 'bat' && TOOLS.indexOf(arg) >= 0) { pm.tool = arg; pm.bat = arg === 'custom' ? '' : undefined; pmNextStep(); return; }
+    if (kind === 'cbat' && batGet(arg)) { pm.tool = 'custom'; pm.bat = arg; pmNextStep(); return; }   // v43: one of the clinic's batteries
     if (kind === 'clear' && (arg === 'r' || arg === 'x')) {
       pm.urls[arg].forEach(function (u) { try { URL.revokeObjectURL(u); } catch (e) { /* gone */ } });
       pm[arg] = []; pm.urls[arg] = []; pm.msg = '';
@@ -3697,7 +4452,10 @@
       startScan(xs, { tool: 'ex', ask: a });
     } else {
       // the battery's page for them: another client's entries are cleared first (Undo); theirs carry on
-      if (homeBusy(t) && (!want || E.nameKey(state[t].meta.name) !== want)) undos.push(clearForClient(t));
+      // v43: the shared Custom page holding another battery is cleared too; then it is set up for the battery chosen
+      var swap = t === 'custom' && typeof f.bat === 'string' && (state.custom.batId || '') !== f.bat;
+      if (homeBusy(t) && (!want || E.nameKey(state[t].meta.name) !== want || swap)) undos.push(clearForClient(t));
+      if (t === 'custom' && typeof f.bat === 'string') switchBattery(f.bat);
       else if (!xs.length && linkedTool() === t && E.nameKey(state.ex.meta.name) !== want) state.ex.link = '';   // someone else's program never follows this report
       if (xs.length) { var hadX = exHasContent(), u2 = clearForClient('ex'); if (hadX) undos.push(u2); }
       if (who.key && clients.clients[who.key]) homeClientOpen(t, { key: who.key, name: who.name }, false);   // details and last time's results (draws the page)
@@ -3737,7 +4495,7 @@
   function homeStartNew(t, page) {
     var undo = clearForClient(t);
     openTool(t, page);
-    toast('New ' + (t === 'ex' ? 'program' : TOOL_NAMES[t]) + ' started', { label: 'Undo', run: undo });
+    toast('New ' + (t === 'ex' ? 'program' : toolName(t)) + ' started', { label: 'Undo', run: undo });
   }
   // o: { tool, page } (a tile), { tool: 'ex', photo: true } (Photo to handout) or { tool, client: { key, name } }
   function askHalfDone(o) {
@@ -3746,8 +4504,17 @@
     function pick(cls, mode, label, aria) {
       return '<label class="' + cls + ' file-btn"><span>' + esc(label) + '</span><input type="file" accept="image/*" multiple data-scan-mode="' + mode + '" aria-label="' + esc(aria) + '"></label>';
     }
-    els.homeAskTitle.textContent = (t === 'ex' ? 'Exercise program' : TOOL_NAMES[t]) + ' in progress';
-    if (o.photo) {
+    els.homeAskTitle.textContent = (t === 'ex' ? 'Exercise program' : toolName(t)) + ' in progress';
+    var toBat = o.swap ? (o.bat ? (batGet(o.bat) || { name: 'the battery' }).name : TOOL_NAMES.custom) : '';   // v43: another battery on the shared Custom page
+    if (o.swap && o.client) {
+      text = line + '. Start ' + toBat + ' for ' + o.client.name + ' (this page is cleared, Undo straight after), or carry on with ' + (cur ? cur + '’s ' : '') + toolName(t) + '?';
+      acts.push(btn('primary', 'new', 'Start ' + toBat + ' for ' + o.client.name));
+      acts.push(btn('ghost', 'continue', 'Continue ' + toolName(t)));
+    } else if (o.swap) {
+      text = line + '. Start ' + toBat + ' (this page is cleared, Undo straight after), or carry on with ' + (cur ? cur + '’s ' : '') + toolName(t) + '?';
+      acts.push(btn('primary', 'new', 'Start ' + toBat));
+      acts.push(btn('ghost', 'continue', 'Continue ' + toolName(t)));
+    } else if (o.photo) {
       text = line + '. Add the photo’s exercises to it, or start a new program?';
       acts.push(pick('primary', 'add', 'Add to it', 'Add to it: take or choose photos of the exercise page'));
       acts.push(pick('ghost', 'new', 'Start a new program', 'Start a new program: take or choose photos of the exercise page'));
@@ -3779,7 +4546,8 @@
     closeModal(false);
     homeAskFor = null;
     if (a === 'continue') openTool(o.tool, o.tool === 'ex' ? 'builder' : null);
-    else if (o.client) homeClientOpen(o.tool, o.client, true);
+    else if (o.client) homeClientOpen(o.tool, o.client, true, o.bat);   // v43: (with a battery to set up once cleared)
+    else if (o.bat !== undefined) batStartNew(o.bat);  // v43: a battery's tile, or Custom's while a battery ran
     else homeStartNew(o.tool, o.page);
   }
   // photos picked from the Photo to handout tile, or from Add to it / Start a new program in its question. v33: a new
@@ -3812,6 +4580,8 @@
     if (cp) { onClientPageClick(cp.dataset.cp); return; }   // v39
     var pmb = e.target.closest('[data-pm]');
     if (pmb && pmb.tagName !== 'LABEL') { onPhotoModeClick(pmb.dataset.pm); return; }   // v41
+    var bb = e.target.closest('button[data-bld]');
+    if (bb) { onBuilderClick(bb.dataset.bld); return; }   // v43: the Battery builder
     var el = e.target.closest('[data-home]');
     if (!el || el.tagName === 'LABEL') return;           // the photo tile opens its picker by itself
     var k = el.dataset.home, part = k.split(':');
@@ -3820,7 +4590,10 @@
     if (part[0] === 'check') { openClientPage(k.slice(6), 'log'); return; }   // v40: a check-in: their log
     if (part[0] === 'seen') { markSeen(k.slice(5)); return; }
     if (k === 'ckall') { ckAll = !ckAll; renderCheckins(); focusQuiet(els.homeSec.querySelector('[data-home="ckall"]')); return; }
+    if (k === 'builder') { if (bld.view !== 'bat') bld = freshBld(); bld.from = ''; openHomeSub('builder'); return; }   // v43 (an edit left half-way carries on)
+    if (part[0] === 'bat') { openBattery(k.slice(4)); return; }   // v43: one of the clinic's batteries
     if (part[0] === 'cont') openTool(part[1], part[1] === 'ex' ? 'builder' : null);
+    else if (k === 'tool:custom' && state.custom.batId) openBattery('');   // v43: Custom on the spot again
     else if (part[0] === 'tool') homeOpen(part[1], null);
     else if (k === 'ex:builder') homeOpen('ex', 'builder');
     else if (part[0] === 'ex') openTool('ex', part[1]);
@@ -3867,19 +4640,28 @@
     els.homeClientTitle.textContent = homeClientFor.name;
     els.homeClientDetail.textContent = tests ? 'Choose the test. Their results from last time come with it, to compare.'
       : cl ? 'Choose a test (their results from last time come with it) or their exercise program.' : 'New client, no record yet. Choose a test, or write their exercise program.';
-    els.homeClientList.innerHTML = (tests ? TOOLS : TOOLS.concat(['ex'])).map(function (t) {
+    // v43: the clinic's batteries after Custom (each with when they last did it; Custom's line counts the on-the-spot ones)
+    var lastBat = {};
+    if (cl) cl.sessions.forEach(function (x) { if (x.tool === 'custom') { var bk = typeof x.batId === 'string' && x.batId ? x.batId : ''; if (!lastBat[bk] || x.date > lastBat[bk]) lastBat[bk] = x.date; } });
+    var opts = [];
+    TOOLS.forEach(function (t) { opts.push(t); if (t === 'custom') tileBats().forEach(function (bb) { opts.push('bat:' + bb.id); }); });
+    if (!tests) opts.push('ex');
+    els.homeClientList.innerHTML = opts.map(function (t) {
+      var b = t.indexOf('bat:') === 0 ? batGet(t.slice(4)) : null, lt = b ? lastBat[b.id] : t === 'custom' ? lastBat[''] : last[t];
       var sub = t === 'ex' ? (last.ex ? 'Last program ' + E.displayIso(last.ex) : cl ? 'No programs yet' : '')
-        : last[t] ? 'Last tested ' + E.displayIso(last[t]) : cl ? 'Not done yet' : '';
-      return '<button type="button" class="hc-opt" data-hc="' + t + '"><span class="tile-ic">' + HOME_ICON[t === 'ex' ? 'builder' : t] + '</span>' +
-        '<span class="hc-text"><b>' + esc(t === 'ex' ? 'Exercise program' : HEAD[t][0]) + '</b>' + (sub ? '<small>' + esc(sub) + '</small>' : '') + '</span></button>';
+        : lt ? 'Last tested ' + E.displayIso(lt) : cl ? 'Not done yet' : '';
+      return '<button type="button" class="hc-opt" data-hc="' + esc(t) + '"><span class="tile-ic">' + HOME_ICON[t === 'ex' ? 'builder' : b ? 'bat' : t] + '</span>' +
+        '<span class="hc-text"><b>' + esc(t === 'ex' ? 'Exercise program' : b ? b.name : HEAD[t][0]) + '</b>' + (sub ? '<small>' + esc(sub) + '</small>' : '') + '</span></button>';
     }).join('');
     openModal(els.homeClientDialog, els.homeClientList.querySelector('.hc-opt'));
   }
   function onHomeClientClick(e) {
-    var b = e.target.closest('button[data-hc]'), c = homeClientFor;
+    var b = e.target.closest('button[data-hc]'), c = homeClientFor, hc = b ? b.dataset.hc : '';
     if (!b || !c) return;
     closeModal(false);
-    homeClientGo(b.dataset.hc, c);
+    if (hc.indexOf('bat:') === 0) clientGoBattery(hc.slice(4), c);   // v43: one of the clinic's batteries
+    else if (hc === 'custom' && state.custom.batId) clientGoBattery('', c);   // Custom on the spot (a battery ran)
+    else homeClientGo(hc, c);
   }
   // c: { key, name } (v39: + prog, the date of a program from their record; or blank: a new program, from their page)
   function homeClientGo(t, c) {
@@ -3900,8 +4682,9 @@
   }
   // the page for that client: a record's details and results from last time (or, for the program, their last saved one,
   // as Choose client does), or a new client's name; clear: Start new for them (the page held someone else's entries)
-  function homeClientOpen(t, c, clear) {
+  function homeClientOpen(t, c, clear, bat) {
     var was = clean1(state[t].meta.name), undo = clear ? clearForClient(t) : null, want = c.key || E.nameKey(c.name);
+    if (t === 'custom' && typeof bat === 'string') switchBattery(bat);   // v43: the battery chosen for them
     if (t === 'ex' && state.ex.link && E.nameKey(state.ex.meta.name) !== want) state.ex.link = '';   // v19: no longer that report's program
     closePick(false);
     leaveHome();
@@ -3953,6 +4736,11 @@
   function cpCount(n, one, many) { return n + ' ' + (n === 1 ? one : many); }
   function cpResults(x) {                              // the tests in a session: LL Strength's two legs count once
     var keys = Object.keys(x.results || {});
+    if (x.tool === 'custom') {                         // v43: a Custom battery's test on each leg counts once too (the screen's own L/R metrics stay two)
+      var names = {};
+      keys.forEach(function (k) { names[screenMetric(k) ? k : k.replace(/ \u2014 (Left|Right)$/, '')] = 1; });
+      return Object.keys(names).length;
+    }
     if (x.tool !== 'str') return keys.length;
     var ids = {};
     keys.forEach(function (k) { ids[k.split('|')[0]] = 1; });
@@ -3977,7 +4765,8 @@
     var go = function (label) { return '<span class="cp-go"><span>' + esc(label) + '</span>' + HOME_ICON.go + '</span>'; };
     var testRows = tests.map(function (x) {
       var t = x.tool, m = x.meta || {}, n = cpResults(x), bits = [], tags = '';
-      var title = TOOL_NAMES[t] + (t === 'custom' && typeof x.batName === 'string' && !blank(x.batName) ? ' — ' + clean1(x.batName) : '');
+      var built = t === 'custom' && typeof x.batId === 'string' && x.batId && typeof x.batName === 'string' && !blank(x.batName);   // v43: a clinic battery goes by its name
+      var title = built ? clean1(x.batName) : TOOL_NAMES[t] + (t === 'custom' && typeof x.batName === 'string' && !blank(x.batName) ? ' — ' + clean1(x.batName) : '');
       if (n) bits.push(cpCount(n, 'test', 'tests'));
       if ((t === 'ham' || t === 'acl') && typeof m.phase === 'string' && m.phase) bits.push(m.phase);
       var sc = t === 'ankle' && DATA.ankle && x.results ? E.num(x.results[DATA.ankle.score.name]) : null;   // v42: the total, once every item was in
@@ -3986,7 +4775,7 @@
       if (!blank(by)) bits.push(clean1(by));
       var co = m.coach && typeof m.coach === 'object' ? m.coach.status : '';
       if (COACH_LOOK[co]) tags = '<span class="cp-tags">' + chip(COACH_LOOK[co], co) + '</span>';
-      return '<button type="button" class="cp-row" data-cp="test:' + esc(t + '|' + x.date) + '"><span class="tile-ic">' + HOME_ICON[t] + '</span>' +
+      return '<button type="button" class="cp-row" data-cp="test:' + esc(t + '|' + x.date) + '"><span class="tile-ic">' + HOME_ICON[built ? 'bat' : t] + '</span>' +
         '<span class="cp-text"><b>' + esc(title) + '</b><small><span class="cp-when">' + esc(E.displayIso(x.date)) + '</span>' + (bits.length ? ' · ' + esc(bits.join(' · ')) : '') + '</small>' + tags + '</span>' +
         go('View report') + '</button>';
     }).join('');
@@ -4048,12 +4837,14 @@
     s.meta.date = x.date;
     if (SL(t)) {
       var pops = E.sportPopulations(DATA.screen);
-      s.pop = m.pop === 'general' || pops.indexOf(m.pop) >= 0 ? m.pop : 'general';
+      s.pop = m.pop === 'general' || pops.indexOf(m.pop) >= 0 || (t === 'custom' && m.pop === 'none') ? m.pop : 'general';   // v43: + the clinic's targets only
       if (Array.isArray(x.radar)) s.radar = x.radar.filter(function (k) { return typeof k === 'string'; });
     }
     if (t === 'custom') {
       s.battery = tidyBattery(x.battery);
       s.batName = typeof x.batName === 'string' ? x.batName : '';
+      s.batId = typeof x.batId === 'string' && BAT_ID.test(x.batId) ? x.batId : '';   // v43: the clinic battery it was
+      if (x.libTests && typeof x.libTests === 'object' && !Array.isArray(x.libTests)) s.libSnap = x.libTests;   // v43: its tests' targets then
       s.hamPhase = H.phases.indexOf(m.hamPhase) >= 0 ? m.hamPhase : null;
       s.aclPhase = A.phases.indexOf(m.aclPhase) >= 0 ? m.aclPhase : null;
       if (s.meta.injured !== 'Left' && s.meta.injured !== 'Right') s.meta.injured = '';
@@ -4100,7 +4891,7 @@
       customSet().groups.forEach(function (g) {
         g.metrics.forEach(function (mm) {
           var v = s.values[mm.name];
-          if (!v || blank(v.previous) || !/^(XBW|PCTBW|PERKG|PERBW)$/.test(mm.calc || '')) return;
+          if (!v || blank(v.previous) || !/^(XBW|PCTBW|PERKG|PERBW|NPCTBW)$/.test(mm.calc || '')) return;
           var p = E.previousFor(hs.filter(function (y) { return y.values && y.values[mm.name] && !blank(y.values[mm.name].result); }), 'custom', mm.name, date);
           var raw = p && p.session.values[mm.name].result;
           if (p && String(raw).trim() === String(v.previous).trim()) v.prevMass = p.mass == null ? '' : String(p.mass);
@@ -4484,10 +5275,19 @@
       if (!e.target.matches) return;
       if (e.target.matches('input[data-scan-mode]')) onHomeScanPick(e.target);
       else if (e.target.matches('input[data-pm-files]')) onPhotoModeFiles(e.target);   // v41
+      else if (homeSub === 'builder') onBuilderChange(e.target);   // v43
     });
-    els.homeSec.addEventListener('input', function (e) { if (e.target.id === 'homeSearch') homeSuggest(); else if (e.target.id === 'pmFind') pmSuggest(); });
+    els.homeSec.addEventListener('input', function (e) {
+      if (e.target.id === 'homeSearch') homeSuggest(); else if (e.target.id === 'pmFind') pmSuggest();
+      else if (homeSub === 'builder') onBuilderInput(e.target);   // v43
+    });
     els.homeSec.addEventListener('keydown', function (e) {
       if (e.target.id === 'pmFind' && e.key === 'Enter') { e.preventDefault(); var first = $('pmSugg') && $('pmSugg').querySelector('button'); if (first) first.click(); return; }   // v41
+      if (e.key === 'Enter' && (e.target.id === 'bldPct' || e.target.id === 'bldName' || e.target.id === 'bldAbout' || e.target.id === 'bldFind')) {   // v43
+        e.preventDefault();
+        if (e.target.id === 'bldPct') bldPctSave(); else if (e.target.id === 'bldName') focusQuiet($('bldAbout')); else e.target.blur();
+        return;
+      }
       if (e.target.id === 'homeSearch') onHomeSearchKey(e);
       else if (e.target.closest && e.target.closest('#homeSugg')) onHomeSuggKey(e);
     });
@@ -4590,6 +5390,12 @@
   }
   function pickTool(tool) {
     closePick(false);
+    if (tool === 'custom' || tool.indexOf('bat:') === 0) {   // v43: Custom on the spot, or one of the clinic's batteries
+      var id = tool === 'custom' ? '' : tool.slice(4);
+      if (state.tool === 'custom' && (state.custom.batId || '') === id) { focusQuiet(pickBtn()); return; }
+      pickBattery(id);
+      return;
+    }
     if (tool === state.tool) { focusQuiet(pickBtn()); return; }
     switchTool(tool);
     focusQuiet(pickBtn());                             // the new page's heading, for keyboard users (no scroll, no keyboard)
@@ -4702,14 +5508,14 @@
     els.clearList.innerHTML = TOOLS.concat(['ex']).map(function (t) {
       var c = toolContent(t);
       if (c.any) any = true;
-      return '<li' + (c.any ? ' class="has-data"' : '') + '><span class="cl-t">' + TOOL_NAMES[t] + '</span><span class="cl-d">' + esc(contentLine(t)) + '</span></li>';
+      return '<li' + (c.any ? ' class="has-data"' : '') + '><span class="cl-t">' + esc(toolName(t)) + '</span><span class="cl-d">' + esc(contentLine(t)) + '</span></li>';
     }).join('');
     if (!any) { toast('Nothing to clear — every section is already empty'); return; }
     openModal(els.clearDialog, els.clearCancel);
   }
   function clearAllData() {
     // v36: the Custom battery's population and tests are set-up, like Tests today: kept (Choose tests › Untick all empties it)
-    var cu = { pop: state.custom.pop, battery: state.custom.battery, batName: state.custom.batName };
+    var cu = customSetup();                            // v43: + the clinic battery it runs
     TOOLS.forEach(function (t) { state[t] = freshTool(t); });
     Object.assign(state.custom, cu);
     state.ex = freshEx();                              // v15: the draft program only; the library, templates and records stay
@@ -4804,10 +5610,11 @@
       : c.counts.Green + ' on target, ' + c.counts.Amber + ' close, ' + c.counts.Red + ' off target.');
     if (SL(t)) {
       L.push('Readers: the athlete and their coach. Refer to the person as \u2018the athlete\u2019.');
-      L.push(t === 'custom' ? 'Report: a custom screening battery chosen by the clinician (VALD force plate and related tests, lower-limb strength tests scored relative to body weight, and the clinic\u2019s own tests, which have a target only when the clinician typed one).'   // v36
+      L.push(t === 'custom' ? (state.custom.batId && state.custom.batName ? 'Report: the clinic\u2019s own screening battery \u201c' + clean1(state.custom.batName) + '\u201d' : 'Report: a custom screening battery chosen by the clinician') +   // v43: a clinic battery by its name
+        ' (VALD force plate and related tests, lower-limb strength tests scored relative to body weight, and the clinic\u2019s own tests, which have a target only when the clinician typed one).'   // v36
         : 'Report: athlete performance and readiness screen (VALD force plate and related tests).');
-      L.push('Compared against: ' + clean1(c.pop.label) + '.');
-      if (t === 'custom') L = L.concat(customRehabLines());   // v37: rehab tests, against their phase
+      L.push('Compared against: ' + clean1(c.pop.label === POP_NONE ? 'the clinic\u2019s targets only (no population norms)' : c.pop.label) + '.');
+      if (t === 'custom') L = L.concat(customRehabLines(), customLibLines());   // v37: rehab tests, against their phase; v43: the clinic's tests
       var who = joinBits([clean1(m.sex), blank(m.age) ? '' : clean1(m.age) + ' years', blank(m.mass) ? '' : clean1(m.mass) + ' kg', blank(m.sport) ? '' : 'sport: ' + clean1(m.sport)]);
       if (who) L.push('Athlete: ' + who + '.');
       L.push('Status key: On target = meets the target; Close = close to the target; Off target = well short of the target. The DSI is not rated: it says which training emphasis the force profile points to.');   // v28
@@ -4870,6 +5677,24 @@
     var L = ['Rehab tests in this battery (the ' + andList([ri.ham !== null ? 'hamstring' : '', ri.acl !== null ? 'ACL' : ''].filter(Boolean)) + ' sections) are compared with research norms for the typical case at the rehab phase chosen, not with the population above: On target = at or ahead of the typical case; Close = up to 1 SD behind; Off target = more than 1 SD behind. The deficit, % of the uninjured side and LSI measures compare the injured side with the other.'];
     L.push('Rehab context: ' + joinBits([ri.injured ? 'injured side: ' + ri.injured.toLowerCase() : '', ri.ham ? 'hamstring strain phase: ' + ri.ham : '', ri.acl ? 'ACL reconstruction phase: ' + ri.acl : '']) + '.');
     ri.notes.forEach(function (x) { L.push('About the rehab norms: ' + x); });
+    return L;
+  }
+  // v43: what Claude is told about the battery builder's tests (nothing without them): how they are rated, and left vs right
+  function customLibLines() {
+    var tests = state.custom.battery.map(function (it) { return it.k === 'lib' ? ltFor(it.id) : null; }).filter(Boolean);
+    if (!tests.length) return [];
+    var p = libBasePct(tests);
+    var own = tests.filter(function (tt) { return ltPct(tt) !== p; });   // v43: tests with a Close rule of their own
+    var L = ['Some tests are the clinic\u2019s own, made in its battery builder, each with a target the clinic set (as measured, or relative to body weight where the result says % BW, \u00d7 BW or N/kg): On target = at or beyond the target; Close = within ' + ltFmt(p) + '% short of it' + (own.length ? ' (unless the test has its own rule, below)' : '') + '; Off target = further away. A test without a target is tracked, not rated.'];
+    own.forEach(function (tt) { L.push('- ' + clean1(tt.name) + ': Close = within ' + ltFmt(ltPct(tt)) + '% of its target (its own rule).'); });
+    var d = legDiffs('custom');
+    if (d.length) {
+      L.push('Left vs right for the clinic\u2019s tests measured on each leg (difference as % of the higher leg):');
+      d.forEach(function (x) {
+        L.push('- ' + clean1(x.name) + ': left ' + E.fmt(x.L) + ', right ' + E.fmt(x.R) + (x.unit && x.unit !== 'score' ? ' ' + x.unit : '') + ' \u2014 ' +
+          (x.behind && Math.round(x.pct) >= 1 ? 'the ' + x.behind.toLowerCase() + ' leg is ' + E.fmt(Math.round(x.pct)) + '% behind' + (x.dir === 'Lower' ? ' (lower is better)' : '') : 'the same on both legs'));
+      });
+    }
     return L;
   }
   function interpBasis(t, c) { return hashStr(interpPayload(t, c)); }
@@ -5181,10 +6006,10 @@
   // what Claude should look for on the paper for one app metric (screening and rehab tabs)
   function scanWhat(t, m) {
     var unit = m.unit && m.unit !== 'AU' ? m.unit : (m.unit === 'AU' ? 'score' : 'number');
-    var w = m.calc === 'PERBW' || m.calc === 'PERKG' ? 'force in N (the app divides by body mass)' : 'in ' + unit;
+    var w = m.calc === 'PERBW' || m.calc === 'PERKG' || m.calc === 'NPCTBW' ? 'force in N (the app divides by body mass)' : 'in ' + unit;
     if (m.calc === 'LSI') return 'left and right values in the same unit (the app works out the LSI)';
     if (/(\u2014 injured|\(injured\))$/.test(m.name)) w += ', injured side only';
-    else if (CALCULATED.test(m.name) && m.calc !== 'PERBW' && m.calc !== 'PERKG') w += ', only if this number itself is written';
+    else if (CALCULATED.test(m.name) && m.calc !== 'PERBW' && m.calc !== 'PERKG' && m.calc !== 'NPCTBW') w += ', only if this number itself is written';
     if (m.dir === 'Lower') w += ', lower is better';
     if (SL(t) && E.isAsym(m.name)) w += '; side = the higher side, L or R';
     return w;
@@ -5197,6 +6022,7 @@
         if (c.ratio) return;                           // v37: the hip ratio is worked out, never read
         if (c.k === 'ham' || c.k === 'acl') list.push({ id: 't' + (++n), key: c.name, name: c.name, what: scanWhat(c.k, c.def), fields: c.def.calc === 'LSI' ? ['left', 'right'] : ['result'], rehab: c.k });   // v37
         else if (c.k === 'screen') list.push({ id: 't' + (++n), key: c.name, name: c.name, what: scanWhat('screen', c.def), fields: E.isAsym(c.name) ? ['result', 'side'] : ['result'] });
+        else if (c.k === 'lib') list.push({ id: 't' + (++n), key: c.def.id, name: c.name, what: ltScanWhat(c.def), fields: c.def.legs ? ['left', 'right'] : ['result'], lib: c.def });   // v43: the clinic's tests
         else list.push({ id: 't' + (++n), key: c.def.id, name: c.name, what: INPUT_WORD[c.def.input] + (c.detail ? ' (' + c.detail + ')' : '') + ' for each leg', fields: ['left', 'right'], str: c.def });
       });
       state.custom.battery.forEach(function (o) {
@@ -5228,7 +6054,7 @@
     return list;
   }
   function scanPrompt(t, list) {
-    var L = ['Section of the app: ' + TOOL_NAMES[t] + '.'];
+    var L = ['Section of the app: ' + TOOL_NAMES[t] + (t === 'custom' && state.custom.batId && state.custom.batName ? ' (the clinic\u2019s battery \u201c' + clean1(state.custom.batName) + '\u201d)' : '') + '.'];   // v43
     if (t === 'custom') L.push('The clinician chose the tests themselves, so the paper may hold any of the tests listed below, and tests of the clinic\u2019s own that are not listed.');   // v36
     if (t === 'ankle') L.push('Ankle-GO after a lateral ankle sprain: left and right are the legs (for a star excursion reach, the leg standing on the floor). Apprehension notes are for the clinician to enter; leave them out.');   // v42
     if (t === 'ham' || t === 'acl' || t === 'custom') {   // v37: the Custom battery's rehab tests too
@@ -5426,6 +6252,7 @@
       if (t === 'custom') {                            // v36: an LL Strength test's leg is its own row here; the test joins the battery
         if (def.str) { key = strSideName(def.str, f === 'left' ? 'Left' : 'Right'); f = 'result'; join({ k: 'str', id: def.str.id }, def.name); }
         else if (def.rehab) join({ k: def.rehab, key: def.key }, def.name);   // v37: a rehab test (an LSI keeps its left and right)
+        else if (def.lib) { key = def.lib.legs ? ltSideName(def.lib, f === 'left' ? 'Left' : 'Right') : def.lib.name; f = 'result'; join({ k: 'lib', id: def.lib.id }, def.name); }   // v43: each leg its own row
         else if (!def.own) join({ k: 'screen', key: def.key }, def.name);
       }
       put(key, f, v, fieldLabel(def, r.field));
@@ -5439,6 +6266,11 @@
         if (hit) {                                     // a catalogue test after all
           if (hit.k === 'screen') { join({ k: 'screen', key: hit.name }, hit.name); put(hit.name, 'result', v, hit.name); }
           else if ((hit.k === 'ham' || hit.k === 'acl') && hit.def.calc !== 'LSI') { join({ k: hit.k, key: hit.name }, hit.name); put(hit.name, 'result', v, hit.name); }   // v37
+          else if (hit.k === 'lib') {                  // v43: one of the clinic's tests (a leg when the name says which)
+            var lk = E.libKey(name), sd = !hit.def.legs ? '' : lk === E.libKey(ltSideName(hit.def, 'Left')) ? 'Left' : lk === E.libKey(ltSideName(hit.def, 'Right')) ? 'Right' : '';
+            if (hit.def.legs && !sd) { notes.push(name + ' is measured on each leg: type the left and right (' + v + ').'); join({ k: 'lib', id: hit.def.id }, hit.name); }
+            else { join({ k: 'lib', id: hit.def.id }, hit.name); put(sd ? ltSideName(hit.def, sd) : hit.name, 'result', v, sd ? ltSideName(hit.def, sd) : hit.name); }
+          }
           else if (hit.ratio) notes.push(name + ': the hip ratio is worked out from Hip adduction and Hip abduction. Tick it under Choose tests and type each leg of both (' + v + ').');
           else if (hit.k === 'str') notes.push(name + ' is an LL Strength test: tick it under Choose tests and type each leg (' + v + ').');
           else notes.push(name + ' is worked out from left and right: tick it under Choose tests and type both sides (' + v + ').');   // v37: an LSI
@@ -5478,7 +6310,7 @@
     if (t === 'custom' && Array.isArray(u.added) && u.added.length) {
       var held = {};
       customSet().groups.forEach(function (g) { g.metrics.forEach(function (m) {
-        var v = s.values[m.name]; if (v && ['result', 'previous', 'side', 'left', 'right'].some(function (f) { return !blank(v[f]); })) held[m.str ? 'str|' + m.str : m.own ? 'own|' + m.own : m.rehab ? m.rehab + '|' + m.name : 'screen|' + m.name] = 1;   // v37: + rehab tests
+        var v = s.values[m.name]; if (v && ['result', 'previous', 'side', 'left', 'right'].some(function (f) { return !blank(v[f]); })) held[metricItemKey(m)] = 1;   // v37: + rehab tests; v43: + the clinic's
       }); });
       s.battery = s.battery.filter(function (it) { var k = batteryKey(it); return u.added.indexOf(k) < 0 || held[k]; });
     }
@@ -5561,8 +6393,8 @@
     if (info.kind === 'error') { bar.innerHTML = '<span class="scan-msg">' + esc(info.text) + '</span>' + close; return; }
     var extra = [info.date ? 'test date' : '', info.mass ? 'body mass' : ''].filter(Boolean);
     var html = '<span class="scan-ico">' + ico + '</span>' + (info.ai ? (info.kind === 'empty'
-      ? '<span class="scan-msg">Claude didn’t find exercises in the library for the ' + esc(TOOL_NAMES[info.from]) + ' results. Nothing was changed.' + costNote(info) + '</span>'
-      : '<span class="scan-msg"><b>Claude suggested ' + info.n + (info.n === 1 ? ' exercise' : ' exercises') + ' from the ' + esc(TOOL_NAMES[info.from]) + ' report' + (info.added ? ', after the ones already there' : '') +
+      ? '<span class="scan-msg">Claude didn’t find exercises in the library for the ' + esc(toolName(info.from)) + ' results. Nothing was changed.' + costNote(info) + '</span>'
+      : '<span class="scan-msg"><b>Claude suggested ' + info.n + (info.n === 1 ? ' exercise' : ' exercises') + ' from the ' + esc(toolName(info.from)) + ' report' + (info.added ? ', after the ones already there' : '') +
         (info.own ? (info.own === info.n ? (info.n === 1 ? ', not in the library' : ', none in the library') : ', ' + info.own + ' not in the library') : '') + '.</b> Check each one, and its sets and reps, before creating the handout.' +
         (info.own ? ' More › Save to library keeps an exercise of Claude’s for next time.' : '') + costNote(info) + '</span>')
       : t === 'ex' ? (info.kind === 'empty'
@@ -5821,7 +6653,7 @@
       '<div class="fields">' +
       field('ex', 'name', 'Patient name', { cls: 'wide', words: true, readonly: !!lt }) + field('ex', 'date', 'Date', { type: 'date', readonly: !!lt }) +
       field('ex', 'practitioner', 'Clinician', { words: true }) +
-      '</div>' + (lt ? '<p class="note ex-linknote">The name and date come from the ' + TOOL_NAMES[lt] + ' report.</p>' : '') + '</section>' + stripHtml('ex') + '<div class="scan-bar" id="scanBar" role="status" aria-live="polite" hidden></div><div class="client-bar" id="clientBar" hidden></div>';
+      '</div>' + (lt ? '<p class="note ex-linknote">The name and date come from the ' + toolName(lt) + ' report.</p>' : '') + '</section>' + stripHtml('ex') + '<div class="scan-bar" id="scanBar" role="status" aria-live="polite" hidden></div><div class="client-bar" id="clientBar" hidden></div>';
   }
   // v18: the exercises first. The title, general instructions and Save as template sit under them (folded to
   // "+ Title and instructions" while both are empty); Start from template sits with the add buttons while the program is
@@ -6077,8 +6909,8 @@
     return { tool: lt, list: list, guide: guide, green: n.Green, total: n.Green + n.Amber + n.Red };
   }
   function exFindSub(d) {                              // 'Performance screen · 6 of 11 on target'
-    if (d.ago) return TOOL_NAMES[d.tool] + ' \u00b7 ' + d.ago.total + ' of ' + d.ago.max + (d.ago.complete ? '' : ' so far');   // v42: 'Ankle-GO · 10 of 25'
-    return TOOL_NAMES[d.tool] + (d.total ? ' · ' + d.green + ' of ' + d.total + ' on target' : '');
+    if (d.ago) return toolName(d.tool) + ' \u00b7 ' + d.ago.total + ' of ' + d.ago.max + (d.ago.complete ? '' : ' so far');   // v42: 'Ankle-GO · 10 of 25'
+    return toolName(d.tool) + (d.total ? ' · ' + d.green + ' of ' + d.total + ' on target' : '');
   }
   function exFindItem(key, name, chipHtml, detail) {
     return '<li><button type="button" class="prio-go" data-action="ex-find-go" data-goto="' + esc(key) + '"><span class="pn">' + esc(name) + '</span>' +
@@ -6148,12 +6980,12 @@
     var why = c.exercises ? '' : 'Add at least one exercise to create the handout.';
     // v19: linked to a report: one PDF with both, so the report has to be ready too (else its reason shows)
     var lt = linkedTool(), cand = reportFor(), nm = clean1(state.ex.meta.name), whose = nm ? nm + '’s ' : 'the ';
-    if (lt && !why) { var rb = blocker(computeFor(lt), lt); if (rb) why = TOOL_NAMES[lt] + ' report: ' + rb.charAt(0).toLowerCase() + rb.slice(1); }
+    if (lt && !why) { var rb = blocker(computeFor(lt), lt); if (rb) why = toolName(lt) + ' report: ' + rb.charAt(0).toLowerCase() + rb.slice(1); }
     var make = lt ? 'Create report + exercises' : 'Create handout';
-    var linkHtml = lt ? '<div class="ex-link"><p class="ex-linkline">' + EX_ICON + '<span>Prints after ' + esc(whose + TOOL_NAMES[lt]) + ' report</span></p>' +
+    var linkHtml = lt ? '<div class="ex-link"><p class="ex-linkline">' + EX_ICON + '<span>Prints after ' + esc(whose + toolName(lt)) + ' report</span></p>' +
         '<div class="ex-linkacts"><button type="button" class="quiet" data-action="back-to-report">‹ Back to the report</button>' +
         '<button type="button" class="quiet" data-action="unlink-program">Print on its own</button></div></div>'
-      : cand ? '<button type="button" class="quiet ex-flag" data-action="link-report" data-tool="' + cand + '">' + EX_ICON + 'Print with ' + esc(whose + TOOL_NAMES[cand]) + ' report</button>' : '';
+      : cand ? '<button type="button" class="quiet ex-flag" data-action="link-report" data-tool="' + cand + '">' + EX_ICON + 'Print with ' + esc(whose + toolName(cand)) + ' report</button>' : '';
     var cols = exColumns(), later = EX_DETAIL.filter(function (f) { return cols.indexOf(f) < 0; }).map(function (f) { return EX_LABEL[f]; });
     var laterText = later.length ? (later.length > 1 ? later.slice(0, -1).join(', ') + ' and ' + later[later.length - 1] : later[0]) + (later.length > 1 ? ' are' : ' is') + ' added when used.' : '';
     // v15: how many filled rows are linked to the library, and how many of those print a video QR code
@@ -6933,7 +7765,7 @@
     function fail(msg) { scanInfo.ex = { tool: 'ex', kind: 'error', ai: true, text: msg }; renderScanBar(); }
     if (!lt) return;
     var cfg = exSuggestCfg(), c = computeFor(lt), why = blocker(c, lt);
-    if (why) return fail(TOOL_NAMES[lt] + ' report: ' + why.charAt(0).toLowerCase() + why.slice(1) + ' Then suggest again.');
+    if (why) return fail(toolName(lt) + ' report: ' + why.charAt(0).toLowerCase() + why.slice(1) + ' Then suggest again.');
     if (!DATA.ai || !cfg.model) return fail('The AI settings file (interpretation.json) didn’t load. Reopen the app while online.');
     if (!aiKey()) { openAiSettings(function () { if (state.tool === 'ex') startExSuggest(); }, 'To suggest exercises from a report, the app needs a Claude API key. ' + ONCE_NOTE()); return; }
     if (navigator.onLine === false) return fail('No internet connection. Connect to suggest exercises, or add them from the library.');
@@ -6948,7 +7780,7 @@
   // report; the report's own condition and phase on a rehab report) and the stage row (while a condition is chosen)
   function suggestLeadText(lt) {
     var plan = tidyPlan(state.ex.plan), cfg = exSuggestCfg(), cond = conditionFor(lt, plan), ev = guideBundle(lt, plan, cfg);
-    var what = 'Claude gets the ' + TOOL_NAMES[lt] + ' results (no name or date), your interpretation' + (blank(plan.brief) ? '' : ', your notes') + ', the exercises already here, the library, the clinic’s programming guide' +
+    var what = 'Claude gets the ' + toolName(lt) + ' results (no name or date), your interpretation' + (blank(plan.brief) ? '' : ', your notes') + ', the exercises already here, the library, the clinic’s programming guide' +
       (DATA.guide ? '' : ' (not loaded: reopen the app online to fetch it)');
     if (ev.ids.length) what += ' and the evidence guide' + (ev.ids.length > 1 ? 's' : '') + ' (' + ev.shorts.join(', ') + ')';
     var missing = guidesMissing(lt, plan);
@@ -7033,7 +7865,7 @@
     if (blocker(c, lt)) return;
     var gen = scanGenOf('ex'), max = perDay(cfg);   // v26: per day
     suggestBusy = true;
-    scanInfo.ex = { tool: 'ex', kind: 'busy', ai: true, text: 'Choosing exercises from the ' + TOOL_NAMES[lt] + ' report… this can take two or three minutes.' };
+    scanInfo.ex = { tool: 'ex', kind: 'busy', ai: true, text: 'Choosing exercises from the ' + toolName(lt) + ' report… this can take two or three minutes.' };
     renderScanBar();
     var ttl = cacheTtl(cfg), mark = ttl === 'off' ? null : (ttl === '1h' ? { type: 'ephemeral', ttl: '1h' } : { type: 'ephemeral' });
     var blocks = exSuggestParts(lt, c, max, cfg).map(function (t, i) {   // v29: the documents (cached), then this report
@@ -8594,6 +9426,12 @@
     var sess = { tool: t, date: date, savedAt: new Date().toISOString(), meta: meta, values: compactValues(t), results: currentResults(t, c),
       mass: E.parseInput(m.mass), interp: blank(state[t].interp.text) ? '' : String(state[t].interp.text).trim() };
     if (t === 'custom') { sess.battery = tidyBattery(state.custom.battery); if (state.custom.batName) sess.batName = state.custom.batName; }   // v36: the tests done
+    if (t === 'custom' && state.custom.batId) sess.batId = state.custom.batId;   // v43: the clinic battery it was
+    if (t === 'custom') {                              // v43: the clinic's tests as they were rated (a report made again later shows these targets)
+      var snap = {};
+      sess.battery.forEach(function (it) { var tt = it.k === 'lib' ? ltFor(it.id) : null; if (tt) snap[tt.id] = ltSnapshot(tt); });
+      if (Object.keys(snap).length) sess.libTests = snap;
+    }
     // v39: so the client's page can make the report again as printed: the summary's AI note and the radar's chosen axes
     if (sess.interp && state[t].interp.ai) sess.interpAi = true;
     if (SL(t) && Array.isArray(state[t].radar)) sess.radar = state[t].radar.filter(function (k) { return typeof k === 'string'; }).slice(0, 6);
@@ -8721,10 +9559,29 @@
     if (t !== 'custom' || !cl) return cl ? cl.sessions : [];
     var names = {}, strOf = {};
     customSet().groups.forEach(function (g) { g.metrics.forEach(function (m) { names[m.name] = 1; if (m.str || m.ratio) strOf[(m.str || m.ratio) + '|' + (m.side === 'Left' ? 'L' : 'R')] = m.name; }); });   // v37: + the hip ratio
+    // v43: a clinic test renamed in the builder: results saved under its earlier names count as its own
+    var alias = {}, na = 0;
+    state.custom.battery.forEach(function (it) {
+      var tt = it.k === 'lib' ? ltFor(it.id) : null;
+      if (!tt || !tt.was) return;
+      tt.was.forEach(function (old) {
+        if (tt.legs) ['Left', 'Right'].forEach(function (sd) { alias[old + ' \u2014 ' + sd] = ltSideName(tt, sd); na++; });
+        else { alias[old] = tt.name; na++; }
+      });
+    });
+    function renamed(x) {
+      var y = Object.assign({}, x, { results: Object.assign({}, x.results), values: Object.assign({}, x.values || {}) }), hit = false;
+      Object.keys(alias).forEach(function (old) {
+        var nw = alias[old];
+        if (old in x.results && !(nw in y.results)) { y.results[nw] = x.results[old]; hit = true; }
+        if (x.values && old in x.values && !(nw in y.values)) y.values[nw] = x.values[old];
+      });
+      return hit ? y : x;
+    }
     var out = [];
     cl.sessions.forEach(function (x) {
       if (!x || !x.results) return;
-      if (x.tool === 'custom') { out.push(x); return; }
+      if (x.tool === 'custom') { out.push(na ? renamed(x) : x); return; }
       if (x.tool !== 'screen' && x.tool !== 'str' && x.tool !== 'ham' && x.tool !== 'acl') return;   // v37: + the rehab tools' sessions (same metric names)
       var res = {}, vals = {}, any = false;
       Object.keys(x.results).forEach(function (k) {
@@ -8750,7 +9607,7 @@
         var v = val('custom', mm.name);
         if (v.prevDate && !blank(v.previous)) { have++; dates[v.prevDate] = 1; }
         if (!blank(v.previous)) return;
-        var src = /^(XBW|PCTBW|PERKG|PERBW)$/.test(mm.calc || '') ? hs.filter(function (x) { return x.values && x.values[mm.name] && !blank(x.values[mm.name].result); }) : hs;
+        var src = /^(XBW|PCTBW|PERKG|PERBW|NPCTBW)$/.test(mm.calc || '') ? hs.filter(function (x) { return x.values && x.values[mm.name] && !blank(x.values[mm.name].result); }) : hs;
         var p = E.previousFor(src, 'custom', mm.name, date);
         if (!p) return;
         var raw = p.session.values && p.session.values[mm.name];
@@ -8772,7 +9629,11 @@
       var ms = all[j].meta || {};
       if (all[j].tool !== t) continue;
       if (t === 'acl' && ms.normSex && DATA.acl.sexes.indexOf(ms.normSex) >= 0) s.sex = ms.normSex;
-      if (SL(t) && ms.pop) s.pop = ms.pop;
+      // v43: a clinic battery compares against its own choice (one asked each time: as the last time it ran for them)
+      if (SL(t) && ms.pop) {
+        var rb = t === 'custom' && s.batId ? runBat() : null;
+        if (!(t === 'custom' && s.batId) || (rb && builtPop(rb) === null && all[j].batId === s.batId)) s.pop = ms.pop;
+      }
       // v36: an empty Custom battery takes the tests done last time
       if (t === 'custom' && !s.battery.length && Array.isArray(all[j].battery)) { s.battery = tidyBattery(all[j].battery); s.batName = typeof all[j].batName === 'string' ? all[j].batName : ''; }
       break;
@@ -8808,7 +9669,7 @@
         g.metrics.forEach(function (mm) {
           if (mm.calc === 'RATIO' || mm.role === 'len') return;   // v37: worked out from the hip tests' previous results; v42: the leg length has none
           // v36: a load or force needs the value as typed (the record's result is the score): only sessions that kept it
-          var src = t === 'custom' && /^(XBW|PCTBW|PERKG|PERBW)$/.test(mm.calc || '') ? hs.filter(function (x) { return x.values && x.values[mm.name] && !blank(x.values[mm.name].result); }) : hs;
+          var src = t === 'custom' && /^(XBW|PCTBW|PERKG|PERBW|NPCTBW)$/.test(mm.calc || '') ? hs.filter(function (x) { return x.values && x.values[mm.name] && !blank(x.values[mm.name].result); }) : hs;
           var v = val(t, mm.name), p = E.previousFor(src, t, mm.name, date);
           v.prevEdit = false;
           if (!p) {

@@ -218,10 +218,16 @@
     doc.rect(ML, top, CW, H, { r: px(6), fill: C.BLUE });
     doc.rect(ML, top, CW, H - px(4), { r: [px(6), px(6), px(2.5), px(2.5)], fill: C.DARK });
     var inner = top + px(11);
-    logo(doc, ML + px(16), inner + px(3), px(34), C.WHITE, C.BLUE);   // the white/blue lockup on the dark band
-    var right = ML + CW - px(15), tTop = inner + px(5.2);
-    doc.text(title, right, baseline(tTop, 15), { style: 'bold', size: fs(15), color: C.WHITE, align: 'right' });
-    doc.text(sub, right, baseline(tTop + px(19.25), 9), { style: 'bold', size: fs(9), color: C.BLUE, align: 'right' });
+    var lw = logo(doc, ML + px(16), inner + px(3), px(34), C.WHITE, C.BLUE);   // the white/blue lockup on the dark band
+    var right = ML + CW - px(15), tTop = inner + px(5.2), room = CW - px(16) - lw - px(30);
+    // v43: a clinic battery's name is the title: smaller type (down to 11) and then … so it never runs into the logo
+    var ts = 15, tt = String(title);
+    while (ts > 11 && width(tt, 'bold', fs(ts)) > room) ts -= 0.5;
+    while (tt.length > 4 && width(tt, 'bold', fs(ts)) > room) tt = tt.slice(0, -2).replace(/\s+$/, '') + '\u2026';
+    var st = String(sub);
+    while (st.length > 4 && width(st, 'bold', fs(9)) > room) st = st.slice(0, -2).replace(/\s+$/, '') + '\u2026';
+    doc.text(tt, right, baseline(tTop, 15), { style: 'bold', size: fs(ts), color: C.WHITE, align: 'right' });
+    doc.text(st, right, baseline(tTop + px(19.25), 9), { style: 'bold', size: fs(9), color: C.BLUE, align: 'right' });
     doc.y = top + H;
   }
 
@@ -567,8 +573,9 @@
     });
   }
 
-  function asymmetry(doc, groups, headSize) {
+  function asymmetry(doc, groups, headSize, legs) {   // v43: legs: the clinic's tests measured on each leg ({ name, pct, higher })
     var rows = E.flatten(groups).filter(function (r) { return E.isAsym(r.name) && E.num(r.result) !== null; });
+    (legs || []).forEach(function (x) { rows.push({ name: x.name + ' (L vs R)', result: x.pct, side: x.higher, status: '', norm: null }); });
     if (!rows.length) return;
     var rowH = px(22);
     // the caption stays with the last bar (never alone at the top of a page)
@@ -1035,8 +1042,10 @@
     prio: { name: 13.33, detail: 11.33, what: 10.67, chip: 10 } };
   function screening(d) {
     var doc = new Doc(), m = d.meta || {}, P = P1, custom = d.kind === 'custom';   // v36: the Custom battery prints as this report, named for what it is
-    var title = custom ? 'Custom Screening Battery' : 'Athlete Performance & Readiness Report';
-    header(doc, title, custom ? (clean(d.battery).trim() ? clean(d.battery).trim() + ' • ' : '') + 'Tests chosen by the clinician • Normative screening with change-vs-previous'
+    var built = custom && clean(d.built).trim() ? clean(d.built).trim() : '';   // v43: one of the clinic's batteries: its name is the title
+    var title = built || (custom ? 'Custom Screening Battery' : 'Athlete Performance & Readiness Report');
+    header(doc, title, built ? 'The clinic’s battery • Norms and the clinic’s targets • Change-vs-previous'
+      : custom ? (clean(d.battery).trim() ? clean(d.battery).trim() + ' • ' : '') + 'Tests chosen by the clinician • Normative screening with change-vs-previous'
       : 'VALD Testing • Normative screening with change-vs-previous');
     var rh = custom && d.rehab ? d.rehab : null;      // v37: a Custom battery with rehab tests: the injured side and the phases
     meta(doc, [['Athlete', m.name], ['Date', m.date], ['Sport', m.sport], ['Clinician', m.tester], ['Age', m.age],
@@ -1054,10 +1063,11 @@
     // no forced page break: the priorities follow on the same page when the heading and the first two fit
     section(doc, 'Top priorities — worst first', { keep: prioKeep(d.prios, 'target', P.prio, 2), size: P.head });
     priorities(doc, d.prios, null, 'target', P.prio);
-    asymmetry(doc, d.groups, P.head);
+    asymmetry(doc, d.groups, P.head, d.legs);
     var foot = withNote('Confidence shown in grey (★★★ strong · ★★☆ moderate · ★☆☆ weak). ' +
       'Norms are population- and protocol-dependent; targets reflect the selected reference population only. ' +
       (custom ? 'Strength tests are scored relative to body weight against the clinic’s targets; the clinic’s own tests are rated only where a target was set. ' : '') +
+      (custom && d.closePct != null ? 'Tests from the clinic’s battery builder are rated against the clinic’s target: Close = within ' + String(Math.round(d.closePct * 10) / 10) + '% of it' + (d.closeOwn ? ', or the test’s own % where one is set (shown with its result)' : '') + '. ' : '') +   // v43
       (rh ? 'Rehab tests are compared with research norms for the typical case at the chosen phase (Close = up to 1 SD behind) and support, not replace, the return-to-play decision. ' : '') +   // v37
       'This report organises and displays testing data and is not medical advice.', rowsHavePrev(d.groups));
     results(doc, d.groups, [150, 52, 120], 'target', d.progress ? 0 : footerH(foot), 'target', { title: 'Full results', size: P.head });

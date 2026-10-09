@@ -13,9 +13,10 @@
    v39: a client's page on Home: their screening (each report made again from the record) and their programs (no new files).
    v40: the client's training log (from their phone) on their page, the check-ins on Home (no new files).
    v41: Home's three buttons (Photo mode, Screening, Exercise programming) and their pages (no new files).
-   v42: the Ankle-GO battery (its rows, points and cut-offs in ankle_go.json). */
-var CACHE = 'bh-athlete-report-v42';
-var FILES = ['./', 'index.html', 'app.js?v=42', 'engine.js?v=42', 'qrcode.js?v=42', 'report.js?v=42', 'report-fonts.js?v=42', 'jspdf.umd.min.js?v=42', 'cloud-config.js?v=42', 'cloud.js?v=42',
+   v42: the Ankle-GO battery (its rows, points and cut-offs in ankle_go.json).
+   v43: the Battery builder: the clinic's own batteries and tests (kept in the clinic store; no new files). */
+var CACHE = 'bh-athlete-report-v43';
+var FILES = ['./', 'index.html', 'app.js?v=43', 'engine.js?v=43', 'qrcode.js?v=43', 'report.js?v=43', 'report-fonts.js?v=43', 'jspdf.umd.min.js?v=43', 'cloud-config.js?v=43', 'cloud.js?v=43',
   'norms.json', 'strength_norms.json', 'hamstring_norms.json', 'acl_norms.json', 'ankle_go.json', 'interpretation.json', 'explainers.json', 'exercise_library.json', 'programming_guide.md', 'manifest.webmanifest',
   'guides/index.json', 'guides/training-variables.md', 'guides/rehab-principles.md', 'guides/muscle-strains.md', 'guides/acl.md', 'guides/tendinopathy.md', 'guides/ankle-sprain.md',
   'guides/groin-pain.md', 'guides/rotator-cuff.md', 'guides/pfp-oa.md', 'guides/low-back-pain.md', 'guides/performance-tests.md', 'guides/rehab-performance.md', 'guides/block-design.md',
