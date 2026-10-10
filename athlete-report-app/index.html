@@ -201,6 +201,44 @@ html.signed-out .workspace, html.signed-out .dock, html.signed-out .tools, html.
 .signin .primary { width: 100%; margin-top: 20px; min-height: 50px; font-size: 16.5px; border-radius: 13px; }
 .signin .primary[disabled] { opacity: .6; cursor: progress; }
 .signin-fine { margin: 14px 0 0; font-size: 12.5px; line-height: 1.45; color: var(--muted); }
+.signin .quiet.signin-link { margin-top: 10px; min-height: 40px; padding-inline: 8px; font-size: 14px; color: var(--teal-ink); }   /* v46: Forgot password? */
+/* ---------- v46: the switcher ("Who's using this iPad?"): everyone signed in on this device, a PIN to carry on */
+html.locked .workspace, html.locked .dock, html.locked .tools, html.locked .clients-btn, html.locked .more-wrap, html.locked .cloud-bar, html.locked .upd-bar, html.locked .home, html.locked .signin:not(.who) { display: none !important; }
+html.signed-out .who { display: none !important; }
+.who-card { width: min(560px, 100%); }
+.who-list { display: flex; flex-direction: column; gap: 8px; margin-top: 18px; }
+.who-row {
+  display: flex; align-items: center; gap: 14px; min-height: 64px; padding: 8px 12px 8px 10px; text-align: left; font: inherit;
+  border: 1px solid var(--line); border-radius: 14px; background: var(--field); color: var(--fg); cursor: pointer;
+}
+.who-row:active { transform: scale(.99); }
+.who-row.who-other { background: transparent; border-style: dashed; }
+.who-av {
+  flex: none; display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; border-radius: 50%;
+  background: var(--accent); color: var(--on-accent); font: 700 17px/1 var(--font-brand); letter-spacing: .5px;
+}
+.who-other .who-av { background: var(--surface); color: var(--teal-ink); border: 1px dashed var(--line-strong); }
+.who-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.who-text b { font-weight: 650; font-size: 16px; overflow-wrap: anywhere; }
+.who-text small { font-size: 12.5px; color: var(--muted); }
+.who-row .who-go { flex: none; color: var(--muted); }
+.who-pin { display: flex; flex-direction: column; gap: 12px; margin-top: 16px; }
+.who-pin .who-row { cursor: default; }
+.who-pin .f input { font-size: 22px; letter-spacing: 8px; text-align: center; }
+.who-pin-acts { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; }
+.who-pin-acts .quiet { min-height: 40px; padding-inline: 8px; color: var(--teal-ink); font-size: 14px; }
+.who-card .signin-err { margin-top: 10px; }
+.who-foot { margin: 16px 0 0; font-size: 12.5px; color: var(--muted); line-height: 1.45; }
+/* the PIN dialog: two boxes side by side */
+.pin-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 14px; }
+.pin-fields .f input { font-size: 22px; letter-spacing: 6px; text-align: center; }
+/* the Team page (Home › ⋯ › Team): one row per person */
+.team-row .cp-tag { margin-left: 6px; vertical-align: middle; }
+.team-row.off .tpl-main b, .team-row.off .tpl-main span { color: var(--muted); }
+.team-fields { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; margin-top: 14px; }
+.team-fields .f input, .team-fields .f select { font-size: 16px; }
+.team-lead { margin: 0; color: var(--muted); font-size: 14px; line-height: 1.45; max-width: 78ch; }
+@media (max-width: 519px) { .pin-fields { grid-template-columns: minmax(0, 1fr); } }
 .modal-card .legacy-never { display: block; width: max-content; max-width: 100%; margin: 8px auto 0; min-height: 36px; font-size: 14px; color: var(--muted); }
 .modal-card .name-field { margin-top: 14px; }
 
@@ -1768,9 +1806,22 @@ html.row-dragging, html.row-dragging * { cursor: grabbing !important; user-selec
       <!-- v13, cloud mode only: app.js stamps these in above Clear all (the template's content is inert in local mode) -->
       <template id="accountTpl">
         <div class="menu-account" id="menuAccount" role="presentation"></div>
+        <!-- v46: the switcher (lock this iPad / another practitioner), the PIN, the Team page (admins) -->
+        <button class="menu-item" id="switchItem" type="button" role="menuitem" tabindex="-1">
+          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0M16 4.5a3.5 3.5 0 0 1 0 7M21.5 20a6.5 6.5 0 0 0-5-6.3"/></svg>
+          <span>Switch practitioner…</span>
+        </button>
+        <button class="menu-item" id="pinItem" type="button" role="menuitem" tabindex="-1" aria-haspopup="dialog">
+          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="10" width="16" height="11" rx="2.5"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>
+          <span>Your PIN…</span>
+        </button>
         <button class="menu-item" id="nameItem" type="button" role="menuitem" tabindex="-1" aria-haspopup="dialog">
           <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.6"/><path d="M5 20a7 7 0 0 1 14 0"/></svg>
           <span>Change your name…</span>
+        </button>
+        <button class="menu-item" id="teamItem" type="button" role="menuitem" tabindex="-1">
+          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="7.5" r="3.5"/><path d="M4 20a8 8 0 0 1 16 0"/><path d="M18 9.5h3M19.5 8v3"/></svg>
+          <span>Team…</span>
         </button>
         <button class="menu-item" id="signOutItem" type="button" role="menuitem" tabindex="-1">
           <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 4H5a1 1 0 0 0-1 1v14a1 1 0 0 0 1 1h5M15 8l4 4-4 4M9 12h10"/></svg>
@@ -1820,7 +1871,7 @@ html.row-dragging, html.row-dragging * { cursor: grabbing !important; user-selec
   <form class="signin-card" id="signinForm" novalidate>
     <svg class="signin-logo" viewBox="0 0 470 114.45" aria-hidden="true" focusable="false"><use href="#brandLogo" xlink:href="#brandLogo"/></svg>
     <h1 id="signinTitle">Sign in to BASE Health Report</h1>
-    <p class="signin-lead">One clinic login for every device; your name goes on the results you save.</p>
+    <p class="signin-lead">Your own login, set up by a BASE admin. Your name goes on the results you save.</p>
     <label class="f" for="signinEmail"><span>Clinic email</span>
       <input id="signinEmail" type="email" autocomplete="username" autocapitalize="off" autocorrect="off" spellcheck="false" inputmode="email" enterkeyhint="next"></label>
     <div class="f"><label for="signinPassword">Password</label>
@@ -1829,13 +1880,23 @@ html.row-dragging, html.row-dragging * { cursor: grabbing !important; user-selec
         <button class="quiet pw-show" id="signinShow" type="button" aria-pressed="false" aria-controls="signinPassword">Show</button>
       </div>
     </div>
-    <label class="f" for="signinName"><span>Your name</span>
-      <input id="signinName" type="text" autocomplete="name" autocapitalize="words" autocorrect="off" spellcheck="false" enterkeyhint="go"></label>
-    <p class="signin-hint" id="signinNameHint">Shown on the results you save from this device.</p>
+    <!-- v46: the name box is for the shared clinic login only (a staff login goes by its Team name): it appears after that sign-in -->
+    <div id="signinNameF" hidden>
+      <label class="f" for="signinName"><span>Your name</span>
+        <input id="signinName" type="text" autocomplete="name" autocapitalize="words" autocorrect="off" spellcheck="false" enterkeyhint="go"></label>
+      <p class="signin-hint" id="signinNameHint">The shared clinic login doesn’t say who you are: your name goes on the results you save from this device.</p>
+    </div>
     <p class="signin-err" id="signinErr" role="alert" hidden></p>
     <button class="primary" id="signinBtn" type="submit">Sign in</button>
+    <button class="quiet signin-link" id="signinForgot" type="button">Forgot your password?</button>
+    <button class="quiet signin-link" id="signinBack" type="button" hidden>‹ Back to the people on this iPad</button>
     <p class="signin-fine">Client records are kept in the clinic’s secure database in Sydney. What you type stays on this device until you create a report.</p>
   </form>
+</section>
+
+<!-- v46: the switcher: everyone signed in on this iPad; a PIN (or the password) to carry on as one of them (built by app.js) -->
+<section class="signin who" id="whoPanel" aria-labelledby="whoTitle" hidden>
+  <div class="signin-card who-card" id="whoCard"></div>
 </section>
 
 <!-- v30: the home screen: a greeting, a client search, anything in progress, and a tile for every part of the app (built by app.js) -->
@@ -2014,6 +2075,39 @@ html.row-dragging, html.row-dragging * { cursor: grabbing !important; user-selec
     <div class="modal-actions">
       <button class="ghost" id="nameCancel" type="button">Cancel</button>
       <button class="primary" id="nameSave" type="button">Save</button>
+    </div>
+  </div>
+</div>
+<!-- v46: a PIN for this iPad (4 to 8 digits): the switcher changes hands with it -->
+<div class="modal" id="pinDialog" role="dialog" aria-modal="true" aria-labelledby="pinTitle" aria-describedby="pinLead" hidden>
+  <div class="modal-card">
+    <h2 id="pinTitle">Your PIN</h2>
+    <p id="pinLead">On a shared iPad, a PIN switches to you in a second. 4 to 8 digits; keep it to yourself.</p>
+    <div class="pin-fields">
+      <label class="f" for="pinBox"><span>PIN</span><input id="pinBox" type="password" inputmode="numeric" autocomplete="off" maxlength="8" enterkeyhint="next"></label>
+      <label class="f" for="pinBox2"><span>Again</span><input id="pinBox2" type="password" inputmode="numeric" autocomplete="off" maxlength="8" enterkeyhint="done"></label>
+    </div>
+    <p class="ai-err" id="pinErr" role="alert" hidden></p>
+    <div class="modal-actions">
+      <button class="ghost" id="pinCancel" type="button">Not now</button>
+      <button class="primary" id="pinSave" type="button">Save PIN</button>
+    </div>
+  </div>
+</div>
+<!-- v46: the Team page's add / edit (admins) -->
+<div class="modal" id="teamDialog" role="dialog" aria-modal="true" aria-labelledby="teamTitle" aria-describedby="teamLead" hidden>
+  <div class="modal-card">
+    <h2 id="teamTitle">Add a practitioner</h2>
+    <p id="teamLead"></p>
+    <div class="team-fields">
+      <label class="f" for="tmName"><span>Name</span><input id="tmName" type="text" maxlength="80" autocapitalize="words" autocomplete="off" enterkeyhint="next"></label>
+      <label class="f" for="tmEmail" id="tmEmailF"><span>Email</span><input id="tmEmail" type="email" autocapitalize="off" autocorrect="off" spellcheck="false" inputmode="email" autocomplete="off" enterkeyhint="next"></label>
+      <label class="f" for="tmRole"><span>Role</span><select id="tmRole"><option value="practitioner">Practitioner</option><option value="admin">Admin (manages the team and the Claude key)</option></select></label>
+    </div>
+    <p class="ai-err" id="tmErr" role="alert" hidden></p>
+    <div class="modal-actions">
+      <button class="ghost" id="tmCancel" type="button">Cancel</button>
+      <button class="primary" id="tmSave" type="button">Add and email them</button>
     </div>
   </div>
 </div>
@@ -2281,13 +2375,13 @@ html.row-dragging, html.row-dragging * { cursor: grabbing !important; user-selec
 
 <div class="toast" id="toast" role="status" hidden></div>
 
-<script src="engine.js?v=45" defer></script>
-<script src="report-fonts.js?v=45" defer></script>
-<script src="jspdf.umd.min.js?v=45" defer></script>
-<script src="qrcode.js?v=45" defer></script>
-<script src="report.js?v=45" defer></script>
-<script src="cloud-config.js?v=45" defer></script>
-<script src="cloud.js?v=45" defer></script>
-<script src="app.js?v=45" defer></script>
+<script src="engine.js?v=46" defer></script>
+<script src="report-fonts.js?v=46" defer></script>
+<script src="jspdf.umd.min.js?v=46" defer></script>
+<script src="qrcode.js?v=46" defer></script>
+<script src="report.js?v=46" defer></script>
+<script src="cloud-config.js?v=46" defer></script>
+<script src="cloud.js?v=46" defer></script>
+<script src="app.js?v=46" defer></script>
 </body>
 </html>

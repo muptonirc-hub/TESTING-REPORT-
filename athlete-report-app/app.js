@@ -19,6 +19,12 @@
   var CLOUD = window.BHCloud && window.BHCloud.enabled ? window.BHCloud : null;   // v13: the clinic store, or null in local mode
   var DATA = { guides: {}, guideIndex: null };         // v24: the evidence guides land here at start
   var STORE = 'bh-athlete-report-draft-v1';
+  // v46: each practitioner's work in progress is their own: a staff login keeps its draft under its own key; the shared
+  // clinic login (and local mode) keep the plain key as before
+  function draftKey() {
+    var a = CLOUD && CLOUD.account();
+    return a && a.staff ? STORE + ':' + a.uid : STORE;
+  }
   var IS_IOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
   var state = null;
   var $ = function (id) { return document.getElementById(id); };
@@ -153,7 +159,7 @@
   }
   function loadDraft() {
     try {
-      var s = JSON.parse(localStorage.getItem(STORE));
+      var s = JSON.parse(localStorage.getItem(draftKey()));
       if (s && s.v === 1 && s.screen && s.ham && s.acl) { if (!s.str) s.str = freshTool('str'); return s; }
     } catch (e) { /* no stored draft */ }
     return null;
@@ -167,7 +173,7 @@
     followReport();                                    // v19: a linked program keeps the report's name and date
     clearTimeout(saveTimer);
     saveTimer = setTimeout(function () {
-      try { localStorage.setItem(STORE, draftJson()); } catch (e) { /* storage unavailable */ }
+      try { localStorage.setItem(draftKey(), draftJson()); } catch (e) { /* storage unavailable */ }
     }, 250);
   }
   function tidyState() {
@@ -2749,6 +2755,7 @@
     return '';
   }
   function updQuietOk() {
+    if (locked) return true;                           // v46: the switcher is up: nobody is mid-task, and it comes straight back
     if (!homeView || homeSub || openModalEl || menuOpen() || !els.sheet.hidden || updBusy()) return false;
     var a = document.activeElement;
     if (a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)) return false;   // someone is typing (the client search, the sign-in)
@@ -2766,7 +2773,7 @@
     if (quiet && t && t.v === upd.v && Date.now() - (+t.at || 0) < UPD_RETRY) return false;   // tried lately and still old here: the bar
     try { localStorage.setItem(UPD_STORE, JSON.stringify({ v: upd.v, at: Date.now() })); } catch (e) { /* storage unavailable */ }
     clearTimeout(saveTimer);                           // the entries as they are now, so the new version opens with them
-    try { followReport(); localStorage.setItem(STORE, draftJson()); } catch (e) { /* storage unavailable */ }
+    try { followReport(); localStorage.setItem(draftKey(), draftJson()); } catch (e) { /* storage unavailable */ }
     try { history.replaceState(null, '', location.pathname + location.search + (homeView ? '' : '#continue')); } catch (e) { /* keep the address */ }
     location.reload();
     return true;
@@ -4114,7 +4121,7 @@
       state.tool = TOOLS.indexOf(state.screenTool) >= 0 ? state.screenTool : 'screen';
       // saved straight away, so closing the app now can't bring the old entries back
       clearTimeout(saveTimer);
-      try { localStorage.setItem(STORE, draftJson()); } catch (e) { /* storage unavailable */ }
+      try { localStorage.setItem(draftKey(), draftJson()); } catch (e) { /* storage unavailable */ }
       closePick(false);
       render();
       showHome(true);                                  // v30: the home screen (until v29, the Screening page)
@@ -4138,7 +4145,7 @@
     tidyState();
     exLoaded = wasLoaded;
     clearTimeout(saveTimer);
-    try { localStorage.setItem(STORE, draftJson()); } catch (e) { /* storage unavailable */ }
+    try { localStorage.setItem(draftKey(), draftJson()); } catch (e) { /* storage unavailable */ }
     closePick(false);
     leaveHome();                                       // v30: back on the page it was
     render();
@@ -4305,7 +4312,7 @@
     if (box && !sub) box.innerHTML = '';
   }
   function openHomeSub(sub) {
-    if (['photo', 'screening', 'ex', 'builder'].indexOf(sub) < 0) return;   // v43: + the Battery builder
+    if (['photo', 'screening', 'ex', 'builder', 'team'].indexOf(sub) < 0) return;   // v43: + the Battery builder; v46: + Team
     closePick(false);
     hideSuggest();
     if (!homeView) { homeView = true; document.documentElement.classList.add('home-on'); }
@@ -4330,7 +4337,7 @@
   }
   // the page drawn only when it changed (a sync redraws Home: Photo mode's search box and its keyboard stay put)
   function renderHomeSub() {
-    var box = $('hsub'), html = homeSub === 'photo' ? photoModeHtml() : homeSub === 'ex' ? exHubHtml() : homeSub === 'builder' ? builderHtml() : screenHubHtml();
+    var box = $('hsub'), html = homeSub === 'photo' ? photoModeHtml() : homeSub === 'ex' ? exHubHtml() : homeSub === 'builder' ? builderHtml() : homeSub === 'team' ? teamHtml() : screenHubHtml();   // v46: + Team
     if (html === hsubDrawn && box.innerHTML) return;
     var a = document.activeElement, inBox = a && box.contains(a);
     var keep = inBox ? (a.id || a.getAttribute('data-pm') || a.getAttribute('data-home') || (a.getAttribute('data-pm-files') ? 'files:' + a.getAttribute('data-pm-files') : '') ||
@@ -4707,6 +4714,8 @@
     if (pmb && pmb.tagName !== 'LABEL') { onPhotoModeClick(pmb.dataset.pm); return; }   // v41
     var bb = e.target.closest('button[data-bld]');
     if (bb) { onBuilderClick(bb.dataset.bld); return; }   // v43: the Battery builder
+    var tb = e.target.closest('button[data-team]');
+    if (tb) { onTeamClick(tb.dataset.team); return; }   // v46: the Team page
     var el = e.target.closest('[data-home]');
     if (!el || el.tagName === 'LABEL') return;           // the photo tile opens its picker by itself
     var k = el.dataset.home, part = k.split(':');
@@ -5574,7 +5583,7 @@
     return { results: n, any: n > 0 || details || !!s.importLog, name: String(s.meta.name || '').trim() };
   }
   function setBackgroundInert(on) {
-    ['.appbar', '.workspace', '#dock', '#signin', '#cloudBar', '#updBar', '#home'].forEach(function (sel) {   // v30: and Home; v44: the new-version bar
+    ['.appbar', '.workspace', '#dock', '#signin', '#cloudBar', '#updBar', '#home', '#whoPanel'].forEach(function (sel) {   // v30: and Home; v44: the new-version bar; v46: the switcher
       var el = document.querySelector(sel);
       if (!el) return;
       if (on) el.setAttribute('inert', ''); else el.removeAttribute('inert');
@@ -5661,7 +5670,7 @@
     els.sheetTitle.textContent = 'Report';
     // overwrite the saved draft straight away, so closing the app now can't bring the old data back
     clearTimeout(saveTimer);
-    try { localStorage.setItem(STORE, draftJson()); } catch (e) { /* storage unavailable */ }
+    try { localStorage.setItem(draftKey(), draftJson()); } catch (e) { /* storage unavailable */ }
     closeModal(false);
     render();
     window.scrollTo(0, 0);
@@ -6040,7 +6049,10 @@
   var KEY_NOTE = 'The key is saved only on this device and is only sent to Anthropic when you use Draft with AI or Scan notes.';
   // v13, cloud mode: the key lives in the clinic store (meta/settings) and is cached on each device for offline use
   var KEY_NOTE_CLOUD = 'The key is shared by the clinic: saved once, it reaches every signed-in device. It is kept on this device too and is only sent to Anthropic when you use Draft with AI or Scan notes.';
-  function ONCE_NOTE() { return CLOUD ? 'You only need to do this once for the clinic.' : 'You only need to do this once on each device.'; }
+  // v46: a practitioner who isn't an admin can't set the clinic's key (the rules let only an admin write it); theirs stays on the iPad
+  var KEY_NOTE_STAFF = 'The clinic’s shared key is set by an admin and reaches every signed-in device. A key pasted here stays on this iPad only and is only sent to Anthropic when you use Draft with AI or Scan notes.';
+  function keyShared() { var a = CLOUD && CLOUD.account(); return !!CLOUD && !(a && a.staff && !a.admin); }
+  function ONCE_NOTE() { return keyShared() ? 'You only need to do this once for the clinic.' : 'You only need to do this once on each device.'; }
   // then: what to do once a key is saved (e.g. carry on drafting or scanning)
   function openAiSettings(then, lead) {
     aiThen = typeof then === 'function' ? then : null;
@@ -6048,9 +6060,9 @@
     els.aiKey.value = '';
     els.aiErr.hidden = true;
     els.aiRemove.hidden = !k;
-    els.aiKeyState.textContent = k ? 'A key ending in ' + k.slice(-4) + ' is saved ' + (CLOUD ? 'for the clinic' : 'on this device') + '. Paste a new one to replace it.' : (CLOUD ? KEY_NOTE_CLOUD : KEY_NOTE);
+    els.aiKeyState.textContent = k ? 'A key ending in ' + k.slice(-4) + ' is saved ' + (keyShared() ? 'for the clinic' : 'on this device') + '. Paste a new one to replace it.' : (keyShared() ? KEY_NOTE_CLOUD : CLOUD ? KEY_NOTE_STAFF : KEY_NOTE);
     els.aiLead.textContent = lead || ('Drafting interpretations and reading scanned notes or VALD screenshots use Claude through the clinic’s own Claude API key.' +
-      (CLOUD ? ' The key is shared by the clinic through the clinic store.' : ''));
+      (keyShared() ? ' The key is shared by the clinic through the clinic store.' : CLOUD ? ' An admin sets the clinic’s shared key; one pasted here stays on this iPad.' : ''));
     openModal(els.aiDialog, els.aiKey);
   }
   function saveAiKey() {
@@ -6065,19 +6077,19 @@
     try { localStorage.setItem(AI_KEY_STORE, v); } catch (e) {
       els.aiErr.textContent = 'This device wouldn’t save the key (storage is blocked).'; els.aiErr.hidden = false; return;
     }
-    if (CLOUD) { CLOUD.setting(v); CLOUD.sync(); }      // shared through meta/settings (queued like any other write)
+    if (keyShared()) { CLOUD.setting(v); CLOUD.sync(); }   // shared through meta/settings (queued like any other write); v46: admins only
     els.aiKey.value = '';
     var then = aiThen;
     aiThen = null;
     closeModal();
-    toast(CLOUD ? 'API key saved for the clinic' : 'API key saved on this device');
+    toast(keyShared() ? 'API key saved for the clinic' : CLOUD ? 'API key saved on this iPad (an admin sets the clinic’s shared key)' : 'API key saved on this device');
     if (then) then();
   }
   function removeAiKey() {
     try { localStorage.removeItem(AI_KEY_STORE); } catch (e) { /* storage unavailable */ }
-    if (CLOUD) { CLOUD.setting(''); CLOUD.sync(); }
+    if (keyShared()) { CLOUD.setting(''); CLOUD.sync(); }
     els.aiRemove.hidden = true;
-    els.aiKeyState.textContent = (CLOUD ? 'Key removed for the clinic. ' : 'Key removed. ') + (CLOUD ? KEY_NOTE_CLOUD : KEY_NOTE);
+    els.aiKeyState.textContent = (keyShared() ? 'Key removed for the clinic. ' : 'Key removed. ') + (keyShared() ? KEY_NOTE_CLOUD : CLOUD ? KEY_NOTE_STAFF : KEY_NOTE);
     els.aiKey.focus();
   }
   // the clinic's key as pulled from meta/settings: kept in the same place as a key pasted here, so it works offline
@@ -9570,6 +9582,7 @@
     });
     if (t === 'str' || t === 'custom') sess.prev = pv;   // (even empty: a session from before v39 has none, and is filled from the record)
     if (userName()) sess.savedBy = userName();         // v13: who saved it (the practitioner's name on this device)
+    var acc = CLOUD && CLOUD.account(); if (acc && acc.staff) sess.savedById = acc.uid;   // v46: and which login
     return storeSession(key, name, sess);
   }
   // a session into the client's record: the same tool and date replaces the earlier save (in the clinic store the
@@ -9597,6 +9610,7 @@
     var sess = { tool: 'ex', date: m.date || todayIso(), savedAt: new Date().toISOString(), meta: {}, values: {}, results: {}, mass: null, interp: '', program: program };
     if (!blank(m.practitioner)) sess.meta.practitioner = clean1(m.practitioner);
     if (userName()) sess.savedBy = userName();
+    var acc2 = CLOUD && CLOUD.account(); if (acc2 && acc2.staff) sess.savedById = acc2.uid;   // v46
     return storeSession(key, name, sess);
   }
   // v15: a client's saved programs, oldest first (by date, then when saved)
@@ -10077,6 +10091,288 @@
     }).catch(function (err) { toast('Couldn’t restore: ' + (err && err.message ? err.message : 'unreadable file')); });
   }
 
+  // ------------------------------------------------------------------ v46: each practitioner their own login
+  // The switcher ("Who's using this iPad?") lists everyone signed in on this device: tap your name, type your PIN and the
+  // app is yours (another person's work in progress is kept under their own login; a change of person reloads the page
+  // so nothing of theirs is left on screen). It shows when the iPad is locked (⋯ › Lock, or 10 minutes untouched while
+  // the active person has a PIN), when the active person signs out while others remain, and on opening when locked.
+  var LOCK_MS = 10 * 60000, LAST_IN = 'bh-athlete-report-lastinput-v1', PIN_TRIES = 5;
+  var who = { step: 'list', uid: '', tries: 0, msg: '', busy: false }, locked = false, lastIn = 0, lastInSaved = 0, startedAs = '';
+  function initials(name) {
+    var parts = clean1(name).split(' ').filter(Boolean);
+    if (!parts.length) return '?';
+    return (parts[0].charAt(0) + (parts.length > 1 ? parts[parts.length - 1].charAt(0) : '')).toUpperCase();
+  }
+  function roleWord(a) { return a.staff ? (a.role === 'admin' ? 'Admin' : 'Practitioner') : 'Clinic login'; }
+  function whoRow(a, extra) {
+    return '<button type="button" class="who-row" data-who="pick:' + esc(a.uid) + '"' + (extra || '') + '><span class="who-av" aria-hidden="true">' + esc(initials(a.name || a.email)) + '</span>' +
+      '<span class="who-text"><b>' + esc(a.name || a.email) + '</b><small>' + esc(roleWord(a) + (a.active ? ' · signed in now' : a.hasPin ? ' · PIN' : ' · password')) + '</small></span>' + HOME_ICON.go + '</button>';
+  }
+  function whoHtml() {
+    var list = CLOUD.accounts(), cur = list.filter(function (a) { return a.uid === who.uid; })[0];
+    var html = '<svg class="signin-logo" viewBox="0 0 470 114.45" aria-hidden="true" focusable="false"><use href="#brandLogo" xlink:href="#brandLogo"/></svg>';
+    if (who.step === 'pin' && cur) {
+      html += '<h1 id="whoTitle">' + esc(cur.name || cur.email) + '</h1><p class="signin-lead">' + (cur.hasPin ? 'Type your PIN to carry on.' : 'No PIN on this iPad yet: sign in with your password.') + '</p>' +
+        '<form class="who-pin" id="whoPinForm" novalidate>' +
+        (cur.hasPin ? '<label class="f" for="whoPin"><span>PIN</span><input id="whoPin" type="password" inputmode="numeric" autocomplete="off" maxlength="8" enterkeyhint="go"></label>' : '') +
+        '<p class="signin-err" id="whoErr" role="alert"' + (who.msg ? '' : ' hidden') + '>' + esc(who.msg) + '</p>' +
+        (cur.hasPin ? '<button class="primary" id="whoGo" type="submit"' + (who.busy ? ' disabled' : '') + '>Continue</button>' : '') +
+        '<div class="who-pin-acts"><button type="button" class="quiet" data-who="password:' + esc(cur.uid) + '">' + (cur.hasPin ? 'Use my password instead' : 'Sign in with my password') + '</button>' +
+        '<button type="button" class="quiet" data-who="list">‹ Back</button></div></form>';
+    } else {
+      html += '<h1 id="whoTitle">Who’s using this iPad?</h1><p class="signin-lead">Tap your name. Your own work in progress, favourites and name on the results come with you.</p>' +
+        '<div class="who-list">' + list.map(function (a) { return whoRow(a); }).join('') +
+        '<button type="button" class="who-row who-other" data-who="other"><span class="who-av" aria-hidden="true">+</span><span class="who-text"><b>Someone else</b><small>Sign in with your email and password</small></span>' + HOME_ICON.go + '</button></div>' +
+        '<p class="signin-err" id="whoErr" role="alert"' + (who.msg ? '' : ' hidden') + '>' + esc(who.msg) + '</p>' +
+        '<p class="who-foot">Everyone here shares the clinic’s records. Each person’s unfinished screens stay with their own login.</p>';
+    }
+    return html;
+  }
+  function renderWho() {
+    var card = $('whoCard');
+    if (!card) return;
+    card.innerHTML = whoHtml();
+    var pin = $('whoPin');
+    if (pin) focusQuiet(pin); else focusQuiet($('whoTitle'));
+  }
+  function showWho(msg, step, uid) {
+    closeMenu(false);
+    closeModal(false);
+    if (!els.sheet.hidden) closeReport();
+    locked = true;
+    who = { step: step || 'list', uid: uid || '', tries: 0, msg: msg || '', busy: false };
+    document.documentElement.classList.add('locked');
+    els.signin.hidden = true;
+    $('whoPanel').hidden = false;
+    renderWho();
+    measureBar();
+    window.scrollTo(0, 0);
+  }
+  function hideWho() {
+    locked = false;
+    document.documentElement.classList.remove('locked');
+    $('whoPanel').hidden = true;
+  }
+  function lockApp() {                                 // ⋯ › Lock this iPad, or left alone: the switcher, this person's work kept
+    if (!CLOUD || !CLOUD.signedIn()) return;
+    clearTimeout(saveTimer);
+    try { followReport(); localStorage.setItem(draftKey(), draftJson()); } catch (e) { /* storage unavailable */ }
+    var a = CLOUD.account();
+    showWho('', a && CLOUD.accounts().length === 1 ? 'pin' : 'list', a ? a.uid : '');
+  }
+  function noteInput() {
+    lastIn = Date.now();
+    if (lastIn - lastInSaved > 15000) { lastInSaved = lastIn; try { localStorage.setItem(LAST_IN, String(lastIn)); } catch (e) { /* storage unavailable */ } }
+  }
+  function idleLockDue() {
+    if (!CLOUD || locked || !CLOUD.signedIn() || !state) return false;
+    var a = CLOUD.account();
+    if (!a || !a.hasPin) return false;                 // nothing to lock behind: the PIN is what lets them back in quickly
+    if (updBusy()) return false;                       // Claude or an upload still working for this person
+    return Date.now() - lastIn > LOCK_MS;
+  }
+  function lockIfIdle() { if (idleLockDue()) lockApp(); }
+  // the switcher's taps
+  function whoEnter(uid) {                             // the PIN (or the password) was right: this person's app
+    var a = CLOUD.account();
+    if (a && a.uid === uid) {                          // the same person: carry on where they were
+      hideWho();
+      noteInput();
+      renderMenuAccount();
+      measureBar();
+      CLOUD.sync({ throttle: true });
+      focusQuiet(homeView ? $('homeHello') : els.entry);
+      return;
+    }
+    who.busy = true; renderWho();
+    CLOUD.switchTo(uid).then(function () { reloadForSwitch(); }, function (err) {
+      who.busy = false; who.msg = 'That login no longer works here: sign in again.'; who.step = 'list'; renderWho();
+    });
+  }
+  function reloadForSwitch() {                         // another person's app: a fresh start on Home with their own draft
+    try { localStorage.setItem(LAST_IN, String(Date.now())); } catch (e) { /* storage unavailable */ }
+    try { history.replaceState(null, '', location.pathname + location.search); } catch (e) { /* keep the address */ }
+    location.reload();
+  }
+  function whoPinSubmit(e) {
+    if (e) e.preventDefault();
+    var uid = who.uid, pin = ($('whoPin') || {}).value || '';
+    if (!uid || who.busy) return;
+    if (!CLOUD.pinOk(pin)) { who.msg = 'Type your PIN (4 to 8 digits).'; renderWho(); return; }
+    who.busy = true;
+    CLOUD.checkPin(uid, pin).then(function (ok) {
+      who.busy = false;
+      if (ok) { who.tries = 0; who.msg = ''; whoEnter(uid); return; }
+      who.tries++;
+      if (who.tries >= PIN_TRIES) { who.msg = 'Five wrong PINs. Sign in with your password instead.'; renderWho(); var b = $('whoCard').querySelector('[data-who^="password:"]'); if (b) focusQuiet(b); return; }
+      who.msg = 'That PIN isn’t right.'; renderWho();
+      var p = $('whoPin'); if (p) { p.value = ''; focusQuiet(p); }
+    });
+  }
+  function whoPassword(uid) {                          // the sign-in card for this person (their email filled in)
+    var a = CLOUD.accounts().filter(function (x) { return x.uid === uid; })[0];
+    hideWho();
+    showSignIn('');
+    if (a) { els.signinEmail.value = a.email; focusQuiet(els.signinPassword); }
+    $('signinBack').hidden = false;
+  }
+  function onWhoClick(e) {
+    var b = e.target.closest('button[data-who]');
+    if (!b) return;
+    var k = b.dataset.who, i = k.indexOf(':'), kind = i < 0 ? k : k.slice(0, i), arg = i < 0 ? '' : k.slice(i + 1);
+    if (kind === 'pick') {
+      var a = CLOUD.accounts().filter(function (x) { return x.uid === arg; })[0];
+      if (!a) return;
+      if (!a.hasPin) { whoPassword(arg); return; }
+      who.step = 'pin'; who.uid = arg; who.msg = ''; who.tries = 0; renderWho();
+    } else if (kind === 'password') whoPassword(arg);
+    else if (kind === 'list') { who.step = 'list'; who.uid = ''; who.msg = ''; renderWho(); }
+    else if (kind === 'other') { hideWho(); showSignIn(''); els.signinEmail.value = ''; $('signinBack').hidden = false; focusQuiet(els.signinEmail); }
+  }
+  // ---- the PIN dialog
+  var pinFirst = false;
+  function openPinDialog(first) {
+    pinFirst = !!first;
+    var a = CLOUD.account();
+    $('pinTitle').textContent = a && a.hasPin ? 'Change your PIN' : 'Set a PIN for this iPad';
+    $('pinLead').textContent = (first ? 'You’re in. ' : '') + 'On a shared iPad, a PIN switches to you in a second and locks the iPad after 10 minutes untouched. 4 to 8 digits; keep it to yourself.';
+    $('pinBox').value = ''; $('pinBox2').value = '';
+    $('pinErr').hidden = true;
+    $('pinCancel').textContent = first ? 'Not now' : 'Cancel';
+    openModal($('pinDialog'), $('pinBox'));
+  }
+  function savePin() {
+    var a = $('pinBox').value, b = $('pinBox2').value, err = $('pinErr');
+    if (!CLOUD.pinOk(a)) { err.textContent = 'A PIN is 4 to 8 digits.'; err.hidden = false; $('pinBox').focus(); return; }
+    if (a !== b) { err.textContent = 'The two PINs don’t match.'; err.hidden = false; $('pinBox2').focus(); return; }
+    CLOUD.setPin(a).then(function () {
+      closeModal();
+      renderMenuAccount();
+      noteInput();
+      toast('PIN saved: ⋯ › Lock this iPad, or 10 minutes untouched, brings up the switcher');
+      CLOUD.sync();                                    // now, not throttled: another iPad reads the PIN from their own document
+    }, function () { err.textContent = 'That PIN couldn’t be saved.'; err.hidden = false; });
+  }
+  // ---- the Team page (⋯ › Team; admins): everyone with a login, add one, switch one off
+  var team = { busy: false, msg: '', editUid: '' };
+  function teamHtml() {
+    var a = CLOUD.account(), list = CLOUD.staffList(), admin = !!(a && a.admin);
+    var html = subHeadHtml('Team', 'Everyone who can sign in. Each person has their own login and PIN, their own work in progress and, soon, their own favourites.', 'data-home="back"', 'Home');
+    if (!admin) return html + '<p class="client-none bld-none">Only an admin can add people or change the team. Ask one of the admins listed below.</p>' + teamListHtml(list, a, false);
+    html += '<section class="bld-sec" aria-labelledby="teamListH"><div class="bld-head"><h2 id="teamListH">People</h2><button type="button" class="primary" data-team="add">+ Add a practitioner</button></div>' +
+      '<p class="team-lead">Adding someone creates their login and emails them a link to set their own password (the email is called “Reset your password for BASE Health Report”, from noreply@base-health-report.firebaseapp.com: worth a look in Junk). If they forget it, “Forgot your password?” on the sign-in screen emails them a new link: nothing for you to do.</p>' +
+      (team.msg ? '<p class="ai-err" role="alert">' + esc(team.msg) + '</p>' : '') + teamListHtml(list, a, true) + '</section>';
+    if (a && !a.staff) html += '<p class="team-lead">You’re using the shared clinic login. Add yourself with your own email to get your own login; the shared one keeps working until everyone has moved across.</p>';
+    return html;
+  }
+  function teamListHtml(list, a, admin) {
+    if (!list.length) return '<p class="client-none bld-none">Nobody has their own login yet. + Add a practitioner starts with you.</p>';
+    return '<div class="tpl-list bld-list">' + list.map(function (o) {
+      var me = a && a.uid === o.id, off = o.active === false, nm = esc(o.name || o.email);
+      return '<div class="tpl-row team-row' + (off ? ' off' : '') + '" data-uid="' + esc(o.id) + '"><div class="tpl-main"><b>' + nm + (me ? '<span class="cp-tag cur">You</span>' : '') +
+        '<span class="cp-tag">' + (o.role === 'admin' ? 'Admin' : 'Practitioner') + '</span>' + (off ? '<span class="cp-tag warn">Switched off</span>' : '') + '</b><span>' + esc(o.email || '') + '</span></div>' +
+        (admin ? '<div class="tpl-acts"><button type="button" class="ghost" data-team="edit:' + esc(o.id) + '">Edit<span class="vh"> ' + nm + '</span></button>' +
+          (off ? '<button type="button" class="quiet" data-team="on:' + esc(o.id) + '">Switch on</button>'
+            : '<button type="button" class="quiet" data-team="email:' + esc(o.id) + '">Email password link</button>' + (me ? '' : '<button type="button" class="quiet tpl-del" data-team="off:' + esc(o.id) + '">Switch off</button>')) + '</div>' : '') + '</div>';
+    }).join('') + '</div>';
+  }
+  function openTeamDialog(uid) {
+    var o = uid ? CLOUD.staffList().filter(function (x) { return x.id === uid; })[0] : null;
+    if (uid && !o) return;
+    team.editUid = uid || '';
+    $('teamTitle').textContent = o ? 'Edit ' + (o.name || o.email) : 'Add a practitioner';
+    $('teamLead').textContent = o ? 'Their name goes on the results they save; an admin can also manage the team and the Claude key.' : 'They get an email with a link to set their own password, then sign in on any iPad with their email.';
+    $('tmName').value = o ? o.name || '' : '';
+    $('tmEmail').value = o ? o.email || '' : '';
+    $('tmEmailF').hidden = !!o;
+    $('tmRole').value = o && o.role === 'admin' ? 'admin' : 'practitioner';
+    $('tmErr').hidden = true;
+    $('tmSave').textContent = o ? 'Save' : 'Add and email them';
+    $('tmSave').disabled = false;
+    openModal($('teamDialog'), $('tmName'));
+  }
+  function teamFail(msg, id) { var p = $('tmErr'); p.textContent = msg; p.hidden = false; $('tmSave').disabled = false; $('tmSave').textContent = team.editUid ? 'Save' : 'Add and email them'; if (id) $(id).focus(); }
+  function teamSave() {
+    var name = clean1($('tmName').value), email = $('tmEmail').value.trim().toLowerCase(), role = $('tmRole').value;
+    if (!name) return teamFail('Add their name.', 'tmName');
+    if (!team.editUid && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return teamFail('That email doesn’t look right.', 'tmEmail');
+    if (navigator.onLine === false) return teamFail('You’re offline. Connect to the internet to change the team.', null);
+    $('tmSave').disabled = true; $('tmSave').textContent = team.editUid ? 'Saving…' : 'Adding…';
+    var p = team.editUid ? CLOUD.staffSet(team.editUid, { name: name, role: role }) : CLOUD.staffAdd({ name: name, email: email, role: role });
+    p.then(function (r) {
+      closeModal();
+      team.msg = '';
+      if (homeView && homeSub === 'team') renderHome();
+      toast(team.editUid ? 'Saved ' + name : (r && r.emailed ? 'Added ' + name + ': they’ve been emailed a link to set their password' : 'Added ' + name + ', but the email didn’t send: use Email password link'));
+      renderMenuAccount();
+    }, function (err) {
+      var c = err && err.code;
+      teamFail(c === 'EMAIL_EXISTS' ? 'That email already has a login. If they were on the team before, find them in the list and Switch on.'
+        : c === 'INVALID_EMAIL' ? 'That email doesn’t look right.' : c === 'denied' ? 'The clinic store refused this: only an admin can change the team (and the store’s rules must allow it).'
+        : c === 'network' ? 'No connection: try again in a moment.' : c === 'OPERATION_NOT_ALLOWED' || c === 'ADMIN_ONLY_OPERATION' ? 'Creating logins is switched off in the Firebase console (Authentication › Sign-in method › Email/Password, and Settings › User actions › Enable create).'
+        : 'That didn’t work (' + (err && err.message ? err.message : c || 'unknown error') + ').', null);
+    });
+  }
+  function onTeamClick(k) {
+    var i = k.indexOf(':'), kind = i < 0 ? k : k.slice(0, i), arg = i < 0 ? '' : k.slice(i + 1);
+    var a = CLOUD.account();
+    if (!a || !a.admin) return;
+    if (kind === 'add') { openTeamDialog(''); return; }
+    if (kind === 'edit') { openTeamDialog(arg); return; }
+    if (navigator.onLine === false) { toast('You’re offline: connect to change the team'); return; }
+    var o = CLOUD.staffList().filter(function (x) { return x.id === arg; })[0];
+    if (!o) return;
+    if (kind === 'off' || kind === 'on') {
+      CLOUD.staffSet(arg, { active: kind === 'on' }).then(function () {
+        team.msg = '';
+        if (homeView && homeSub === 'team') renderHome();
+        toast(kind === 'on' ? (o.name || o.email) + ' can sign in again' : (o.name || o.email) + ' can’t sign in any more (their saved results stay)');
+      }, function (err) { team.msg = 'That didn’t work' + (err && err.message ? ' (' + err.message + ')' : '') + '.'; renderHome(); });
+    } else if (kind === 'email') {
+      CLOUD.sendReset(o.email).then(function () { toast('Emailed ' + o.email + ' a link to set a password'); },
+        function (err) { toast('The email didn’t send' + (err && err.message ? ' (' + err.message + ')' : '')); });
+    }
+  }
+  function wireWho() {
+    try { lastIn = +localStorage.getItem(LAST_IN) || 0; } catch (e) { lastIn = 0; }
+    ['pointerdown', 'keydown'].forEach(function (ev) { document.addEventListener(ev, noteInput, { capture: true, passive: true }); });
+    document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible') lockIfIdle(); });
+    setInterval(lockIfIdle, 30000);
+    var panel = $('whoPanel');
+    panel.addEventListener('click', onWhoClick);
+    panel.addEventListener('submit', whoPinSubmit);
+    $('pinCancel').addEventListener('click', function () { closeModal(); if (pinFirst) toast('You can set a PIN any time: ⋯ › Your PIN'); });
+    $('pinSave').addEventListener('click', savePin);
+    $('pinBox2').addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); savePin(); } });
+    $('pinBox').addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); $('pinBox2').focus(); } });
+    $('tmCancel').addEventListener('click', function () { closeModal(); });
+    $('tmSave').addEventListener('click', teamSave);
+    ['tmName', 'tmEmail'].forEach(function (id) { $(id).addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); if (id === 'tmName' && !$('tmEmailF').hidden) $('tmEmail').focus(); else teamSave(); } }); });
+    [$('pinDialog'), $('teamDialog')].forEach(function (d) { d.addEventListener('click', function (e) { if (e.target === d) closeModal(); }); });
+    var sw = $('switchItem'), pi = $('pinItem'), tm = $('teamItem'), back = $('signinBack'), forgot = $('signinForgot');
+    if (sw) sw.addEventListener('click', menuAction(function () { lockApp(); }));
+    if (pi) pi.addEventListener('click', menuAction(function () { openPinDialog(false); }));
+    if (tm) tm.addEventListener('click', menuAction(function () { openHomeSub('team'); CLOUD.sync({ throttle: true }); }));
+    if (back) back.addEventListener('click', function () { els.signin.hidden = true; document.documentElement.classList.remove('signed-out'); showWho(''); });
+    if (forgot) forgot.addEventListener('click', forgotPassword);
+  }
+  function forgotPassword() {
+    var email = els.signinEmail.value.trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { signinError('Type your email first, then tap Forgot your password?'); els.signinEmail.focus(); return; }
+    if (navigator.onLine === false) { signinError(signinMessage({ code: 'network' })); return; }
+    signinError('');
+    $('signinForgot').disabled = true;
+    CLOUD.sendReset(email).then(function () {
+      $('signinForgot').disabled = false;
+      signinError('');
+      toast('If ' + email + ' has a login, a link to set a new password is on its way (“Reset your password for BASE Health Report”)');
+    }, function (err) {
+      $('signinForgot').disabled = false;
+      var c = err && err.code;
+      signinError(c === 'EMAIL_NOT_FOUND' ? 'There’s no login with that email. Ask an admin to add you in ⋯ › Team.' : c === 'network' ? signinMessage(err) : 'The email couldn’t be sent (' + (err && err.message ? err.message : c) + ').');
+    });
+  }
+
   // ------------------------------------------------------------------ the clinic store (v13, cloud mode only)
   // One clinic login on every device (cloud.js does the talking). Signed out: the sign-in card in place of the workspace.
   // Signed in: the records are the cache, every save is queued and pushed, a pull brings the other devices' saves, the
@@ -10089,6 +10385,8 @@
   function signinMessage(err) {
     var c = err && err.code ? String(err.code) : '';
     if (c === 'INVALID_LOGIN_CREDENTIALS' || c === 'EMAIL_NOT_FOUND' || c === 'INVALID_PASSWORD' || c === 'INVALID_EMAIL' || c === 'MISSING_PASSWORD') return 'That email or password isn’t right.';
+    if (c === 'not-staff' || c === 'inactive' || c === 'store') return err.message;   // v46: a login the team list doesn't have, switched off, or the store not answering
+    if (c === 'USER_DISABLED') return 'This login has been disabled.';
     if (c === 'TOO_MANY_ATTEMPTS_TRY_LATER') return 'Too many attempts. Wait a few minutes and try again.';
     if (c === 'network') return 'You’re offline. Connect to the internet to sign in for the first time.';
     return 'Couldn’t sign in (' + (err && err.message ? err.message : (c || 'unknown error')) + ').';
@@ -10106,8 +10404,10 @@
     clearLogBook();                                    // v40: the training logs read go with the login
     document.documentElement.classList.add('signed-out');
     els.signin.hidden = false;
-    els.signinName.value = userName();
+    $('signinNameF').hidden = true;                    // v46: asked only after the shared clinic login signs in without a name
+    els.signinName.value = '';
     els.signinPassword.value = '';
+    $('signinBack').hidden = !(CLOUD.accounts().length);   // v46: others signed in on this iPad: back to the switcher
     signinBusySet(false);
     signinError(msg || '');
     renderCloudBar();
@@ -10127,29 +10427,52 @@
     if (e) e.preventDefault();
     if (signinBusy) return;
     var email = els.signinEmail.value.trim().toLowerCase(), pw = els.signinPassword.value, name = clean1(els.signinName.value);
-    if (!email) { signinError('Type the clinic email.'); els.signinEmail.focus(); return; }
+    // v46: the shared clinic login signed in a moment ago and is now giving the name it goes by on this device
+    if (!$('signinNameF').hidden && CLOUD.signedIn()) {
+      if (!name) { signinError('Add your name — it’s shown on the results you save.'); els.signinName.focus(); return; }
+      CLOUD.setUserName(name);
+      enterApp('');
+      return;
+    }
+    if (!email) { signinError('Type your email.'); els.signinEmail.focus(); return; }
     if (!pw) { signinError('Type the password.'); els.signinPassword.focus(); return; }
-    if (!name) { signinError('Add your name — it’s shown on the results you save.'); els.signinName.focus(); return; }
     if (navigator.onLine === false) { signinError(signinMessage({ code: 'network' })); return; }
     signinError('');
     signinBusySet(true);
-    CLOUD.signIn(email, pw).then(function () {
-      var was = userName();
-      CLOUD.setUserName(name);
+    CLOUD.signIn(email, pw).then(function (acc) {
       els.signinPassword.value = '';
-      clients = CLOUD.cache;
-      libVer++;                                        // v15: the store's library and templates come with the new cache
-      legacyAsked = false;
-      fillPractitioner(was);
-      showApp();
-      render();
-      window.scrollTo(0, 0);
-      CLOUD.sync();
+      if (startedAs && startedAs !== acc.uid) { reloadForSwitch(); return; }   // v46: someone else was using this iPad: their app goes, this person's loads
+      if (!acc.staff && !userName()) {               // the shared clinic login: who is this?
+        signinBusySet(false);
+        $('signinNameF').hidden = false;
+        els.signinBtn.textContent = 'Continue';
+        focusQuiet(els.signinName);
+        return;
+      }
+      enterApp(acc.staff && !acc.hasPin ? 'pin' : '');
     }, function (err) {
       signinBusySet(false);
       signinError(signinMessage(err));
       focusQuiet(err && err.code === 'network' ? els.signinBtn : els.signinPassword);
     });
+  }
+  // v46: signed in (the first person on this iPad, or the shared login after its name): the app with this person's draft
+  function enterApp(then) {
+    var was = '';
+    clients = CLOUD.cache;
+    libVer++;                                          // v15: the store's library and templates come with the new cache
+    legacyAsked = false;
+    startedAs = CLOUD.account().uid;
+    var mine = loadDraft();                            // this person's own draft (a staff login's key differs from the shared one's)
+    if (mine) { state = mine; tidyState(); } else if (draftKey() !== STORE) { TOOLS.forEach(function (t) { state[t] = freshTool(t); }); state.ex = freshEx(); tidyState(); }
+    fillPractitioner(was);
+    showApp();
+    render();
+    if (homeView) renderHome();
+    window.scrollTo(0, 0);
+    noteInput();
+    CLOUD.sync();
+    if (then === 'pin') openPinDialog(true);
   }
   function togglePassword() {
     var show = els.signinPassword.type === 'password';
@@ -10162,7 +10485,16 @@
   function renderMenuAccount() {
     var line = $('menuAccount'), a = CLOUD.account();
     if (!line) return;
-    line.innerHTML = a ? 'Signed in as <b>' + esc(a.email) + '</b> · ' + esc(userName() || 'no name yet') : '';
+    // v46: a staff login goes by its Team name and role; the shared clinic login by the name typed on this device
+    line.innerHTML = a ? (a.staff ? 'Signed in as <b>' + esc(a.name || a.email) + '</b> · ' + esc(a.email) + ' · ' + (a.role === 'admin' ? 'Admin' : 'Practitioner')
+      : 'Signed in as <b>' + esc(a.email) + '</b> · ' + esc(userName() || 'no name yet') + ' (the shared clinic login)') : '';
+    var n = CLOUD.accounts().length;
+    var sw = $('switchItem'), pi = $('pinItem'), nm = $('nameItem'), tm = $('teamItem'), so = $('signOutItem');
+    if (sw) { sw.hidden = !a; sw.querySelector('span').textContent = n > 1 ? 'Switch practitioner…' : 'Lock this iPad'; }
+    if (pi) { pi.hidden = !a; pi.querySelector('span').textContent = a && a.hasPin ? 'Change your PIN…' : 'Set a PIN…'; }
+    if (nm) nm.hidden = !a || a.staff;
+    if (tm) tm.hidden = !a || !a.admin;
+    if (so) so.querySelector('span').textContent = n > 1 ? 'Sign out of this iPad' : 'Sign out';
   }
   function openNameDialog() {
     els.nameBox.value = userName();
@@ -10275,9 +10607,18 @@
       if (state) maybeLegacyPrompt();
     } else if (evt.kind === 'signout') {
       libVer++;                                        // the store's library and templates went with the cache
-      showSignIn(evt.message || '');
+      if (evt.others) showWho(evt.message || '');      // v46: others are still signed in on this iPad
+      else showSignIn(evt.message || '');
     } else if (evt.kind === 'auth') {
       libVer++;
+      renderMenuAccount();                             // v46: a name or role changed on the Team page
+      if (state && homeView && !locked) renderHome();
+    } else if (evt.kind === 'staff') {                 // v46: the team changed (here or on another device)
+      if (state && homeView && homeSub === 'team') renderHome();
+      renderMenuAccount();
+    } else if (evt.kind === 'accounts') {
+      if (locked) renderWho();
+      renderMenuAccount();
     }
   }
   function initCloud() {
@@ -10298,7 +10639,14 @@
     els.legacyUpload.addEventListener('click', legacyUpload);
     els.legacyNever.addEventListener('click', legacyNever);
     [els.nameDialog, els.signOutDialog].forEach(function (d) { d.addEventListener('click', function (e) { if (e.target === d) closeModal(); }); });
-    if (CLOUD.signedIn()) { showApp(); CLOUD.sync(); }
+    wireWho();                                         // v46
+    if (CLOUD.signedIn()) {
+      startedAs = CLOUD.account().uid;
+      showApp();
+      CLOUD.sync();
+      if (idleLockDue()) lockApp();                    // v46: left alone (or closed) for 10 minutes: the switcher first
+      else if (!CLOUD.account().staff && !userName()) openNameDialog();   // the shared login without a name yet
+    } else if (CLOUD.accounts().length) showWho('');   // v46: nobody active, but people are signed in on this iPad
     else showSignIn('');
   }
 

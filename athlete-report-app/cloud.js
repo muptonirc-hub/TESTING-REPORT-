@@ -24,15 +24,25 @@
    v40: the client's training log. Their phone writes each session to shared/<token>/logs/<id> while the link works (the
    rules check the shape); logs(token) reads a link's sessions with the clinic login. `checkins` (one document per link:
    when the clinic last marked its check-in as seen) is a collection like the library's; a refusal of it (no rule yet)
-   is reported apart, as the links are. */
+   is reported apart, as the links are.
+   v46: each practitioner their own login. `staff/<uid>` (one document per person: email, name, role, active; written by
+   admins) is what the rules check: a login not on it sees nothing. A device keeps every person who signed in on it
+   (bh-athlete-report-accounts-v1: their tokens and their PIN's hash) so the switcher can change hands with a PIN; `auth`
+   is the active person's. `users/<uid>` is that person's own document (the PIN, later their favourites): only they can
+   read or write it. The shared clinic login (no staff document, allowed by the rules as before) still works as the
+   "legacy" account: it counts as an admin and goes by the name typed on the device. Admins add people (accounts:signUp
+   with a throw-away password, the staff document, then accounts:sendOobCode so they set their own password by email). */
 (function () {
   'use strict';
   var cfg = window.BH_CLOUD || {};
   var projectId = String(cfg.projectId || '').trim(), apiKey = String(cfg.apiKey || '').trim();
   var enabled = !!projectId;
   var AUTH = 'bh-athlete-report-auth-v1', USER = 'bh-athlete-report-user-v1', CACHE = 'bh-athlete-report-cloud-v1',
-    PENDING = 'bh-athlete-report-pending-v1', DEVICE = 'bh-athlete-report-device-v1';
+    PENDING = 'bh-athlete-report-pending-v1', DEVICE = 'bh-athlete-report-device-v1',
+    ACCTS = 'bh-athlete-report-accounts-v1';         // v46: everyone who signed in on this device
   var SIGNIN_URL = 'https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=';
+  var SIGNUP_URL = 'https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=';           // v46: an admin adding a person
+  var OOB_URL = 'https://identitytoolkit.googleapis.com/v1/accounts:sendOobCode?key=';         // v46: the set-password email
   var TOKEN_URL = 'https://securetoken.googleapis.com/v1/token?key=';
   var DOCS = 'projects/' + projectId + '/databases/(default)/documents';       // the resource-name prefix of every document
   var BASE = 'https://firestore.googleapis.com/v1/' + DOCS;
@@ -41,8 +51,8 @@
   var MAX_WRITES = 400;                                // writes per commit (Firestore's limit is 500)
   // v15: the clinic's shared documents (cache[coll] = { <id>: entry | { id, deleted: true } }) and the push order: each
   // group goes in commits of its own, the results first
-  var DOC_COLLS = ['library', 'templates', 'batteries', 'checkins'];   // v36: + the saved screening batteries; v40: + check-ins seen
-  var PUSH_ORDER = [['sessions', 'history'], ['library'], ['templates'], ['batteries'], ['checkins'], ['shared']];   // v35: + the phone links, last
+  var DOC_COLLS = ['library', 'templates', 'batteries', 'checkins', 'staff'];   // v36: + the saved screening batteries; v40: + check-ins seen; v46: + the team
+  var PUSH_ORDER = [['sessions', 'history'], ['library'], ['templates'], ['batteries'], ['checkins'], ['staff'], ['users'], ['shared']];   // v35: + the phone links, last; v46: the team, a person's own document
   var DOC_ID = /^[A-Za-z0-9][A-Za-z0-9_-]{0,149}$/;    // safe as a Firestore document id (no '/', never '__x__')
   // v34: the project's default bucket (since late 2024 a new one is <projectId>.firebasestorage.app; cloud-config.js may
   // name another as storageBucket) and the Firebase Storage REST address the SDK uses
@@ -52,7 +62,8 @@
   var SHARE_ID = /^[A-Za-z0-9]{20,64}$/;               // v35: a phone link's token (the document id in shared/)
   var SHARE_MAX = 900000;                              // characters of program JSON (a document holds 1 MiB)
   var LOG_ID = /^[0-9]{8}-[A-Za-z0-9]{12}$/;           // v40: a session in a link's log (as the phone page names it)
-  var APART = ['shared', 'checkins'];                  // v40: refusals reported apart (never the device being refused)
+  var APART = ['shared', 'checkins', 'staff', 'users'];   // v40: refusals reported apart (never the device being refused); v46: + the team and a person's own document
+  var ROLES = ['admin', 'practitioner'];               // v46
 
   // ------------------------------------------------------------------ storage helpers
   function getJson(k) { try { return JSON.parse(localStorage.getItem(k)); } catch (e) { return null; } }
@@ -92,7 +103,10 @@
   }
 
   // ------------------------------------------------------------------ state
-  var auth = null;                                     // { idToken, refreshToken, exp, email, uid }
+  var auth = null;                                     // { idToken, refreshToken, exp, email, uid }: the active person's
+  // v46: { active: uid, by: { uid: { email, idToken, refreshToken, exp, staff (true: on the team; false: the shared clinic
+  // login), name, role, pin: { salt, hash } | null, lastAt } }
+  var accts = { active: '', by: {} };
   // { v: 1, email, syncedAt, cursorName, clients, legacy, library, templates, cursors: { library: { at, name }, templates } }
   // (syncedAt / cursorName stay the sessions' cursor, as in v13)
   var cache = null;
@@ -109,14 +123,15 @@
   }
   function freshCursor() { return { at: '', name: '' }; }
   function freshCache(email) {
-    return { v: 1, email: email || '', syncedAt: '', cursorName: '', clients: {}, legacy: 'pending',
-      library: {}, templates: {}, batteries: {}, checkins: {}, cursors: { library: freshCursor(), templates: freshCursor(), batteries: freshCursor(), checkins: freshCursor() } };   // v36: + batteries; v40: + checkins
+    return { v: 1, email: email || '', store: projectId, syncedAt: '', cursorName: '', clients: {}, legacy: 'pending',   // v46: store: the project it holds (every practitioner shares it)
+      library: {}, templates: {}, batteries: {}, checkins: {}, staff: {}, cursors: { library: freshCursor(), templates: freshCursor(), batteries: freshCursor(), checkins: freshCursor(), staff: freshCursor() } };   // v36: + batteries; v40: + checkins; v46: + staff
   }
   function isMap(m) { return !!m && typeof m === 'object' && !Array.isArray(m); }
   function loadCache() {
     var c = getJson(CACHE);
     if (c && c.v === 1 && c.clients && typeof c.clients === 'object' && !Array.isArray(c.clients)) {
       c.email = String(c.email || ''); c.syncedAt = String(c.syncedAt || ''); c.cursorName = String(c.cursorName || '');
+      c.store = String(c.store || projectId);          // v46: a cache from v45 or earlier belongs to this project
       if (c.legacy !== 'uploaded' && c.legacy !== 'never') c.legacy = 'pending';
       // v15: a cache from v14 or earlier has no library, templates or cursors: start them empty, so the first pull
       // fetches every document of the two collections (a damaged map is rebuilt the same way)
@@ -149,7 +164,222 @@
     return a && typeof a.idToken === 'string' && a.idToken && typeof a.refreshToken === 'string' && a.refreshToken
       ? { idToken: a.idToken, refreshToken: a.refreshToken, exp: +a.exp || 0, email: String(a.email || ''), uid: String(a.uid || '') } : null;
   }
-  function saveAuth() { setJson(AUTH, auth); }
+  function saveAuth() {                                // v46: the active person's tokens, in the accounts too
+    setJson(AUTH, auth);
+    if (auth && auth.uid) {
+      var e = accts.by[auth.uid] = accts.by[auth.uid] || { email: auth.email, staff: false, name: '', role: '', pin: null, lastAt: 0 };
+      e.email = auth.email; e.idToken = auth.idToken; e.refreshToken = auth.refreshToken; e.exp = auth.exp;
+      accts.active = auth.uid;
+    }
+    saveAccts();
+  }
+  // ---- v46: the people signed in on this device
+  function loadAccts() {
+    var a = getJson(ACCTS), out = { active: '', by: {} };
+    if (!isMap(a) || !isMap(a.by)) return out;
+    Object.keys(a.by).forEach(function (uid) {
+      var e = a.by[uid];
+      if (!isMap(e) || typeof e.refreshToken !== 'string' || !e.refreshToken || !/^[A-Za-z0-9_-]{1,128}$/.test(uid)) return;
+      out.by[uid] = { email: String(e.email || ''), idToken: String(e.idToken || ''), refreshToken: e.refreshToken, exp: +e.exp || 0, staff: e.staff === true,
+        name: String(e.name || ''), role: ROLES.indexOf(e.role) >= 0 ? e.role : '', lastAt: +e.lastAt || 0,
+        pin: isMap(e.pin) && typeof e.pin.salt === 'string' && typeof e.pin.hash === 'string' ? { salt: e.pin.salt, hash: e.pin.hash } : null };
+    });
+    out.active = typeof a.active === 'string' && out.by[a.active] ? a.active : '';
+    return out;
+  }
+  function saveAccts() { setJson(ACCTS, accts); }
+  function entryAuth(e, uid) { return { idToken: e.idToken, refreshToken: e.refreshToken, exp: e.exp, email: e.email, uid: uid }; }
+  function me() { return auth && accts.by[auth.uid] ? accts.by[auth.uid] : null; }
+  function isStaff() { var e = me(); return !!(e && e.staff); }
+  function isAdmin() { var e = me(); return !!e && (!e.staff || e.role === 'admin'); }   // the shared clinic login counts as an admin
+  function accountInfo(uid) {
+    var e = accts.by[uid];
+    return e ? { uid: uid, email: e.email, name: e.staff ? e.name : getStr(USER), role: e.staff ? e.role : 'admin', staff: e.staff, hasPin: !!e.pin, active: uid === accts.active, lastAt: e.lastAt } : null;
+  }
+  function accounts() {                                // most recently used first
+    return Object.keys(accts.by).map(accountInfo).sort(function (a, b) { return b.lastAt - a.lastAt; });
+  }
+  // the person's own document (users/<uid>): the PIN so another iPad knows it (later: favourites)
+  function pinFields(pin) { return { pinSalt: { stringValue: pin ? pin.salt : '' }, pinHash: { stringValue: pin ? pin.hash : '' } }; }
+  function sha256Hex(s) {
+    return Promise.resolve().then(function () { return crypto.subtle.digest('SHA-256', new TextEncoder().encode(s)); }).then(function (d) {
+      return Array.prototype.map.call(new Uint8Array(d), function (b) { return (b < 16 ? '0' : '') + b.toString(16); }).join('');
+    });
+  }
+  function randomHex(n) {
+    var a = new Uint8Array(n);
+    try { crypto.getRandomValues(a); } catch (e) { for (var i = 0; i < n; i++) a[i] = Math.floor(Math.random() * 256); }
+    return Array.prototype.map.call(a, function (b) { return (b < 16 ? '0' : '') + b.toString(16); }).join('');
+  }
+  function pinOk(pin) { return /^[0-9]{4,8}$/.test(String(pin || '')); }
+  // the active person's PIN: hashed with a salt, kept on this device and (staff) in their own document for other devices
+  function setPin(pin) {
+    var e = me();
+    if (!e || !pinOk(pin)) return Promise.reject({ code: 'pin' });
+    var salt = randomHex(16), uid = auth.uid;
+    return sha256Hex(salt + ':' + String(pin)).then(function (hash) {
+      if (!auth || auth.uid !== uid) throw { code: 'signed-out' };
+      e.pin = { salt: salt, hash: hash };
+      saveAccts();
+      if (e.staff) queueWrite({ sid: uid, kind: 'user', uid: uid, coll: 'users', doc: pinFields(e.pin) });
+      return true;
+    });
+  }
+  function checkPin(uid, pin) {
+    var e = accts.by[uid];
+    if (!e || !e.pin || !pinOk(pin)) return Promise.resolve(false);
+    return sha256Hex(e.pin.salt + ':' + String(pin)).then(function (hash) { return hash === e.pin.hash; });
+  }
+  // the person's own document, read after a sign-in or a switch (a PIN set on another iPad)
+  function pullMine() {
+    var e = me();
+    if (!e || !e.staff) return Promise.resolve();
+    var uid = auth.uid;
+    return fs('GET', '/users/' + uid).then(function (r) {
+      if (r.status !== 200 || !auth || auth.uid !== uid) return;
+      var f = (r.json && r.json.fields) || {}, salt = str(f.pinSalt), hash = str(f.pinHash);
+      if (salt && hash && !pending.some(function (x) { return x.coll === 'users' && x.uid === uid; })) { e.pin = { salt: salt, hash: hash }; saveAccts(); }
+    }).catch(function () { /* next time */ });
+  }
+  // who the active login is: their staff document (200 and active: on the team; 200 and switched off: 'inactive';
+  // 404: the shared clinic login as before, or a login nobody added, told apart by the clinic's settings; 403: not on
+  // the team). Resolves the account, or throws { code: 'not-staff' | 'inactive' }
+  function meCheck() {
+    var uid = auth && auth.uid;
+    if (!uid) return Promise.reject({ code: 'signed-out' });
+    return fs('GET', '/staff/' + uid).then(function (r) {
+      var e = accts.by[uid];
+      if (!auth || auth.uid !== uid || !e) throw { code: 'signed-out' };
+      if (r.status === 200) {
+        var f = (r.json && r.json.fields) || {};
+        if (!(f.active && f.active.booleanValue === true)) { dropAccount(uid, INACTIVE_MSG); throw { code: 'inactive', message: INACTIVE_MSG }; }
+        e.staff = true; e.name = str(f.name); e.role = ROLES.indexOf(str(f.role)) >= 0 ? str(f.role) : 'practitioner';
+        saveAccts();
+        return pullMine().then(function () { return account(); });
+      }
+      if (r.status === 403) { dropAccount(uid, NOT_STAFF_MSG); throw notStaff(); }
+      if (r.status !== 404) throw httpError(r);
+      // no staff document: the shared clinic login, or a login nobody added (the rules let anyone read their own staff
+      // document, so a switched-off person hears why); the clinic's settings tell them apart (refused to a stranger)
+      return fs('GET', '/meta/settings').then(function (r2) {
+        if (!auth || auth.uid !== uid || !accts.by[uid]) throw { code: 'signed-out' };
+        if (r2.status === 403) { dropAccount(uid, NOT_STAFF_MSG); throw notStaff(); }
+        if (r2.status !== 200 && r2.status !== 404) throw httpError(r2);
+        e.staff = false; e.name = ''; e.role = ''; saveAccts();
+        return account();
+      });
+    });
+  }
+  var INACTIVE_MSG = 'This login has been switched off by an admin.';
+  var NOT_STAFF_MSG = 'This login isn’t on the BASE team list. Ask an admin to add you in ⋯ › Team.';
+  function notStaff() { return { code: 'not-staff', message: NOT_STAFF_MSG }; }
+  // v46: a sync refused across the board may mean a staff login was switched off (or taken off the team) since it
+  // signed in: its own staff document still answers, so meCheck signs it out with the reason; otherwise nothing changes
+  function recheckIfRefused(round) {
+    var e = me();
+    if (!round.denied.length || !e || !e.staff) return Promise.resolve();
+    return meCheck().then(function () {}, function () {});
+  }
+  // the team as the store has it, from the staff documents pulled with the rest (the active person's own entry follows them)
+  function staffList() {
+    var m = cache && isMap(cache.staff) ? cache.staff : {};
+    return Object.keys(m).map(function (uid) { var o = m[uid]; return o && o.deleted !== true ? o : null; }).filter(Boolean)
+      .sort(function (a, b) { return String(a.name || '').localeCompare(String(b.name || '')); });
+  }
+  function staffFollow() {                             // after a pull: the active staff member's name / role / active from the team list
+    var e = me();
+    if (!e || !cache || !isMap(cache.staff)) return;
+    var o = cache.staff[auth.uid];
+    if (!o || o.deleted === true) return;
+    if (o.active === false) { dropAccount(auth.uid, 'This login has been switched off by an admin.'); return; }
+    var changed = !e.staff || e.name !== String(o.name || '') || e.role !== o.role;
+    e.staff = true; e.name = String(o.name || ''); e.role = ROLES.indexOf(o.role) >= 0 ? o.role : 'practitioner';   // (a login seen only through AUTH learns it is on the team here)
+    if (changed) { saveAccts(); emit({ kind: 'auth' }); }
+  }
+  // v46: an admin adds a person: a login with a throw-away password (never kept), their staff document, then the email
+  // that lets them set their own password. Resolves { uid, emailed }; throws { code: 'EMAIL_EXISTS' | 'network' | 'denied' | ... }
+  function staffAdd(o) {
+    var email = String(o && o.email || '').trim().toLowerCase(), name = String(o && o.name || '').replace(/\s+/g, ' ').trim();
+    var role = ROLES.indexOf(o && o.role) >= 0 ? o.role : 'practitioner';
+    if (!enabled || !auth) return Promise.reject({ code: 'signed-out' });
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || !name) return Promise.reject({ code: 'input' });
+    var throwaway = randomHex(24) + 'Aa1!';
+    return request(SIGNUP_URL + encodeURIComponent(apiKey), 'POST', { email: email, password: throwaway, returnSecureToken: false }).then(function (r) {
+      var j = r.json || {};
+      if (r.status !== 200 || !j.localId) { var msg = googleMessage(r); throw { code: msg.split(/[\s:]/)[0], message: msg, status: r.status }; }
+      var uid = String(j.localId), obj = { id: uid, email: email, name: name, role: role, active: true, addedBy: userName(), addedAt: new Date().toISOString() };
+      return staffWrite(uid, obj).then(function () { return sendReset(email).then(function () { return { uid: uid, emailed: true }; }, function () { return { uid: uid, emailed: false }; }); });
+    });
+  }
+  // a staff document written straight away (an admin's change should say so if it is refused), with the fields the
+  // rules read on top (email, name, role, active) and the whole object as data like the other collections
+  function staffFields(uid, obj) {
+    var f = libFields('staff', uid, obj, false, obj.name);
+    f.email = { stringValue: String(obj.email || '') }; f.name = { stringValue: String(obj.name || '') };
+    f.role = { stringValue: ROLES.indexOf(obj.role) >= 0 ? obj.role : 'practitioner' }; f.active = { booleanValue: obj.active !== false };
+    return f;
+  }
+  function staffWrite(uid, obj) {
+    if (!enabled || !auth || !docIdOk(uid) || !isMap(obj)) return Promise.reject({ code: 'input' });
+    var copy = JSON.parse(JSON.stringify(obj)); copy.id = uid;
+    var body = { writes: [{ update: { name: DOCS + '/staff/' + uid, fields: staffFields(uid, copy) }, updateTransforms: [{ fieldPath: 'updatedAt', setToServerValue: 'REQUEST_TIME' }] }] };
+    return fs('POST', ':commit', body).then(function (r) {
+      if (r.status === 403) throw { code: 'denied', message: googleMessage(r) };
+      if (r.status !== 200) throw httpError(r);
+      if (cache && isMap(cache.staff)) { cache.staff[uid] = copy; saveCache(); }
+      emit({ kind: 'staff' });
+      staffFollow();
+      return copy;
+    });
+  }
+  function staffSet(uid, fields) {                     // an admin changes a person's name, role or active flag
+    var was = cache && isMap(cache.staff) ? cache.staff[uid] : null;
+    if (!was || was.deleted === true) return Promise.reject({ code: 'input' });
+    var obj = JSON.parse(JSON.stringify(was));
+    if (typeof fields.name === 'string' && fields.name.trim()) obj.name = fields.name.replace(/\s+/g, ' ').trim();
+    if (ROLES.indexOf(fields.role) >= 0) obj.role = fields.role;
+    if (typeof fields.active === 'boolean') obj.active = fields.active;
+    obj.updatedBy = userName();
+    return staffWrite(uid, obj);
+  }
+  function sendReset(email) {                          // the set / reset password email (Firebase's template)
+    email = String(email || '').trim().toLowerCase();
+    if (!enabled || !email) return Promise.reject({ code: 'input' });
+    return request(OOB_URL + encodeURIComponent(apiKey), 'POST', { requestType: 'PASSWORD_RESET', email: email }).then(function (r) {
+      if (r.status !== 200) { var msg = googleMessage(r); throw { code: msg.split(/[\s:]/)[0], message: msg, status: r.status }; }
+      return true;
+    });
+  }
+  // another person on this device takes over (their tokens, refreshed on the next request if stale). Resolves the account
+  function switchTo(uid) {
+    var e = accts.by[uid];
+    if (!e) return Promise.reject({ code: 'unknown' });
+    if (auth && auth.uid === uid) return Promise.resolve(account());
+    auth = entryAuth(e, uid);
+    e.lastAt = Date.now();
+    accts.active = uid;
+    saveAuth();
+    lastSyncAt = 0; backoffMs = 0;
+    status = { offline: false, failed: false, denied: false, deniedColls: [], waited: resultsWaiting() > 0, error: '' };
+    emit({ kind: 'auth', email: auth.email, switched: true });
+    return Promise.resolve(account());
+  }
+  // a person leaves this device (Sign out of this iPad, or their login stopped working): their tokens and PIN go; the
+  // records cache stays while anyone else is still signed in here (it is the clinic's, behind the next PIN)
+  function dropAccount(uid, message) {
+    var wasActive = !!auth && auth.uid === uid;
+    delete accts.by[uid];
+    if (accts.active === uid) accts.active = '';
+    saveAccts();
+    if (!wasActive) { emit({ kind: 'accounts' }); return; }
+    auth = null;
+    drop(AUTH);
+    clearTimeout(retryTimer); retryTimer = null;
+    status = { offline: false, failed: false, denied: false, deniedColls: [], waited: resultsWaiting() > 0, error: '' };
+    if (!Object.keys(accts.by).length) { drop(CACHE); cache = freshCache(''); }
+    emit({ kind: 'signout', message: message || '', others: Object.keys(accts.by).length > 0 });
+  }
+
 
   // ------------------------------------------------------------------ HTTP
   // one request with a JSON body (or a form-encoded one: form = true, as the token endpoint documents); resolves
@@ -187,12 +417,21 @@
         throw { code: msg.split(/[\s:]/)[0], message: msg, status: r.status };
       }
       auth = { idToken: j.idToken, refreshToken: j.refreshToken, exp: Date.now() + (parseInt(j.expiresIn, 10) || 3600) * 1000, email: String(j.email || email).toLowerCase(), uid: String(j.localId || '') };
+      var fresh = !accts.by[auth.uid];
       saveAuth();
-      if (!cache || cache.email !== auth.email) { cache = freshCache(auth.email); overlayPending(); saveCache(); }
+      var e = accts.by[auth.uid]; e.lastAt = Date.now(); if (fresh) { e.staff = false; e.name = ''; e.role = ''; e.pin = null; } saveAccts();
+      // v46: the records cache is the clinic's, shared by everyone who signs in on this device
+      if (!cache || cache.store !== projectId || !cache.email) { cache = freshCache(auth.email); overlayPending(); saveCache(); }   // (no email: nobody signed in here yet, or the last login dropped)
       lastSyncAt = 0; backoffMs = 0;
       status = { offline: false, failed: false, denied: false, deniedColls: [], waited: resultsWaiting() > 0, error: '' };
-      emit({ kind: 'auth', email: auth.email });
-      return { email: auth.email, uid: auth.uid };
+      // v46: on the team, the shared clinic login, or neither (then the login is dropped again). The store not answering
+      // (busy, offline mid-way) also drops it: who they are isn't known yet, so they try again in a moment
+      var uid = auth.uid;
+      return meCheck().then(function (acc) { emit({ kind: 'auth', email: auth.email }); return acc; }, function (err) {
+        if (err && (err.code === 'not-staff' || err.code === 'inactive' || err.code === 'signed-out')) throw err;
+        if (auth && auth.uid === uid && accts.by[uid]) dropAccount(uid, '');
+        throw { code: 'store', message: 'The clinic store didn’t answer (' + String(err && err.message || 'no connection') + '). Try again in a moment.' };
+      });
     });
   }
   // a new id token from the refresh token; a 400 (TOKEN_EXPIRED, INVALID_REFRESH_TOKEN, USER_DISABLED, ...) means this
@@ -214,7 +453,7 @@
         return auth;
       }
       if (r.status === 400) {
-        signOut('Please sign in again.');
+        dropAccount(mine.uid, 'Please sign in again.');   // v46: this person's login only
         throw { code: 'signed-out', message: googleMessage(r) };
       }
       throw { code: 'refresh', status: r.status, message: googleMessage(r) };   // 5xx, 429: try again later
@@ -231,13 +470,9 @@
   }
   // signing out keeps the draft, the tests preference, the AI key cache, the practitioner name and the pending queue
   // (v15: the library and templates go with the cache; the starter file still shows after the next sign-in)
-  function signOut(message) {
-    auth = null;
-    drop(AUTH); drop(CACHE);
-    cache = freshCache('');
-    clearTimeout(retryTimer); retryTimer = null;
-    status = { offline: false, failed: false, denied: false, deniedColls: [], waited: resultsWaiting() > 0, error: '' };
-    emit({ kind: 'signout', message: message || '' });
+  function signOut(message) {                          // v46: the active person leaves this device (others stay signed in)
+    if (!auth) return;
+    dropAccount(auth.uid, message || '');
   }
 
   // ------------------------------------------------------------------ Firestore requests
@@ -359,7 +594,7 @@
   // v15: library entries and templates. A document per id: id, name (the entry's name or the template's title),
   // deleted, data (the entry / template as JSON), updatedBy, device and updatedAt (server time). A save writes the whole
   // object; a delete writes a tombstone (deleted true, data { id, deleted: true }), which also hides a starter exercise.
-  function docCollOk(coll) { return DOC_COLLS.indexOf(coll) >= 0; }
+  function docCollOk(coll) { return DOC_COLLS.indexOf(coll) >= 0 && coll !== 'staff'; }   // v46: staff documents are written by staffWrite
   function docIdOk(id) { return typeof id === 'string' && DOC_ID.test(id); }
   function docTitle(coll, obj) {
     var v = obj ? (coll === 'templates' ? obj.title : obj.name) : '';
@@ -476,7 +711,8 @@
       else if (known.indexOf(it.coll) < 0 && extra.indexOf(it.coll) < 0) extra.push(it.coll);
     });
     PUSH_ORDER.concat(extra.map(function (c) { return [c]; })).forEach(function (colls) {
-      var g = items.filter(function (it) { return it.kind !== 'setting' && colls.indexOf(it.coll) >= 0; });
+      // v46: a person's own document (users/<uid>) goes only with their own login; another person's waits for them
+      var g = items.filter(function (it) { return it.kind !== 'setting' && colls.indexOf(it.coll) >= 0 && (!it.uid || (auth && it.uid === auth.uid)); });
       if (g.length) groups.push({ colls: colls, items: g });
     });
     var p = Promise.resolve();
@@ -487,7 +723,9 @@
           p = p.then(function () {
             if (refused) return;
             var body = { writes: chunk.map(function (it) {
-              return { update: { name: DOCS + '/' + it.coll + '/' + it.sid, fields: it.doc }, updateTransforms: [{ fieldPath: 'updatedAt', setToServerValue: 'REQUEST_TIME' }] };
+              var w = { update: { name: DOCS + '/' + it.coll + '/' + it.sid, fields: it.doc }, updateTransforms: [{ fieldPath: 'updatedAt', setToServerValue: 'REQUEST_TIME' }] };
+              if (it.kind === 'user') w.updateMask = { fieldPaths: Object.keys(it.doc) };   // v46: a person's own document: these fields only
+              return w;
             }) };
             return fs('POST', ':commit', body).then(function (r) {
               if (r.status === 403) {
@@ -614,6 +852,7 @@
       saveCache();
       if (changed.sessions) emit({ kind: 'cache' });
       DOC_COLLS.forEach(function (coll) { if (changed[coll]) emit({ kind: coll }); });
+      if (changed.staff) staffFollow();                // v46: the active person's own entry (switched off: signed out)
     }
     return p.then(done, function (err) { done(); throw err; });
   }
@@ -669,6 +908,9 @@
     }).then(function () {
       return pullSettings(round);
     }).then(function () {
+      return recheckIfRefused(round);
+    }).then(function () {
+      if (!auth) return false;                         // signed out meanwhile (switched off): nothing more to note
       backoffMs = 0;
       status.offline = false; status.failed = false;
       setDenied(round);
@@ -693,6 +935,15 @@
   }
 
   // ------------------------------------------------------------------ the public face
+  function account() {
+    if (!auth) return null;
+    var e = me();
+    return { email: auth.email, uid: auth.uid, staff: !!(e && e.staff), name: userName(), role: e && e.staff ? e.role : 'admin', admin: isAdmin(), hasPin: !!(e && e.pin) };
+  }
+  function userName() {                                // v46: a staff member goes by their team name; the shared login by the name typed here
+    var e = me();
+    return e && e.staff ? e.name : getStr(USER);
+  }
   var api = {
     enabled: enabled,
     throttleMs: cfg.throttleMs != null ? +cfg.throttleMs : 30000,   // visibility and dialog triggers: at most one sync this often
@@ -700,9 +951,23 @@
     cache: null,
     sid: sid,
     signedIn: function () { return !!auth; },
-    account: function () { return auth ? { email: auth.email, uid: auth.uid } : null; },
-    userName: function () { return getStr(USER); },
+    account: account,
+    userName: userName,
     setUserName: function (name) { name = String(name == null ? '' : name).replace(/\s+/g, ' ').trim(); setStr(USER, name); return name; },
+    // v46: the people signed in on this device, switching between them, PINs, the team (admins)
+    accounts: accounts,
+    switchTo: switchTo,
+    dropAccount: function (uid) { dropAccount(uid, ''); },
+    setPin: setPin,
+    checkPin: checkPin,
+    pinOk: pinOk,
+    isAdmin: isAdmin,
+    isStaff: isStaff,
+    staffList: staffList,
+    staffAdd: staffAdd,
+    staffSet: staffSet,
+    sendReset: sendReset,
+    meCheck: meCheck,
     deviceId: deviceId,
     signIn: signIn,
     signOut: function () { signOut(''); },
@@ -746,11 +1011,15 @@
     }
   };
   if (enabled) {
-    auth = loadAuth();
+    accts = loadAccts();
+    auth = loadAuth();                                 // v45 and earlier: the one login; v46: the active person's
+    if (auth && auth.uid && !accts.by[auth.uid]) { saveAuth(); accts.by[auth.uid].lastAt = Date.now(); saveAccts(); }
+    else if (auth && auth.uid && accts.active !== auth.uid) { accts.active = auth.uid; saveAccts(); }
+    else if (!auth && accts.active && accts.by[accts.active]) { auth = entryAuth(accts.by[accts.active], accts.active); setJson(AUTH, auth); }
     cache = loadCache();
     pending = loadPending();
-    if (auth && cache.email && cache.email !== auth.email) { cache = freshCache(auth.email); overlayPending(); saveCache(); }
-    if (!auth) cache = freshCache('');                 // signed out: the cache is gone with the sign-out
+    if (auth && cache.store !== projectId) { cache = freshCache(auth.email); overlayPending(); saveCache(); }
+    if (!auth && !Object.keys(accts.by).length) cache = freshCache('');   // nobody signed in here: the cache is gone with the sign-out
     status.waited = resultsWaiting() > 0;
     window.addEventListener('online', function () { status.offline = false; emit({ kind: 'status' }); sync(); });
     window.addEventListener('offline', function () { status.offline = true; emit({ kind: 'status' }); });
