@@ -10,7 +10,7 @@
    client records live in Firestore (cloud.js), cached on the device; the draft stays on the device as before.
    v15: the Exercises tab has three pages chosen from its heading (Program builder, Exercise library, Program templates);
    programs can be built from the clinic's exercise library (cues and video links print on the handout), saved as
-   templates, and each handout created with a patient name is saved to that client's record.
+   templates, and each handout created with a client name is saved to that client's record.
    v16: the report view has Return home: the session is already in the client's record, so it makes sure it has reached
    the clinic store, empties the page for the next client and goes back to the Screening tab (Undo for a few seconds). */
 (function () {
@@ -110,8 +110,29 @@
   // v36: the Custom battery is scored like the Performance screen (population norms), so most of its code is the screen's
   function SL(t) { return t === 'screen' || t === 'custom'; }
   // Screening is for athletes; LL Strength and the rehab tabs are used with patients of all kinds (v9)
-  function person(t) { return SL(t) ? 'athlete' : 'patient'; }
-  function Person(t) { return SL(t) ? 'Athlete' : 'Patient'; }
+  // v49 (the usability review's C2: physios, exercise physiologists and exercise scientists, and all their clients): the
+  // person is the client, and an athlete only on the Performance screen or a Custom battery with a sport population chosen
+  // or a sport filled in (until v48 always the athlete there, the patient everywhere else)
+  function sportCtx(t) {
+    var s = state && state[t];
+    if (!s || (t !== 'screen' && t !== 'custom')) return false;
+    return !!((s.pop && s.pop !== 'general' && s.pop !== 'none') || !blank(s.meta && s.meta.sport));
+  }
+  function person(t) { return sportCtx(t) ? 'athlete' : 'client'; }
+  function Person(t) { return sportCtx(t) ? 'Athlete' : 'Client'; }
+  // the words already on the page follow a sport typed or a population chosen (the details card, the strip, the
+  // interpretation's help line) without drawing the page again
+  function personWords(t) {
+    if (t !== 'screen' && t !== 'custom') return;
+    var P = Person(t), p = person(t), h = $('athleteH'), lab = document.querySelector('label[for="' + t + '-name"] > span'), strip = $('athleteStrip'), help = document.querySelector('#interpCard .interp-help');
+    if (h && h.textContent !== P) h.textContent = P;
+    if (lab && lab.textContent !== P + ' name') lab.textContent = P + ' name';
+    if (strip) {
+      strip.setAttribute('aria-label', P);
+      var ed = strip.querySelector('.strip-edit'); if (ed) ed.setAttribute('aria-label', 'Edit ' + p + ' details');
+    }
+    if (help) help.textContent = 'Optional: a short summary for the ' + (sportCtx(t) ? 'athlete and coach' : 'client') + ', printed near the top of the report.';
+  }
   function statusWord(status, t) { return E.statusWord(status, wordKind(t || state.tool)); }
   function chip(status, text) {                        // v28: a 'Guide' chip (the DSI) names the training emphasis, in a neutral look
     var cls = status === 'n/a' ? 'na' : status;
@@ -635,13 +656,13 @@
     acl: ['ACL rehab & return to play', 'Injured-limb and symmetry results against ACLR norms for the chosen phase and sex.'],
     ankle: ['Ankle-GO return-to-sport score', 'Lateral ankle sprain (no surgery): four tests and three questionnaires, scored out of 25 on the injured leg.'],   // v42
     custom: ['Custom screening battery', 'Choose the population, then pick the tests or photograph your notes. Results are scored against the norms available.'],   // v36
-    ex: ['Program builder', 'Add exercises from the library, type them, or scan a handwritten page (no patient name on it).']
+    ex: ['Program builder', 'Add exercises from the library, type them, or scan a handwritten page (no client name on it).']
   };
   // v15: the Exercises tab's three pages, chosen from its heading (the same picker as Screening's tools)
   var EX_PAGES = ['builder', 'library', 'templates'];
   var EX_PAGE_TITLE = { builder: 'Program builder', library: 'Exercise library', templates: 'Program templates' };
   function exPageBlurb(p) {
-    if (p === 'builder') return 'Build a patient’s program from the library, by typing, or from a photo of a handwritten page.';
+    if (p === 'builder') return 'Build a client’s program from the library, by typing, or from a photo of a handwritten page.';
     if (p === 'library') return 'The clinic’s exercises: default dose, cues for the handout and a video link.';
     return 'Saved programs to start from, ' + (CLOUD ? 'shared by the whole clinic.' : 'saved on this device.');
   }
@@ -743,7 +764,7 @@
   var IMPORT_LABEL = 'Scan<span class="il-more"> photo</span>';   // v18: just Scan on a phone, so it shares a row with Choose client; v48: was Import results
   function cardHead(t, h2id) {
     var open = state[t].cardOpen !== false;
-    var out = '<div class="card-head"><h2 id="' + h2id + '">' + (t === 'ex' ? 'Patient' : Person(t)) + '</h2><div class="head-actions">';
+    var out = '<div class="card-head"><h2 id="' + h2id + '">' + (t === 'ex' ? 'Client' : Person(t)) + '</h2><div class="head-actions">';   // v49: Client (was Patient)
     out += '<button type="button" class="ghost choose-btn" data-action="choose-client" aria-haspopup="dialog">' + PEOPLE + 'Choose client</button>';   // v15: Exercises too
     if (t === 'screen') {
       // v18: one Import results menu: a photo of notes (or a VALD app screenshot), or a VALD CSV export. Each item is a
@@ -1206,7 +1227,7 @@
       return '<button type="button" class="pop-choice" data-pop="' + esc(key) + '"><span class="pc-text"><b>' + esc(title) + '</b><small>' + esc(sub) + '</small></span>' + HOME_ICON.go + '</button>';
     }
     var html = '<section class="card pop-step" id="popStep" aria-labelledby="popStepH"><h2 id="popStepH">Compare against</h2>' +
-      '<p class="pop-lead">The norms this battery is scored against. Pick first; the tests come next. It can be changed later in the athlete card.</p><div class="pop-choices">' +
+      '<p class="pop-lead">The norms this battery is scored against. Pick first; the tests come next. It can be changed later in the details card.</p><div class="pop-choices">' +
       choice('general', 'General population', 'By sex and age band (VALD norms and the clinic’s own). Sex is asked for next.');
     sports.forEach(function (p) { html += choice(p, p, Object.keys(N.populations[p] || {}).length + ' metrics with norms · all ages'); });
     html += choice('none', 'The clinic\u2019s targets only', 'No population norms: LL Strength, rehab and your own tests against their targets. Sex only if a target needs it.');   // v43
@@ -2381,6 +2402,7 @@
     var t = state.tool, c = compute();
     applyRetest(false);
     refreshClientBar(c);
+    personWords(t);                                    // v49: Athlete as soon as a sport is typed or a sport population chosen
     syncCard(c);
     var showPrev = prevShown(t), ap = $('addPrev');   // v18: the Previous column, or + Add previous results
     els.entry.classList.toggle('no-prev', !showPrev);
@@ -3031,7 +3053,7 @@
     var a = v.appr === 'No' || v.appr === 'Yes' ? v.appr : '';
     return '<div class="ago-appr"><span class="aa-l" id="' + id + '-al">Apprehension</span><div class="seg aa-seg" role="group" aria-labelledby="' + id + '-al" aria-describedby="' + id + '-ad">' +
       ['No', 'Yes'].map(function (o) { return '<button type="button" data-appr="' + o + '" aria-pressed="' + (a === o) + '">' + o + '</button>'; }).join('') +
-      '</div><span class="vh" id="' + id + '-ad">Did the patient feel apprehension, a fear of the ankle giving way, during this test? No earns a point.</span></div>';
+      '</div><span class="vh" id="' + id + '-ad">Did the client feel apprehension, a fear of the ankle giving way, during this test? No earns a point.</span></div>';
   }
   function agoRowHtml(m, gi, mi) {
     var v = val('ankle', m.name), id = 'ankle-' + gi + '-' + mi, nm = esc(m.name), it = agoItemOf(m.name), q = m.kind === 'q', comp = m.kind === 'comp';
@@ -3617,13 +3639,13 @@
         'Split squat (rear leg) — Left': ['22', ''], 'Split squat (rear leg) — Right': ['20', ''], 'Single-leg calf raise — Left': ['27', '24'], 'Single-leg calf raise — Right': ['22', ''], 'Y-balance anterior reach': ['63', '61'] };
       Object.keys(cx).forEach(function (k) { var v = val('custom', k); v.result = cx[k][0]; v.previous = cx[k][1]; });
     } else if (t === 'ham') {
-      Object.assign(s.meta, { name: 'Example Patient', injured: 'Left', sport: 'Soccer', notes: 'Example data — not a real patient' });
+      Object.assign(s.meta, { name: 'Example Client', injured: 'Left', sport: 'Soccer', notes: 'Example data — not a real client' });
       s.phase = 'Return to Play';                      // v18: chosen here, as the clinician would
       var hx = { 'AKET deficit vs uninjured': ['4', '9'], 'SLR % of uninjured side': ['96', '88'], 'HHD 90° knee-flex % of uninjured': ['91', '80'],
         'Nordic peak force — injured': ['290', '245'], 'Nordic peak-force imbalance': ['22', '41'], '10 m sprint time': ['1.86', '1.95'], 'HaOS score': ['84', '70'] };
       Object.keys(hx).forEach(function (k) { var v = val('ham', k); v.result = hx[k][0]; v.previous = hx[k][1]; });
     } else if (t === 'ankle') {                        // v42: about two months after a sprain, nearly there
-      Object.assign(s.meta, { name: 'Example Patient', injured: 'Right', weeks: '8', sport: 'Basketball', notes: 'Example data \u2014 not a real patient' });
+      Object.assign(s.meta, { name: 'Example Client', injured: 'Right', weeks: '8', sport: 'Basketball', notes: 'Example data \u2014 not a real client' });
       var gx = { 'Single-leg stance': ['1', '0', 'No'], 'Leg length': ['91', '91'], 'SEBT anterior': ['58', '55'], 'SEBT posteromedial': ['88', '80'],
         'SEBT posterolateral': ['84', '77'], 'SEBT composite': ['', '', 'No'], 'Side hop': ['9.8', '13.8', 'Yes'], 'Figure-of-8 hop': ['11.9', '13.6', 'No'] };
       Object.keys(gx).forEach(function (k) { var v = val('ankle', k); v.left = gx[k][0]; v.right = gx[k][1]; if (gx[k][2]) v.appr = gx[k][2]; });
@@ -3631,13 +3653,13 @@
       var fs = val('ankle', 'FAAM Sport'); fs.total = '26'; fs.result = '81.3';
       val('ankle', 'ALR-RSI').result = '58';
     } else if (t === 'str') {
-      Object.assign(s.meta, { name: 'Example Patient', mass: '80', sport: 'AFL', notes: 'Example data \u2014 not a real patient' });
+      Object.assign(s.meta, { name: 'Example Client', mass: '80', sport: 'AFL', notes: 'Example data \u2014 not a real client' });
       var sx = { split_squat: ['28', '25'], sl_seated_calf_vald: ['1650', '1540'], sl_seated_calf_smith: ['125', '118'],
         sl_knee_extension: ['820', '700'], sl_bridge: ['17', '16'], sl_calf_raise_reps: ['27', '22'],
         prone_hamstring_curl: ['420', '385'], hip_abduction: ['350', '372'], hip_adduction: ['395', '380'] };
       Object.keys(sx).forEach(function (k) { var v = val('str', k); v.left = sx[k][0]; v.right = sx[k][1]; });
     } else {
-      Object.assign(s.meta, { name: 'Example Patient', injured: 'Right', graft: 'Hamstring', sport: 'Netball', notes: 'Example data — not a real patient' });
+      Object.assign(s.meta, { name: 'Example Client', injured: 'Right', graft: 'Hamstring', sport: 'Netball', notes: 'Example data — not a real client' });
       s.phase = '2 Years'; s.sex = 'Female';           // v18: chosen here, as the clinician would
       var ax = { 'IKDC': ['78', '70'], 'ACL-RSI': ['61', '52'], 'KOOS — Sport & Rec': ['75', '65'], 'Knee extension LSI': ['84', '76'],
         'CMJ — Jump height': ['27.5', '25.9'], 'Single hop LSI': ['88', ''] };
@@ -3681,7 +3703,7 @@
       return {
         file: fileName('_strength.pdf', t),
         rep: window.BHReport.strength({
-          meta: { name: m.name, date: E.displayIso(m.date), mass: m.mass, sport: m.sport, tester: m.tester, notes: m.notes },
+          meta: { name: m.name, date: E.displayIso(m.date), mass: m.mass, sport: m.sport, tester: withProf(m.tester), notes: m.notes },   // v49: + profession
           tests: c.tests, counts: c.counts, prios: explained(c.prios, function (r) { return r.id; }), amberPct: DATA.str.amber_pct, interp: interp, progress: progress,
           coach: coachData(t)
         })
@@ -3699,7 +3721,8 @@
           closePct: t === 'custom' && batLibTests().length ? libBasePct(batLibTests()) : null,
           closeOwn: t === 'custom' && batLibTests().some(function (tt) { return ltPct(tt) !== libBasePct(batLibTests()); }),   // v43: a test with its own Close %
           rehab: t === 'custom' ? customRehabInfo() : null,   // v37: the injured side and the phases, while it has rehab tests
-          meta: { name: m.name, date: E.displayIso(m.date), sport: m.sport, tester: m.tester, age: m.age, sex: m.sex, mass: m.mass, notes: m.notes },
+          person: Person(t),                           // v49: Athlete with a sport, else Client (the title and the details row)
+          meta: { name: m.name, date: E.displayIso(m.date), sport: m.sport, tester: withProf(m.tester), age: m.age, sex: m.sex, mass: m.mass, notes: m.notes },
           popLabel: c.pop.label, groups: c.groups, counts: c.counts, prios: explained(c.prios, function (r) { return explainKey(t, r.name); }),
           ageNote: over60Note(t),                      // v48: a client over 60 against the all-ages norms (until age-matched norms are added)
           radarKeys: c.radarPicked.map(function (k) { return [k, labels[k]]; }), interp: interp, progress: progress, coach: coachData(t)
@@ -3722,7 +3745,7 @@
             }) };
           }),
           bands: A0.bands, note: A0.note || '', sources: A0.sources || [], disclaimer: A0.disclaimer || '', title: A0.title || 'Ankle-GO',
-          meta: { name: m.name, date: E.displayIso(m.date), injured: m.injured, clinician: m.clinician, weeks: blank(m.weeks) ? auto(m.doi, 7) : m.weeks, sport: m.sport, notes: m.notes }
+          meta: { name: m.name, date: E.displayIso(m.date), injured: m.injured, clinician: withProf(m.clinician), weeks: blank(m.weeks) ? auto(m.doi, 7) : m.weeks, sport: m.sport, notes: m.notes }
         })
       };
     }
@@ -3731,7 +3754,7 @@
         file: fileName('_hamstring.pdf', t),
         rep: window.BHReport.rehab({
           kind: 'ham', phase: state.ham.phase, groups: c.groups, counts: c.counts, disclaimer: DATA.ham.disclaimer || '', interp: interp, progress: progress, coach: coachData(t),
-          meta: { name: m.name, date: E.displayIso(m.date), injured: m.injured, clinician: m.clinician, weeks: blank(m.weeks) ? auto(m.doi, 7) : m.weeks, sport: m.sport, notes: m.notes }
+          meta: { name: m.name, date: E.displayIso(m.date), injured: m.injured, clinician: withProf(m.clinician), weeks: blank(m.weeks) ? auto(m.doi, 7) : m.weeks, sport: m.sport, notes: m.notes }
         })
       };
     }
@@ -5748,7 +5771,7 @@
     if (restoreFocus !== false && modalReturn && modalReturn.focus) modalReturn.focus();
   }
   function onModalKey(e) {
-    if (e.key === 'Escape') { e.preventDefault(); closeModal(); return; }
+    if (e.key === 'Escape') { e.preventDefault(); if (!(pinRequired && openModalEl === $('pinDialog'))) closeModal(); return; }   // v49: a staff login's first PIN can't be skipped
     if (e.key !== 'Tab') return;
     var f = modalFocusables(openModalEl);
     if (!f.length) return;
@@ -5867,31 +5890,31 @@
     if (!blank(m.months)) return clean1(m.months);
     var d2 = daysBetween(m.dos, m.date); return d2 !== null && d2 >= 0 ? String(Math.floor(d2 / 30.4375)) : '';
   }
-  var READERS_PATIENT = 'Readers: the patient (and their coach or trainer, if they have one). Refer to the person as \u2018the patient\u2019.';
+  var READERS_CLIENT = 'Readers: the client (and their coach or trainer, if they have one). Refer to the person as \u2018the client\u2019.';   // v49: was the patient
   function interpPayload(t, c) {
     var m = state[t].meta, L = [], rehab = t === 'ham' || t === 'acl' || t === 'ankle';
     var totals = 'Totals: ' + (rehab
       ? c.counts.Green + ' on target, ' + c.counts.Amber + ' close, ' + c.counts.Red + ' behind.'
       : c.counts.Green + ' on target, ' + c.counts.Amber + ' close, ' + c.counts.Red + ' off target.');
     if (SL(t)) {
-      L.push('Readers: the athlete and their coach. Refer to the person as \u2018the athlete\u2019.');
+      L.push(sportCtx(t) ? 'Readers: the athlete and their coach. Refer to the person as \u2018the athlete\u2019.' : READERS_CLIENT);   // v49
       L.push(t === 'custom' ? (state.custom.batId && state.custom.batName ? 'Report: the clinic\u2019s own screening battery \u201c' + clean1(state.custom.batName) + '\u201d' : 'Report: a custom screening battery chosen by the clinician') +   // v43: a clinic battery by its name
         ' (VALD force plate and related tests, lower-limb strength tests scored relative to body weight, and the clinic\u2019s own tests, which have a target only when the clinician typed one).'   // v36
-        : 'Report: athlete performance and readiness screen (VALD force plate and related tests).');
+        : 'Report: ' + (sportCtx(t) ? 'athlete ' : '') + 'performance and readiness screen (VALD force plate and related tests).');
       L.push('Compared against: ' + clean1(c.pop.label === POP_NONE ? 'the clinic\u2019s targets only (no population norms)' : c.pop.label) + '.');
       if (t === 'custom') L = L.concat(customRehabLines(), customLibLines());   // v37: rehab tests, against their phase; v43: the clinic's tests
       var who = joinBits([clean1(m.sex), blank(m.age) ? '' : clean1(m.age) + ' years', blank(m.mass) ? '' : clean1(m.mass) + ' kg', blank(m.sport) ? '' : 'sport: ' + clean1(m.sport)]);
-      if (who) L.push('Athlete: ' + who + '.');
+      if (who) L.push((sportCtx(t) ? 'Athlete: ' : 'Client: ') + who + '.');
       L.push('Status key: On target = meets the target; Close = close to the target; Off target = well short of the target. The DSI is not rated: it says which training emphasis the force profile points to.');   // v28
       L.push(totals);
       L.push('Results (metric: result | target | status | change since the previous test, if given):');
       L = L.concat(groupLines(c.groups, 'target', t));
     } else if (t === 'str') {
       var pct = DATA.str.amber_pct == null ? 5 : DATA.str.amber_pct;
-      L.push(READERS_PATIENT);
+      L.push(READERS_CLIENT);
       L.push('Report: lower-limb strength and capacity battery. Each leg is scored against a target relative to body weight (BW). RM = repetition maximum.');
       var who2 = joinBits([blank(m.mass) ? '' : 'body mass ' + clean1(m.mass) + ' kg', blank(m.sport) ? '' : 'sport: ' + clean1(m.sport)]);
-      if (who2) L.push('Patient: ' + who2 + '.');
+      if (who2) L.push('Client: ' + who2 + '.');
       L.push('Status key: On target = at or above target; Close = up to ' + pct + '% below target; Off target = more than ' + pct + '% below target. For the hip ratio the target is a band, and Close is within ' + pct + '% outside it.');
       L.push(totals.replace('Totals:', 'Totals (each leg counted separately):'));
       L.push('Results (test: left leg | right leg | target | difference between legs):');
@@ -5908,7 +5931,7 @@
         L.push('- ' + tt.name + (tt.detail ? ' (' + tt.detail + ')' : '') + ': ' + sides.join(' | ') + ' | target ' + tt.target + (diff ? ' | ' + diff : ''));
       });
     } else if (t === 'ankle') {                        // v42
-      L.push(READERS_PATIENT);
+      L.push(READERS_CLIENT);
       L.push('Report: the Ankle-GO score after a lateral ankle sprain managed without surgery: four functional tests (single-leg stance, the modified star excursion balance test, the side hop and the figure-of-8 hop) and three questionnaires (FAAM ADL, FAAM Sport and ALR-RSI, readiness to return to sport), scored on the injured leg for a total out of 25. The other leg is given for comparison.');
       var wk = sinceText(t);
       L.push('Context: ' + joinBits([blank(m.injured) ? '' : 'injured side: ' + clean1(m.injured).toLowerCase(), wk ? 'weeks since injury: ' + wk : '', blank(m.sport) ? '' : 'sport: ' + clean1(m.sport)]) + '.');
@@ -5917,7 +5940,7 @@
       L = L.concat(agoLines(c));
     } else {
       var S = DATA[t], acl = t === 'acl';
-      L.push(READERS_PATIENT);
+      L.push(READERS_CLIENT);
       L.push(acl ? 'Report: ACL reconstruction rehab. Results are compared with ACLR research norms for ' + clean1(state.acl.sex).toLowerCase() + ' patients at this rehab phase.'
         : 'Report: hamstring strain rehab. Injured-limb results are compared with research norms for the typical case at this rehab phase.');
       if (S.disclaimer) L.push('About the norms: ' + clean1(S.disclaimer));
@@ -5971,7 +5994,7 @@
     var t = state.tool, it = state[t].interp;
     return '<section class="card interp' + (interpShown(t) ? '' : ' folded') + '" id="interpCard" aria-labelledby="interpTitle">' +
       '<div class="card-head"><div class="fold-t"><h2 id="interpTitle">Interpretation</h2>' +
-      '<p class="interp-help">Optional: a short summary for the ' + (SL(t) ? 'athlete and coach' : 'patient') + ', printed near the top of the report.</p></div>' +
+      '<p class="interp-help">Optional: a short summary for the ' + (sportCtx(t) ? 'athlete and coach' : 'client') + ', printed near the top of the report.</p></div>' +
       '<div class="interp-bar"><button type="button" class="ghost ai-draft" data-action="ai-draft">' + SPARKLE + '<span data-label>Draft with AI</span></button>' +
       '<button type="button" class="quiet interp-own" data-action="interp-own" aria-controls="interpText">Write my own</button></div></div>' +
       '<span class="interp-status" id="interpStatus" role="status" aria-live="polite"></span>' +
@@ -6170,7 +6193,7 @@
     var payload = interpPayload(t, c), basis = hashStr(payload), gen = aiGen;
     aiBusy = t; interpUndo = null;
     refresh();                                       // v18: the card unfolds and the summary says it's drafting
-    callClaude(key, payload, interpGuideText(t)).then(function (text) {   // v24: the condition's evidence guide on rehab reports
+    callClaude(key, addProfLine(payload), interpGuideText(t)).then(function (text) {   // v24: the condition's evidence guide on rehab reports; v49: + the clinician's profession (not part of the basis)
       if (gen !== aiGen) return;                     // cleared while waiting
       var it = state[t].interp;
       if (!blank(it.text)) interpUndo = { tool: t, text: it.text, ai: it.ai, basis: it.basis, reviewed: it.reviewed };
@@ -6264,7 +6287,7 @@
   var SCAN_DEFAULT = {
     effort: 'medium', max_tokens: 8000, timeout_s: 120, max_edge: 2000, max_photos: 6,
     system: [
-      'You read test results from photos taken at BASE Health Noosa, a sports physiotherapy clinic in Queensland, Australia, and match them to the tests listed in the request. Each photo is either the clinician’s handwritten testing notes or a screenshot of a VALD app (ForceDecks, NordBord, ForceFrame, DynaMo, SmartSpeed or VALD Hub).',
+      'You read test results from photos taken at BASE Health Noosa, a physiotherapy, exercise physiology and exercise science clinic in Queensland, Australia, and match them to the tests listed in the request. Each photo is either the clinician’s handwritten testing notes or a screenshot of a VALD app (ForceDecks, NordBord, ForceFrame, DynaMo, SmartSpeed or VALD Hub).',
       'Handwritten notes are on the clinician’s own paper, so labels may be abbreviated or shorthand (for example SS for split squat, KE for knee extension, CMJ for countermovement jump, JH for jump height, Add/Abd for hip adduction/abduction, L/R for left/right, Inj for injured). Match each written result to the listed test it clearly belongs to.',
       'Copy each number exactly as written, as a plain number without units, using a full stop for decimals. Never calculate anything: no averages, differences, percentages, ratios or LSIs. If a listed test is a calculated value that is not written on the paper, but the numbers it would come from are, leave the test out and put those numbers in unclear so the clinician can work it out.',
       'If several trials are written for one test and none is marked as the result, use the best one (the highest, or the lowest where lower is better) and say so in unclear.',
@@ -6934,7 +6957,7 @@
     var lt = linkedTool();                             // v19: while linked, the name and date are the report's
     return '<section class="card athlete ex-patient" id="athleteCard" tabindex="-1" aria-labelledby="exPatientH"' + (state.ex.cardOpen === false ? ' hidden' : '') + '>' + cardHead('ex', 'exPatientH') +
       '<div class="fields">' +
-      field('ex', 'name', 'Patient name', { cls: 'wide', words: true, readonly: !!lt }) + field('ex', 'date', 'Date', { type: 'date', readonly: !!lt }) +
+      field('ex', 'name', 'Client name', { cls: 'wide', words: true, readonly: !!lt }) + field('ex', 'date', 'Date', { type: 'date', readonly: !!lt }) +
       field('ex', 'practitioner', 'Clinician', { words: true }) +
       '</div>' + (lt ? '<p class="note ex-linknote">The name and date come from the ' + toolName(lt) + ' report.</p>' : '') + '</section>' + stripHtml('ex') + '<div class="scan-bar" id="scanBar" role="status" aria-live="polite" hidden></div><div class="client-bar" id="clientBar" hidden></div>';
   }
@@ -7686,7 +7709,7 @@
     return {
       file: name ? name.replace(/[\\/:*?"<>|]+/g, '-').replace(/ /g, '_') + '_exercises.pdf' : 'exercises.pdf',
       rep: window.BHReport.exercises({
-        meta: { name: name, date: E.displayIso(m.date), practitioner: clean1(m.practitioner) },
+        meta: { name: name, date: E.displayIso(m.date), practitioner: withProf(m.practitioner) },   // v49: + profession (the footer too)
         title: title, instructions: instructions,
         reason: reason, weeks: weeks, review: review ? E.displayIso(review) : '', large: !!x.large,   // v32
         phone: share ? { url: share.url, until: E.displayIso(share.day) } : null,   // v35
@@ -7701,14 +7724,14 @@
   var EX_SCAN_DEFAULT = {
     effort: 'medium', max_tokens: 8000, timeout_s: 120, max_edge: 2000, max_photos: 6,
     system: [
-      'You read exercise programs from photos taken at BASE Health Noosa, a sports physiotherapy clinic in Queensland, Australia. The photos are a physiotherapist’s handwritten exercise program for a patient. Your answer fills a table that the practitioner checks and then prints as a handout for the patient.',
+      'You read exercise programs from photos taken at BASE Health Noosa, a physiotherapy, exercise physiology and exercise science clinic in Queensland, Australia. The photos are a clinician’s handwritten exercise program for a client. Your answer fills a table that the practitioner checks and then prints as a handout for the client.',
       'Do your best with what is written. Any of sets, reps, load, rest, tempo, side or notes may be missing for an exercise: leave those fields as empty strings. Never invent exercises or values, and never fill in anything that is not written on the page. Keep the exercises in the order they are written.',
       'Tidy each exercise name into a clear, full name in sentence case, expanding common shorthand: SL = single-leg, DL = deadlift, BW = body weight, DB = dumbbell, KB = kettlebell, BB = barbell, TB = TheraBand, ecc = eccentric, iso = isometric, ext = extension, flex = flexion, and other standard abbreviations like these. Well-known exercise names that are normally written as initials, such as RDL, stay as they are. Keep the equipment and variations that are written (for example "SL RDL" becomes "Single-leg RDL" and "KB swing" becomes "Kettlebell swing"). When you are not sure what a piece of shorthand means, keep it exactly as written and add a note to unclear.',
       'Read the usual notation: "3x10" is sets 3 and reps 10; "3 x 8-12" is reps "8–12" (with an en dash); "3 x 30s" is reps "30 s"; "@20kg" or "20kg" is load "20 kg"; "BW" as a load is "Body weight"; "e/s", "ea side" or "each leg" is side "Each side", and "L only" is side "Left" ("R only" is "Right"); "r 90s" or "90s rest" is rest "90 s"; a tempo such as "3-1-1" is tempo, copied as written. Other short cues for an exercise (for example "slow lowering" or "keep hips level") go in its notes.',
       'Copy numbers exactly as written: don’t round, total or convert them. Keep units as written (don’t convert lb to kg or minutes to seconds), with a space between a number and its unit (20 kg, 30 s, 2 min).',
       'Section headings on the page (for example Warm-up, Day A, Day B, Gym or Home) become sections, in order, each holding the exercises written under it. If the page has no headings, return one section with an empty heading holding every exercise.',
       'Instructions for the whole program rather than one exercise (for example "3x/week" or "ice after") go in the top-level notes, written out plainly (for example "3 times a week. Ice after."). A title for the whole program, if one is written, goes in title; otherwise title is an empty string.',
-      'Ignore names and any other personal details on the page (the patient’s name, date of birth, phone number or address) and never include them in your answer.',
+      'Ignore names and any other personal details on the page (the client’s name, date of birth, phone number or address) and never include them in your answer.',
       'Put a short note in unclear for anything that is hard to read or ambiguous, naming the exercise it is about (for example "Step-up: 10 or 16 reps?"), and for any shorthand kept as written. Leave unclear empty when everything is clear.',
       'Sometimes the request also has the clinician’s answers to a few questions: how many days a week, the injury, the block length, and anything else they’d like added. With no answers, leave why_this_plan empty, set added to false on every exercise and add nothing.',
       'With answers, keep the page as the clinician wrote it: every exercise, every value and their order stay exactly as written (the rules above), and the layout stays as written: one list stays one list, done on every session day, even when the days a week are given; days or sections written on the page stay as they are.',
@@ -7728,7 +7751,7 @@
   // patient) so a clearly matching exercise comes back under the clinic's own name
   // v33: the clinician's answers from the form after the photos (no names: the patient's and the clinician's are taken out)
   function askLines(a) {
-    var x = state.ex, scrub = function (t) { return withoutName(withoutName(clean1(t), x.meta.name, 'patient'), x.meta.practitioner, 'physiotherapist'); };
+    var x = state.ex, scrub = function (t) { return withoutName(withoutName(clean1(t), x.meta.name, 'client'), x.meta.practitioner, 'clinician'); };
     if (!askGiven(a)) return '\n\nNo answers from the clinician this time: leave why_this_plan empty, set added to false on every exercise and add nothing.';
     var L = ['', 'The clinician’s answers (use them as your instructions say):'];
     if (a.days) L.push('- How often: ' + (a.days === 'Every day' ? 'every day' : a.days + ' days a week') + ' (the same exercises each session unless the page sets out days).');
@@ -7876,7 +7899,7 @@
   var EX_SUGGEST_DEFAULT = {
     effort: 'high', max_tokens: 32000, timeout_s: 480, max_per_day: 5, cache: '1h',   // v26: the cap is per training day; v28: room for a three-day program; v29: high effort (the JSON answer leaves Claude only its hidden thinking to reason in, which medium effort often skips), room for that thinking, and the reference documents cached for an hour
     system: [
-      'You suggest an exercise program for a sports physiotherapist at BASE Health Noosa, a clinic in Queensland, Australia, from the results of a testing report. Your suggestions fill a draft that the physiotherapist checks, edits and then prints as a handout for the person tested. The physiotherapist makes every clinical decision; you are saving them the first draft.',
+      'You suggest an exercise program for a clinician (a physiotherapist, exercise physiologist or exercise scientist) at BASE Health Noosa, a clinic in Queensland, Australia, from the results of a testing report. Your suggestions fill a draft that the clinician checks, edits and then prints as a handout for the person tested. The clinician makes every clinical decision; you are saving them the first draft.',
       'Prefer the clinic’s library listed in the request: when it has a suitable exercise, give its id exactly as written there (and leave name empty). When the library has nothing suitable for a priority, or a clearly better exercise exists, give an exercise of your own instead: leave id empty and give its name (a clear, full name in sentence case, with the equipment or variation in the name) and one short note, under 100 characters, telling the person how to do it, which prints on their handout. Never use an id that isn’t in the list.',
       'Follow the clinic’s programming guide in the request for everything it covers: which exercise family fits each finding, one exercise per training quality (never two with the same effect, such as a box jump and a squat jump), how many exercises, the order of the session, the training variables by intent, the weekly structure for the sessions given, the setting, the experience level and the block length. Where the guide is silent, use standard strength and conditioning practice.',
       'Evidence guides come with the clinic guide in the documents at the start of the request, one per topic (training variables, reading the performance tests, designing the block, rehabilitation principles, rehab and performance together, and the condition named). They are drafts the clinic is reviewing. Use them for the condition and stage given: take exercises and doses from the sections and stage-table rows that match that stage, never from a later stage; apply their pain and load rules in the notes and the instructions line; where an evidence guide and the clinic programming guide differ, the clinic guide wins.',
@@ -7887,15 +7910,15 @@
       'The DSI is never a deficit, a priority or a focus: it has no target and is neither good nor bad. Read with the IMTP and CMJ values, it sets the emphasis and the training variables of the power and strength work: below about 0.60, lean towards ballistic and plyometric work (light loads moved fast with maximal intent, low reps, full rest) with one heavy lift kept; 0.60 to 0.80, keep both; above about 0.80, lean towards heavy maximal strength work (about 85% of 1RM, low reps, long rest) with one ballistic exercise kept. Say in the rationale how the DSI shaped the variables.',
       'Write about the physical quality being trained, never the test score as the aim: power output, not jump height; maximal strength, not the IMTP number; reactive strength, not the RSI; eccentric hamstring strength, not the Nordic number; acceleration, not the 10 m time. Use this wording in the title, the day headings, the why lines and the rationale; the test result is the evidence and the re-test ("to increase lower-body power output (CMJ peak power 42 W/kg, target ≥ 48)", not "to improve jump height").',
       'Lay the program out by training day, as the request’s layout line says: one section per day, 3 to 5 exercises each, heading "Day 1: <what the day is for>" and so on (for example "Day 1: Power output and maximal strength", "Day 2: Rehab: Achilles loading, plus strength", "Day 3: Capacity and control"). Follow the clinic guide’s weekly structure for that number of days: the focus on the freshest days and on at least two days, heavy and high-strain work on the same tissue 48 hours or more apart, the main lifts spread across the week. The same exercise may appear on two days with different loads (a heavier and a lighter day); never two exercises for the same quality on one day. Someone new to training may get the same two or three full-body sessions repeated. Where the first and second halves of the block differ (double to single leg, isometric to loaded, a load step), say so in the exercise’s note ("weeks 1–3 …; from week 4 …") and keep the instructions line consistent with it.',
-      'Notes from the physiotherapist in the request ("From the physiotherapist") are instructions for this program: follow them for the focus, the exercises chosen, the equipment, the days and anything to avoid, ahead of the guides’ defaults. Where a note conflicts with a red line, the stage’s pain and load rules or the clinic guide, keep the program safe, say so in notes and follow the rest of the note. Say in the rationale how the notes shaped the program.',
-      'rationale: 3 to 6 plain sentences for the physiotherapist (never printed on the handout), starting "Focus: … Secondary: … Deferred: …": what this block is for and why it leads; which findings you treated as the condition (named, with the number and side) and which as separate; which findings were deferred and to which block; what was left out or kept light because of the stage; what the next block adds or swaps and the sign or test result that opens it (a 24-hour pain level, a symmetry, a test number, a time floor); and what to re-test and when.',
+      'Notes from the clinician in the request ("From the clinician") are instructions for this program: follow them for the focus, the exercises chosen, the equipment, the days and anything to avoid, ahead of the guides’ defaults. Where a note conflicts with a red line, the stage’s pain and load rules or the clinic guide, keep the program safe, say so in notes and follow the rest of the note. Say in the rationale how the notes shaped the program.',
+      'rationale: 3 to 6 plain sentences for the clinician (never printed on the handout), starting "Focus: … Secondary: … Deferred: …": what this block is for and why it leads; which findings you treated as the condition (named, with the number and side) and which as separate; which findings were deferred and to which block; what was left out or kept light because of the stage; what the next block adds or swaps and the sign or test result that opens it (a 24-hour pain level, a symmetry, a test number, a time floor); and what to re-test and when.',
       'For each exercise give every variable: sets and reps as plain numbers or ranges ("3", "8–10", or "30 s" for a hold); load as a short guide the person can act on ("Body weight", "Heavy, 2 reps in reserve", "A weight you could lift 8 times"); rest ("2 min", "60 s"); tempo only where it matters ("3 s down", "3-0-3", or empty); side ("Each side", "Left", "Right", or empty). Put the intent cue in note (under 100 characters), for example "Every rep as fast as you can on the way up"; for an exercise of your own the note also says how to do it.',
       'instructions: one line of general instructions for the handout from the plan, for example "3 sessions a week for 6 weeks, at least a day between sessions", or an empty string.',
-      'why_this_plan: 2 or 3 short sentences printed on the client’s handout under the title, written to them as “you” (only here; everywhere else they are the athlete or the patient): what this block works on, the main finding from their testing behind it in everyday words (at most one number, no test names or abbreviations), and what happens next, such as the retest at the end of the block. Warm and direct, plain Australian English, no names, no diagnosis, no promises about results or returning to sport. For example: “Your testing showed your legs produce less power than we’d like for your sport. This block builds strength first, then speed, three days a week. We’ll retest at the end of the six weeks to see how you’re tracking.”',
+      'why_this_plan: 2 or 3 short sentences printed on the client’s handout under the title, written to them as “you” (only here; everywhere else they are the athlete or the client): what this block works on, the main finding from their testing behind it in everyday words (at most one number, no test names or abbreviations), and what happens next, such as the retest at the end of the block. Warm and direct, plain Australian English, no names, no diagnosis, no promises about results or returning to sport. For example: “Your testing showed your legs produce less power than we’d like for your sport. This block builds strength first, then speed, three days a week. We’ll retest at the end of the six weeks to see how you’re tracking.”',
       'why: one short line, under 80 characters, naming the quality and the finding behind it, with its number and target, for example "Eccentric hamstring strength: Nordic L/R 12.9%, target ≤ 9" or "Calf capacity: right 22 reps, left 27". Plain Australian English, no jargon.',
       'title: a short title naming the block’s focus as a quality, for example "Block 1: lower-body power output (strength kept)" or "Achilles loading, weeks 1–6", or an empty string.',
-      'notes: anything the physiotherapist should know, one sentence each: why an exercise of your own was chosen over the library, or a finding that needs their judgement. Leave notes empty when there is nothing to say.',
-      'Use only the information given. Don’t diagnose, predict injury or give medical advice, and never say anything about being cleared to return to sport. Refer to the person as the athlete or the patient, never by a name.',
+      'notes: anything the clinician should know, one sentence each: why an exercise of your own was chosen over the library, or a finding that needs their judgement. Leave notes empty when there is nothing to say.',
+      'Use only the information given. Don’t diagnose, predict injury or give medical advice, and never say anything about being cleared to return to sport. Refer to the person as the athlete or the client, never by a name.',
       'Think the problem through before you answer.'
     ]
   };
@@ -7945,13 +7968,13 @@
       : { id: id, label: clean1(hit.label) || id, detail: clean1(hit.detail), guides: Array.isArray(hit.guides) ? hit.guides : [], fixed: false };
   }
   function stageFor(lt, plan) {                        // the stage line for the request: a rehab report's phase, or the plan's stage
-    if (lt === 'ham' || lt === 'acl') { var ph = clean1(state[lt].phase); return ph ? 'Rehab phase (set by the physiotherapist on the report): ' + ph + '.' : ''; }
+    if (lt === 'ham' || lt === 'acl') { var ph = clean1(state[lt].phase); return ph ? 'Rehab phase (set by the clinician on the report): ' + ph + '.' : ''; }
     if (lt === 'ankle') {                              // v42: no phase: the weeks since the injury and the Ankle-GO total stand in for the stage
       var wk = sinceText('ankle'), ag = computeAnkle().ago;
       return joinBits([wk ? 'Weeks since the sprain (from the report): ' + wk : '', ag.tested ? 'Ankle-GO ' + ag.total + ' of ' + ag.max + (ag.complete ? '' : ' so far') + (ag.band ? ' (' + ag.band.label.toLowerCase() + ': ' + ag.band.short + ')' : '') : '']).replace(/ · /, '; ') + (wk || ag.tested ? '.' : '');
     }
     var s = plan && plan.stage, g = DATA.guideIndex, help = g && g.stage_help && typeof g.stage_help[s] === 'string' ? clean1(g.stage_help[s]) : '';
-    return s ? 'Stage (set by the physiotherapist): ' + s.toLowerCase() + (help ? ' (' + help + ')' : '') + '.' : '';
+    return s ? 'Stage (set by the clinician): ' + s.toLowerCase() + (help ? ' (' + help + ')' : '') + '.' : '';
   }
   // v26: the program is laid out by training day: as many days as the plan's sessions a week (2–4), 3–5 exercises a day
   function planDays(plan) { var n = parseInt(plan && plan.sessions, 10); return n >= 2 && n <= 4 ? n : 3; }
@@ -8007,13 +8030,13 @@
   }
   function exSuggestRequest(lt, c, max, cfg) { return exSuggestParts(lt, c, max, cfg).filter(Boolean).join('\n\n'); }   // the whole text (estimates, tests)
   function exSuggestTail(lt, c, max, cfg, plan) {
-    var L = ['The report and the program to fill:', '', '<report>', interpPayload(lt, c), '</report>'];
+    var L = ['The report and the program to fill:', '', '<report>', addProfLine(interpPayload(lt, c)), '</report>'];   // v49: + the clinician's profession
     L.push('', 'The program: ' + planLines(plan), layoutLine(plan));   // v23; v26: the layout by day
     var cond = conditionFor(lt, plan), stage = stageFor(lt, plan), side = sideFor(lt, plan);   // v24; v25: the side
-    if (cond) L.push('Condition (set by the physiotherapist): ' + cond.label + (cond.detail ? ' (' + cond.detail + ')' : '') + ', ' + (side || 'side not given') + '.' + (stage ? ' ' + stage : ''));
+    if (cond) L.push('Condition (set by the clinician): ' + cond.label + (cond.detail ? ' (' + cond.detail + ')' : '') + ', ' + (side || 'side not given') + '.' + (stage ? ' ' + stage : ''));
     var it = state[lt].interp, who = person(lt);
-    if (!blank(it.text)) L.push('', 'The physiotherapist’s interpretation of these results (their emphasis): ' + withoutName(clean1(it.text), state[lt].meta.name, who));
-    if (!blank(plan.brief)) L.push('', 'From the physiotherapist (their instructions for this program; follow them): ' + withoutName(clean1(plan.brief), state[lt].meta.name, who));   // v27
+    if (!blank(it.text)) L.push('', 'The clinician’s interpretation of these results (their emphasis): ' + withoutName(clean1(it.text), state[lt].meta.name, who));
+    if (!blank(plan.brief)) L.push('', 'From the clinician (their instructions for this program; follow them): ' + withoutName(clean1(plan.brief), state[lt].meta.name, who));   // v27
     var have = state.ex.items.filter(function (r) { return r.kind === 'ex' && !blank(r.name); }).map(function (r) { return clean1(r.name); });
     if (have.length) L.push('', 'Already in the program (don’t repeat these): ' + have.join('; '));
     L.push('', 'Now suggest the exercise program for this report, choosing from the clinic’s library in the documents above (at most ' + max + ' exercises a day), following the clinic’s programming guide for selection, order and the training variables, and the evidence guides for the condition and stage given.');
@@ -9389,7 +9412,7 @@
   // ---- the templates page (Exercises › Program templates)
   var tplView = { q: '' }, tplDelTimer = null;
   function renderTemplates() {
-    els.entry.innerHTML = '<div class="pagehead">' + pickHtml('ex') + '<p>Start a patient’s program from a template in the builder (Start from template).</p></div>' +
+    els.entry.innerHTML = '<div class="pagehead">' + pickHtml('ex') + '<p>Start a client’s program from a template in the builder (Start from template).</p></div>' +
       '<div class="tpl-searchbar" id="tplSearchBar" hidden>' + searchHtml('tplSearch', tplView.q, 'Search templates') + '</div>' +
       '<div class="tpl-list" id="tplList"></div>';
     document.documentElement.classList.remove('has-strip');
@@ -9483,7 +9506,7 @@
     if (!exCounts().exercises) { toast('Add at least one exercise to save a template'); return; }
     tplArmed = '';
     $('tplName').value = clean1(state.ex.title);
-    $('tplSaveHint').textContent = (CLOUD ? 'Shared with the whole clinic.' : 'Saved on this device.') + ' The patient’s name and the date aren’t saved.';
+    $('tplSaveHint').textContent = (CLOUD ? 'Shared with the whole clinic.' : 'Saved on this device.') + ' The client’s name and the date aren’t saved.';
     $('tplSaveGo').textContent = 'Save';
     tplSaveErr('');
     openModal(els.tplSaveDialog, $('tplName'));
@@ -10069,7 +10092,7 @@
   function clientLine(t) {
     var name = String(state[t].meta.name || '').trim(), cl = clientFor(name);
     if (t === 'ex' ? (linkedTool() && isExample(linkedTool())) : isExample(t)) return 'Example results: nothing on this page is saved to a record.';   // v48
-    if (!name) return t === 'ex' ? 'Add a patient name to save this program to a ' + recordWord() + '.' : 'Add a name to save this session to a ' + recordWord() + '.';
+    if (!name) return t === 'ex' ? 'Add a client name to save this program to a ' + recordWord() + '.' : 'Add a name to save this session to a ' + recordWord() + '.';
     var date = state[t].meta.date || todayIso();
     // one line each (v11); the client bar in the details card says how many sessions there are
     var where = CLOUD ? '’s clinic record.' : '’s client record on this device.';
@@ -10366,8 +10389,9 @@
         (cur.hasPin ? '<label class="f" for="whoPin"><span>PIN</span><input id="whoPin" type="password" inputmode="numeric" autocomplete="off" maxlength="8" enterkeyhint="go"></label>' : '') +
         '<p class="signin-err" id="whoErr" role="alert"' + (who.msg ? '' : ' hidden') + '>' + esc(who.msg) + '</p>' +
         (cur.hasPin ? '<button class="primary" id="whoGo" type="submit"' + (who.busy ? ' disabled' : '') + '>Continue</button>' : '') +
-        '<div class="who-pin-acts"><button type="button" class="quiet" data-who="password:' + esc(cur.uid) + '">' + (cur.hasPin ? 'Use my password instead' : 'Sign in with my password') + '</button>' +
-        '<button type="button" class="quiet" data-who="list">‹ Back</button></div></form>';
+        '<div class="who-pin-acts"><button type="button" class="quiet" data-who="password:' + esc(cur.uid) + '">' + (cur.hasPin ? 'Use my password instead' : 'Sign in with my password') + '</button></div>' +
+        // v49: someone else picks up the iPad: the way to their own login is said in words (until v48 "‹ Back", then "Someone else")
+        '<button type="button" class="ghost who-not" data-who="list">Not ' + esc(firstName(cur.name || cur.email)) + '? Switch practitioner</button></form>';
     } else {
       html += '<h1 id="whoTitle">Who’s using this iPad?</h1><p class="signin-lead">Tap your name. Your own work in progress, favourites and name on the results come with you.</p>' +
         '<div class="who-list">' + list.map(function (a) { return whoRow(a); }).join('') +
@@ -10431,6 +10455,7 @@
       measureBar();
       CLOUD.sync({ throttle: true });
       focusQuiet(homeView ? $('homeHello') : els.entry);
+      if (pinNeeded()) openPinDialog(false);           // v49
       return;
     }
     who.busy = true; renderWho();
@@ -10479,15 +10504,22 @@
     else if (kind === 'other') { hideWho(); showSignIn(''); els.signinEmail.value = ''; $('signinBack').hidden = false; focusQuiet(els.signinEmail); }
   }
   // ---- the PIN dialog
-  var pinFirst = false;
+  // v49 (Matthew: a PIN required at first sign-in for staff logins): a practitioner's own login without a PIN is asked for
+  // one at sign-in and whenever the app opens, with no "Not now" (Escape and a tap outside don't close it either); the
+  // only other way out is Sign out instead. The shared clinic login keeps "Not now".
+  var pinFirst = false, pinRequired = false;
+  function pinNeeded() { var a = CLOUD && CLOUD.signedIn() ? CLOUD.account() : null; return !!(a && a.staff && !a.hasPin); }
   function openPinDialog(first) {
     pinFirst = !!first;
     var a = CLOUD.account();
-    $('pinTitle').textContent = a && a.hasPin ? 'Change your PIN' : 'Set a PIN for this iPad';
-    $('pinLead').textContent = (first ? 'You’re in. ' : '') + 'On a shared iPad, a PIN switches to you in a second and locks the iPad after 10 minutes untouched. 4 to 8 digits; keep it to yourself.';
+    pinRequired = pinNeeded();
+    $('pinTitle').textContent = pinRequired ? 'Set your PIN' : a && a.hasPin ? 'Change your PIN' : 'Set a PIN for this iPad';
+    $('pinLead').textContent = pinRequired
+      ? (first ? 'You’re in. ' : '') + 'Your login needs a PIN on these iPads: it switches to you in a second and locks the iPad after 10 minutes untouched, so nobody else works under your name. 4 to 8 digits; keep it to yourself.'
+      : (first ? 'You’re in. ' : '') + 'On a shared iPad, a PIN switches to you in a second and locks the iPad after 10 minutes untouched. 4 to 8 digits; keep it to yourself.';
     $('pinBox').value = ''; $('pinBox2').value = '';
     $('pinErr').hidden = true;
-    $('pinCancel').textContent = first ? 'Not now' : 'Cancel';
+    $('pinCancel').textContent = pinRequired ? 'Sign out instead' : first ? 'Not now' : 'Cancel';
     openModal($('pinDialog'), $('pinBox'));
   }
   function savePin() {
@@ -10495,6 +10527,7 @@
     if (!CLOUD.pinOk(a)) { err.textContent = 'A PIN is 4 to 8 digits.'; err.hidden = false; $('pinBox').focus(); return; }
     if (a !== b) { err.textContent = 'The two PINs don’t match.'; err.hidden = false; $('pinBox2').focus(); return; }
     CLOUD.setPin(a).then(function () {
+      pinRequired = false;
       closeModal();
       renderMenuAccount();
       noteInput();
@@ -10502,6 +10535,23 @@
       CLOUD.sync();                                    // now, not throttled: another iPad reads the PIN from their own document
     }, function () { err.textContent = 'That PIN couldn’t be saved.'; err.hidden = false; });
   }
+  // ---- v49: professions (the Team page's choice). A clinician's profession is looked up by the name in the report's
+  // Clinician box (any member of the team, so a report made again from the record says it too); Claude is told the
+  // signed-in person's
+  var PROFESSIONS = ['Physiotherapist', 'Exercise physiologist', 'Exercise scientist'];
+  function profOf(name) {
+    var k = clean1(name).toLowerCase();
+    if (!k || !CLOUD || !CLOUD.staffList) return '';
+    var hit = CLOUD.staffList().filter(function (o) { return o.active !== false && clean1(o.name).toLowerCase() === k && PROFESSIONS.indexOf(o.profession) >= 0; })[0];
+    return hit ? hit.profession : '';
+  }
+  function withProf(name) { var n = clean1(name), p = profOf(n); return n && p ? n + ', ' + p : n; }   // 'Matthew, Physiotherapist'
+  function myProfession() { var a = CLOUD && CLOUD.signedIn() ? CLOUD.account() : null; return a && PROFESSIONS.indexOf(a.profession) >= 0 ? a.profession : ''; }
+  function profLine() {                                // for Claude: who it is writing for (never a name)
+    var p = myProfession();
+    return p ? 'The clinician using this is ' + (/^[AEIOU]/.test(p) ? 'an ' : 'a ') + p.toLowerCase() + '.' : '';
+  }
+  function addProfLine(payload) { var pl = profLine(); if (!pl) return payload; var i = payload.indexOf('\n'); return i < 0 ? payload + '\n' + pl : payload.slice(0, i + 1) + pl + '\n' + payload.slice(i + 1); }
   // ---- the Team page (⋯ › Team; admins): everyone with a login, add one, switch one off
   var team = { busy: false, msg: '', editUid: '' };
   function teamHtml() {
@@ -10519,7 +10569,7 @@
     return '<div class="tpl-list bld-list">' + list.map(function (o) {
       var me = a && a.uid === o.id, off = o.active === false, nm = esc(o.name || o.email);
       return '<div class="tpl-row team-row' + (off ? ' off' : '') + '" data-uid="' + esc(o.id) + '"><div class="tpl-main"><b>' + nm + (me ? '<span class="cp-tag cur">You</span>' : '') +
-        '<span class="cp-tag">' + (o.role === 'admin' ? 'Admin' : 'Practitioner') + '</span>' + (off ? '<span class="cp-tag warn">Switched off</span>' : '') + '</b><span>' + esc(o.email || '') + '</span></div>' +
+        '<span class="cp-tag">' + (o.role === 'admin' ? 'Admin' : 'Practitioner') + '</span>' + (off ? '<span class="cp-tag warn">Switched off</span>' : '') + '</b><span>' + esc((o.profession ? o.profession + ' · ' : '') + (o.email || '')) + '</span></div>' +   // v49: + profession
         (admin ? '<div class="tpl-acts"><button type="button" class="ghost" data-team="edit:' + esc(o.id) + '">Edit<span class="vh"> ' + nm + '</span></button>' +
           (off ? '<button type="button" class="quiet" data-team="on:' + esc(o.id) + '">Switch on</button>'
             : '<button type="button" class="quiet" data-team="email:' + esc(o.id) + '">Email password link</button>' + (me ? '' : '<button type="button" class="quiet tpl-del" data-team="off:' + esc(o.id) + '">Switch off</button>')) + '</div>' : '') + '</div>';
@@ -10530,11 +10580,12 @@
     if (uid && !o) return;
     team.editUid = uid || '';
     $('teamTitle').textContent = o ? 'Edit ' + (o.name || o.email) : 'Add a practitioner';
-    $('teamLead').textContent = o ? 'Their name goes on the results they save; an admin can also manage the team and the Claude key.' : 'They get an email with a link to set their own password, then sign in on any iPad with their email.';
+    $('teamLead').textContent = o ? 'Their name and profession go on the results they save; an admin can also manage the team and the Claude key.' : 'They get an email with a link to set their own password, then sign in on any iPad with their email.';
     $('tmName').value = o ? o.name || '' : '';
     $('tmEmail').value = o ? o.email || '' : '';
     $('tmEmailF').hidden = !!o;
     $('tmRole').value = o && o.role === 'admin' ? 'admin' : 'practitioner';
+    $('tmProf').value = o && PROFESSIONS.indexOf(o.profession) >= 0 ? o.profession : '';   // v49
     $('tmErr').hidden = true;
     $('tmSave').textContent = o ? 'Save' : 'Add and email them';
     $('tmSave').disabled = false;
@@ -10542,12 +10593,12 @@
   }
   function teamFail(msg, id) { var p = $('tmErr'); p.textContent = msg; p.hidden = false; $('tmSave').disabled = false; $('tmSave').textContent = team.editUid ? 'Save' : 'Add and email them'; if (id) $(id).focus(); }
   function teamSave() {
-    var name = clean1($('tmName').value), email = $('tmEmail').value.trim().toLowerCase(), role = $('tmRole').value;
+    var name = clean1($('tmName').value), email = $('tmEmail').value.trim().toLowerCase(), role = $('tmRole').value, prof = PROFESSIONS.indexOf($('tmProf').value) >= 0 ? $('tmProf').value : '';   // v49
     if (!name) return teamFail('Add their name.', 'tmName');
     if (!team.editUid && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return teamFail('That email doesn’t look right.', 'tmEmail');
     if (navigator.onLine === false) return teamFail('You’re offline. Connect to the internet to change the team.', null);
     $('tmSave').disabled = true; $('tmSave').textContent = team.editUid ? 'Saving…' : 'Adding…';
-    var p = team.editUid ? CLOUD.staffSet(team.editUid, { name: name, role: role }) : CLOUD.staffAdd({ name: name, email: email, role: role });
+    var p = team.editUid ? CLOUD.staffSet(team.editUid, { name: name, role: role, profession: prof }) : CLOUD.staffAdd({ name: name, email: email, role: role, profession: prof });
     p.then(function (r) {
       closeModal();
       team.msg = '';
@@ -10590,14 +10641,19 @@
     var panel = $('whoPanel');
     panel.addEventListener('click', onWhoClick);
     panel.addEventListener('submit', whoPinSubmit);
-    $('pinCancel').addEventListener('click', function () { closeModal(); if (pinFirst) toast('You can set a PIN any time: ⋯ › Your PIN'); });
+    $('pinCancel').addEventListener('click', function () {
+      if (pinRequired) { pinRequired = false; closeModal(false); askSignOut(); return; }   // v49: the only way past a required PIN
+      closeModal(); if (pinFirst) toast('You can set a PIN any time: ⋯ › Your PIN');
+    });
     $('pinSave').addEventListener('click', savePin);
     $('pinBox2').addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); savePin(); } });
     $('pinBox').addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); $('pinBox2').focus(); } });
     $('tmCancel').addEventListener('click', function () { closeModal(); });
     $('tmSave').addEventListener('click', teamSave);
     ['tmName', 'tmEmail'].forEach(function (id) { $(id).addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); if (id === 'tmName' && !$('tmEmailF').hidden) $('tmEmail').focus(); else teamSave(); } }); });
-    [$('pinDialog'), $('teamDialog')].forEach(function (d) { d.addEventListener('click', function (e) { if (e.target === d) closeModal(); }); });
+    [$('pinDialog'), $('teamDialog')].forEach(function (d) { d.addEventListener('click', function (e) { if (e.target === d && !(pinRequired && d === $('pinDialog'))) closeModal(); }); });
+    var chip = $('whoChip');                           // v49: the initials in the app bar: the switcher (this person's work kept)
+    if (chip) chip.addEventListener('click', function () { lockApp(); });
     var sw = $('switchItem'), pi = $('pinItem'), tm = $('teamItem'), back = $('signinBack'), forgot = $('signinForgot');
     if (sw) sw.addEventListener('click', menuAction(function () { lockApp(); }));
     if (pi) pi.addEventListener('click', menuAction(function () { openPinDialog(false); }));
@@ -10735,7 +10791,16 @@
   // with no clinic store (local mode) the iPad's one user
   function isAdmin() { var a = CLOUD && CLOUD.account(); return !CLOUD || !!(a && a.admin); }
   function renderMenuAccount() {
-    var line = $('menuAccount'), a = CLOUD.account();
+    var line = $('menuAccount'), a = CLOUD.account(), chip = $('whoChip');
+    if (chip) {                                        // v49: who is working, on every page (the shared login: the name typed on this iPad)
+      var nm = a ? (a.staff ? a.name || a.email : userName() || 'Clinic login') : '';
+      chip.hidden = !a;
+      if (a) {
+        chip.querySelector('.who-av').textContent = initials(nm);
+        chip.setAttribute('aria-label', nm + ' is signed in: switch practitioner or lock this iPad');
+        chip.title = nm + ' · switch practitioner';
+      }
+    }
     if (!line) return;
     var adm = isAdmin();                               // v48: Back up / Restore are an admin's
     ['adminSep', 'clientsBackup', 'restoreItem'].forEach(function (id) { var el = $(id); if (el) el.hidden = !adm; });
@@ -10772,7 +10837,8 @@
     if (!n && !ch) { signOutNow(); return; }
     els.signOutText.textContent = (n && ch ? waitingWords(n, ch) + ' are' : n ? n + (n === 1 ? ' result is' : ' results are') : ch + (ch === 1 ? ' library change is' : ' library changes are')) +
       ' still waiting to upload — sign out anyway?';
-    openModal(els.signOutDialog, els.signOutCancel);
+    // v49: kept signed in from the required PIN (Cancel, Escape, the backdrop): back to the PIN
+    openModal(els.signOutDialog, els.signOutCancel, function () { if (pinNeeded()) { setTimeout(function () { if (pinNeeded() && !openModalEl) openPinDialog(false); }, 0); return true; } return false; });
   }
   // '2 results', '1 library change', '2 results and 1 library change' (library and template writes are "library changes")
   function waitingWords(n, ch) {
@@ -10899,6 +10965,7 @@
       showApp();
       CLOUD.sync();
       if (idleLockDue()) lockApp();                    // v46: left alone (or closed) for 10 minutes: the switcher first
+      else if (pinNeeded()) openPinDialog(false);      // v49: a staff login from before v49 without a PIN: one now
       else if (!CLOUD.account().staff && !userName()) openNameDialog();   // the shared login without a name yet
     } else if (CLOUD.accounts().length) showWho('');   // v46: nobody active, but people are signed in on this iPad
     else showSignIn('');

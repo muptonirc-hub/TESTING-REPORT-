@@ -31,7 +31,9 @@
    is the active person's. `users/<uid>` is that person's own document (the PIN, later their favourites): only they can
    read or write it. The shared clinic login (no staff document, allowed by the rules as before) still works as the
    "legacy" account: it counts as an admin and goes by the name typed on the device. Admins add people (accounts:signUp
-   with a throw-away password, the staff document, then accounts:sendOobCode so they set their own password by email). */
+   with a throw-away password, the staff document, then accounts:sendOobCode so they set their own password by email).
+   v49: a staff document also holds the person's profession (Physiotherapist, Exercise physiologist, Exercise scientist or
+   none), as a top-level field and in data; it follows them like their name and role. */
 (function () {
   'use strict';
   var cfg = window.BH_CLOUD || {};
@@ -181,7 +183,7 @@
       var e = a.by[uid];
       if (!isMap(e) || typeof e.refreshToken !== 'string' || !e.refreshToken || !/^[A-Za-z0-9_-]{1,128}$/.test(uid)) return;
       out.by[uid] = { email: String(e.email || ''), idToken: String(e.idToken || ''), refreshToken: e.refreshToken, exp: +e.exp || 0, staff: e.staff === true,
-        name: String(e.name || ''), role: ROLES.indexOf(e.role) >= 0 ? e.role : '', lastAt: +e.lastAt || 0,
+        name: String(e.name || ''), role: ROLES.indexOf(e.role) >= 0 ? e.role : '', lastAt: +e.lastAt || 0, profession: String(e.profession || '').slice(0, 60),   // v49: + profession
         pin: isMap(e.pin) && typeof e.pin.salt === 'string' && typeof e.pin.hash === 'string' ? { salt: e.pin.salt, hash: e.pin.hash } : null };
     });
     out.active = typeof a.active === 'string' && out.by[a.active] ? a.active : '';
@@ -194,7 +196,7 @@
   function isAdmin() { var e = me(); return !!e && (!e.staff || e.role === 'admin'); }   // the shared clinic login counts as an admin
   function accountInfo(uid) {
     var e = accts.by[uid];
-    return e ? { uid: uid, email: e.email, name: e.staff ? e.name : getStr(USER), role: e.staff ? e.role : 'admin', staff: e.staff, hasPin: !!e.pin, active: uid === accts.active, lastAt: e.lastAt } : null;
+    return e ? { uid: uid, email: e.email, name: e.staff ? e.name : getStr(USER), role: e.staff ? e.role : 'admin', staff: e.staff, hasPin: !!e.pin, active: uid === accts.active, lastAt: e.lastAt, profession: e.staff ? String(e.profession || '') : '' } : null;
   }
   function accounts() {                                // most recently used first
     return Object.keys(accts.by).map(accountInfo).sort(function (a, b) { return b.lastAt - a.lastAt; });
@@ -253,7 +255,7 @@
       if (r.status === 200) {
         var f = (r.json && r.json.fields) || {};
         if (!(f.active && f.active.booleanValue === true)) { dropAccount(uid, INACTIVE_MSG); throw { code: 'inactive', message: INACTIVE_MSG }; }
-        e.staff = true; e.name = str(f.name); e.role = ROLES.indexOf(str(f.role)) >= 0 ? str(f.role) : 'practitioner';
+        e.staff = true; e.name = str(f.name); e.role = ROLES.indexOf(str(f.role)) >= 0 ? str(f.role) : 'practitioner'; e.profession = str(f.profession).slice(0, 60);   // v49
         saveAccts();
         return pullMine().then(function () { return account(); });
       }
@@ -292,8 +294,9 @@
     var o = cache.staff[auth.uid];
     if (!o || o.deleted === true) return;
     if (o.active === false) { dropAccount(auth.uid, 'This login has been switched off by an admin.'); return; }
-    var changed = !e.staff || e.name !== String(o.name || '') || e.role !== o.role;
-    e.staff = true; e.name = String(o.name || ''); e.role = ROLES.indexOf(o.role) >= 0 ? o.role : 'practitioner';   // (a login seen only through AUTH learns it is on the team here)
+    var prof = String(o.profession || '').slice(0, 60);   // v49
+    var changed = !e.staff || e.name !== String(o.name || '') || e.role !== o.role || String(e.profession || '') !== prof;
+    e.staff = true; e.name = String(o.name || ''); e.role = ROLES.indexOf(o.role) >= 0 ? o.role : 'practitioner'; e.profession = prof;   // (a login seen only through AUTH learns it is on the team here)
     if (changed) { saveAccts(); emit({ kind: 'auth' }); }
   }
   // v46: an admin adds a person: a login with a throw-away password (never kept), their staff document, then the email
@@ -307,7 +310,7 @@
     return request(SIGNUP_URL + encodeURIComponent(apiKey), 'POST', { email: email, password: throwaway, returnSecureToken: false }).then(function (r) {
       var j = r.json || {};
       if (r.status !== 200 || !j.localId) { var msg = googleMessage(r); throw { code: msg.split(/[\s:]/)[0], message: msg, status: r.status }; }
-      var uid = String(j.localId), obj = { id: uid, email: email, name: name, role: role, active: true, addedBy: userName(), addedAt: new Date().toISOString() };
+      var uid = String(j.localId), obj = { id: uid, email: email, name: name, role: role, profession: String(o.profession || '').trim().slice(0, 60), active: true, addedBy: userName(), addedAt: new Date().toISOString() };   // v49: + profession
       return staffWrite(uid, obj).then(function () { return sendReset(email).then(function () { return { uid: uid, emailed: true }; }, function () { return { uid: uid, emailed: false }; }); });
     });
   }
@@ -317,6 +320,7 @@
     var f = libFields('staff', uid, obj, false, obj.name);
     f.email = { stringValue: String(obj.email || '') }; f.name = { stringValue: String(obj.name || '') };
     f.role = { stringValue: ROLES.indexOf(obj.role) >= 0 ? obj.role : 'practitioner' }; f.active = { booleanValue: obj.active !== false };
+    f.profession = { stringValue: String(obj.profession || '') };   // v49: read at sign-in with the rest (the rules don't look at it)
     return f;
   }
   function staffWrite(uid, obj) {
@@ -338,6 +342,7 @@
     var obj = JSON.parse(JSON.stringify(was));
     if (typeof fields.name === 'string' && fields.name.trim()) obj.name = fields.name.replace(/\s+/g, ' ').trim();
     if (ROLES.indexOf(fields.role) >= 0) obj.role = fields.role;
+    if (typeof fields.profession === 'string') obj.profession = fields.profession.trim().slice(0, 60);   // v49
     if (typeof fields.active === 'boolean') obj.active = fields.active;
     obj.updatedBy = userName();
     return staffWrite(uid, obj);
@@ -938,7 +943,8 @@
   function account() {
     if (!auth) return null;
     var e = me();
-    return { email: auth.email, uid: auth.uid, staff: !!(e && e.staff), name: userName(), role: e && e.staff ? e.role : 'admin', admin: isAdmin(), hasPin: !!(e && e.pin) };
+    return { email: auth.email, uid: auth.uid, staff: !!(e && e.staff), name: userName(), role: e && e.staff ? e.role : 'admin', admin: isAdmin(), hasPin: !!(e && e.pin),
+      profession: e && e.staff ? String(e.profession || '') : '' };   // v49: the Team page's profession (none for the shared login)
   }
   function userName() {                                // v46: a staff member goes by their team name; the shared login by the name typed here
     var e = me();

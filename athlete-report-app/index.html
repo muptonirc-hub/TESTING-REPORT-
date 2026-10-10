@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>BASE Health Report</title>
-<meta name="description" content="Type in test results and create the BASE Health report for an athlete or patient on the spot.">
+<meta name="description" content="Type in test results and create the BASE Health report for a client on the spot.">
 <meta name="theme-color" content="#202020" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#101214" media="(prefers-color-scheme: dark)">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -129,6 +129,11 @@ button { cursor: pointer; }
 .tools button[aria-selected="true"] { background: var(--seg-on); color: var(--tab-on-fg); box-shadow: 0 1px 3px rgba(0, 0, 0, .25); }   /* dark mode: slate, white label */
 .appbar .ghost { border: 1px solid rgba(255, 255, 255, .25); background: transparent; color: #fff; }
 .appbar .clients-btn { padding-inline: 14px; }
+/* v49: the initials of whoever is signed in, beside Clients */
+.appbar .who-chip { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; min-height: 44px; padding: 0; border-radius: 50%; }
+.appbar .who-chip .who-av { width: 34px; height: 34px; font-size: 14px; }
+.appbar .who-chip[hidden] { display: none; }
+html.signed-out .who-chip, html.locked .who-chip { display: none !important; }
 .appbar .clients-btn svg { flex: none; opacity: .85; }
 /* the ⋯ menu (v11): a small panel under the button (full width under the bar on a phone) */
 .more-wrap { position: relative; display: flex; }
@@ -227,6 +232,7 @@ html.signed-out .who { display: none !important; }
 .who-pin .f input { font-size: 22px; letter-spacing: 8px; text-align: center; }
 .who-pin-acts { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; }
 .who-pin-acts .quiet { min-height: 40px; padding-inline: 8px; color: var(--teal-ink); font-size: 14px; }
+.who-not { width: 100%; min-height: 48px; margin-top: 18px; font-size: 16px; }   /* v49: Not Matthew? Switch practitioner */
 .who-card .signin-err { margin-top: 10px; }
 .who-foot { margin: 16px 0 0; font-size: 12.5px; color: var(--muted); line-height: 1.45; }
 /* the PIN dialog: two boxes side by side */
@@ -1778,6 +1784,8 @@ html.row-dragging, html.row-dragging * { cursor: grabbing !important; user-selec
   .tools { margin-left: 0; order: 3; width: 100%; }
   .tools button { flex: 1; padding-inline: 8px; }
   .appbar .clients-btn { margin-left: auto; }
+  .appbar .who-chip { margin-left: auto; }                         /* v49: the initials lead the right-hand buttons */
+  .appbar .who-chip:not([hidden]) ~ .clients-btn { margin-left: 0; }
   .import-btn .il-more, .done-btn .il-more { display: none; }     /* v18: Import, so it fits beside Choose client; v48: Hide (details) beside the title */
   /* v18: the Import menu is a card under the buttons, as wide as the details card (the button sits mid-row on a phone) */
   .athlete .card-head { position: relative; }
@@ -1850,6 +1858,8 @@ html.row-dragging, html.row-dragging * { cursor: grabbing !important; user-selec
     <button role="tab" id="tab-screening" data-section="screening" aria-selected="false">Screening</button>
     <button role="tab" id="tab-ex" data-section="ex" aria-selected="false">Exercises</button>
   </nav>
+  <!-- v49: who is working on this iPad (their initials); a tap brings up the switcher. Cloud mode, signed in -->
+  <button class="ghost who-chip" id="whoChip" type="button" hidden><span class="who-av" aria-hidden="true"></span></button>
   <button class="ghost clients-btn" id="clientsBtn" type="button" aria-haspopup="dialog" aria-label="Clients">
     <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0M16 4.5a3.5 3.5 0 0 1 0 7M21.5 20a6.5 6.5 0 0 0-5-6.3"/></svg>
     <span class="cb-label">Clients</span>
@@ -1987,7 +1997,7 @@ html.row-dragging, html.row-dragging * { cursor: grabbing !important; user-selec
     <!-- v20: a Screening report made without a program: add one here; it prints after the report, in the same PDF -->
     <div class="sheet-ex" id="sheetEx" hidden>
       <p><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="4.5" width="14" height="16.5" rx="2"/><path d="M9 3h6v3H9zM9 11h6M9 15h4"/></svg>
-        <span><b id="sheetExQ">Exercises for this patient?</b> Add a program and it prints after this report, in the same PDF.</span></p>
+        <span><b id="sheetExQ">Exercises for this client?</b> Add a program and it prints after this report, in the same PDF.</span></p>
       <button class="ghost" id="sheetExBtn" type="button">Add exercise program</button>
     </div>
     <!-- v35: the program on the client's phone: the link's state, Show the code, Share link, Copy link, Stop sharing (or the offer) -->
@@ -2177,6 +2187,8 @@ html.row-dragging, html.row-dragging * { cursor: grabbing !important; user-selec
       <label class="f" for="tmName"><span>Name</span><input id="tmName" type="text" maxlength="80" autocapitalize="words" autocomplete="off" enterkeyhint="next"></label>
       <label class="f" for="tmEmail" id="tmEmailF"><span>Email</span><input id="tmEmail" type="email" autocapitalize="off" autocorrect="off" spellcheck="false" inputmode="email" autocomplete="off" enterkeyhint="next"></label>
       <label class="f" for="tmRole"><span>Role</span><select id="tmRole"><option value="practitioner">Practitioner</option><option value="admin">Admin (manages the team and the Claude key)</option></select></label>
+      <!-- v49: their profession: beside their name on the reports and handouts, and told to Claude -->
+      <label class="f" for="tmProf"><span>Profession</span><select id="tmProf"><option value="">Not set</option><option>Physiotherapist</option><option>Exercise physiologist</option><option>Exercise scientist</option></select></label>
     </div>
     <p class="ai-err" id="tmErr" role="alert" hidden></p>
     <div class="modal-actions">
@@ -2240,7 +2252,7 @@ html.row-dragging, html.row-dragging * { cursor: grabbing !important; user-selec
       <label class="ex-cell" for="libDose-side"><span class="ex-cl">Side</span><input class="ex-in" id="libDose-side" type="text" maxlength="60" autocapitalize="sentences" autocomplete="off" enterkeyhint="next"></label>
     </div>
     <h3 class="lib-h" id="libCuesH">Cues for the handout</h3>
-    <p class="lib-hint lib-hint-top">Short, for the patient: printed under the exercise</p>
+    <p class="lib-hint lib-hint-top">Short, for the client: printed under the exercise</p>
     <div class="lib-cues" role="group" aria-labelledby="libCuesH">
       <input class="ex-in" id="libCue0" type="text" maxlength="90" autocapitalize="sentences" autocomplete="off" enterkeyhint="next" placeholder="Cue 1" aria-label="Cue 1">
       <input class="ex-in" id="libCue1" type="text" maxlength="90" autocapitalize="sentences" autocomplete="off" enterkeyhint="next" placeholder="Cue 2" aria-label="Cue 2">
@@ -2449,13 +2461,13 @@ html.row-dragging, html.row-dragging * { cursor: grabbing !important; user-selec
 
 <div class="toast" id="toast" role="status" hidden></div>
 
-<script src="engine.js?v=48" defer></script>
-<script src="report-fonts.js?v=48" defer></script>
-<script src="jspdf.umd.min.js?v=48" defer></script>
-<script src="qrcode.js?v=48" defer></script>
-<script src="report.js?v=48" defer></script>
-<script src="cloud-config.js?v=48" defer></script>
-<script src="cloud.js?v=48" defer></script>
-<script src="app.js?v=48" defer></script>
+<script src="engine.js?v=49" defer></script>
+<script src="report-fonts.js?v=49" defer></script>
+<script src="jspdf.umd.min.js?v=49" defer></script>
+<script src="qrcode.js?v=49" defer></script>
+<script src="report.js?v=49" defer></script>
+<script src="cloud-config.js?v=49" defer></script>
+<script src="cloud.js?v=49" defer></script>
+<script src="app.js?v=49" defer></script>
 </body>
 </html>

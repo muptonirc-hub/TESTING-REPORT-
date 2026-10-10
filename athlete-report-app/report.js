@@ -412,7 +412,7 @@
   function radar(doc, spokes, quadNote, headSize) {
     if (spokes.length < 3) return false;
     var u = CW / 480, H = 300 * u, n = spokes.length;
-    section(doc, 'Athlete profile — key components', { keep: H + px(14), size: headSize });
+    section(doc, PROFILE_HEAD(), { keep: H + px(14), size: headSize });
     var ox = ML, oy = doc.y, cx = 240, cy = 150, Rmax = 98, CAP = 1.5;
     function pt(score, i) {
       var ang = (-90 + i * 360 / n) * Math.PI / 180, rr = Math.min(score, CAP) / CAP * Rmax;
@@ -442,7 +442,7 @@
       doc.circle(p[0], p[1], 3.2 * u, { fill: COL[sp.status] || C.NA, stroke: C.WHITE, lw: 1 * u });
     });
     doc.y = oy + H + px(2);
-    doc.text('Each axis = result vs the athlete’s age/sex norm target (dashed green ring). Dots show status.',   // v48: the "placeholder norm" caption went (Quad ISO has a sourced norm)
+    doc.text('Each axis = result vs the ' + PERSON + '’s age/sex norm target (dashed green ring). Dots show status.',   // v48: the "placeholder norm" caption went (Quad ISO has a sourced norm)
       ML + CW / 2, baseline(doc.y, 7.5), { style: 'italic', size: fs(7.5), color: C.MUTE, align: 'center' });
     doc.y += lineH(7.5);
     return true;
@@ -465,11 +465,11 @@
       return { sp: sp, ll: ll, h: Math.max(ll.length * lineH(S.label), valH, barH) + px(12) };
     });
     var lower = spokes.some(function (sp) { return sp.dir === 'Lower'; });
-    var cap = wrap('Bar length = result as a % of the athlete’s norm target (dashed line = target).' +
+    var cap = wrap('Bar length = result as a % of the ' + PERSON + '’s norm target (dashed line = target).' +
       (lower ? ' For times, a faster time gives a longer bar.' : ''), 'italic', fs(7.5), CW - px(4));   // v48: no placeholder caption
     var topH = lineH(7.5) + px(3), axH = px(4) + lineH(7.5), capH = px(6) + cap.length * lineH(7.5);
     var total = topH + rows.reduce(function (s, r) { return s + r.h; }, 0) + axH + capH;
-    section(doc, 'Athlete profile — key components', { keep: total, size: headSize });
+    section(doc, PROFILE_HEAD(), { keep: total, size: headSize });
     var top = doc.y, ys = [], y = top + topH;
     rows.forEach(function (r) { ys.push(y); y += r.h; });
     var last = rows.length - 1;
@@ -1064,15 +1064,20 @@
   // type for its headings, athlete details, interpretation and priorities (the other reports keep their sizes).
   var P1 = { head: 13, meta: 11.33, band: 11.33, interp: 13.33, cards: { domain: 11, status: 10, count: 9.5 },
     prio: { name: 13.33, detail: 11.33, what: 10.67, chip: 10 } };
+  // v49: the person on the screening report: Athlete with a sport population or a sport, else Client (until v48 always Athlete)
+  var PERSON = 'client';
+  function PROFILE_HEAD() { return (PERSON === 'athlete' ? 'Athlete profile' : 'Profile') + ' — key components'; }
   function screening(d) {
     var doc = new Doc(), m = d.meta || {}, P = P1, custom = d.kind === 'custom';   // v36: the Custom battery prints as this report, named for what it is
+    var who = d.person === 'Athlete' ? 'Athlete' : 'Client';
+    PERSON = who.toLowerCase();
     var built = custom && clean(d.built).trim() ? clean(d.built).trim() : '';   // v43: one of the clinic's batteries: its name is the title
-    var title = built || (custom ? 'Custom Screening Battery' : 'Athlete Performance & Readiness Report');
+    var title = built || (custom ? 'Custom Screening Battery' : (who === 'Athlete' ? 'Athlete ' : '') + 'Performance & Readiness Report');
     header(doc, title, built ? 'The clinic’s battery • Norms and the clinic’s targets • Change-vs-previous'
       : custom ? (clean(d.battery).trim() ? clean(d.battery).trim() + ' • ' : '') + 'Tests chosen by the clinician • Normative screening with change-vs-previous'
       : 'VALD Testing • Normative screening with change-vs-previous');
     var rh = custom && d.rehab ? d.rehab : null;      // v37: a Custom battery with rehab tests: the injured side and the phases
-    meta(doc, [['Athlete', m.name], ['Date', m.date], ['Sport', m.sport], ['Clinician', m.tester], ['Age', m.age],
+    meta(doc, [[who, m.name], ['Date', m.date], ['Sport', m.sport], ['Clinician', m.tester], ['Age', m.age],
       ['Sex', m.sex], ['Mass', clean(m.mass).trim() ? clean(m.mass).trim() + ' kg' : '']].concat(rh ? [['Injured side', rh.injured]] : [],
       rh && rh.ham != null ? [['Hamstring phase', rh.ham]] : [], rh && rh.acl != null ? [['ACL phase', rh.acl]] : [], [['Notes', m.notes]]), P.meta);
     coachBand(doc, d.coach);
@@ -1110,11 +1115,11 @@
     var doc = new Doc(), m = d.meta || {}, acl = d.kind === 'acl';
     if (acl) {
       header(doc, 'ACL Rehab & Return-to-Play', 'ACLR research norms • injured-limb / symmetry tracking');
-      meta(doc, [['Patient', m.name], ['Date', m.date], ['Injured side', m.injured], ['Graft', m.graft],
+      meta(doc, [['Client', m.name], ['Date', m.date], ['Injured side', m.injured], ['Graft', m.graft],
         ['Surgeon', m.surgeon], ['Months post-op', m.months], ['Sport', m.sport], ['Notes', m.notes]]);
     } else {
       header(doc, 'Hamstring Rehab & Return-to-Play', 'Injured-limb tracking vs phase targets • change-vs-previous');
-      meta(doc, [['Patient', m.name], ['Date', m.date], ['Injured side', m.injured], ['Clinician', m.clinician],
+      meta(doc, [['Client', m.name], ['Date', m.date], ['Injured side', m.injured], ['Clinician', m.clinician],
         ['Wks since injury', m.weeks], ['Sport', m.sport], ['Notes', m.notes]]);
     }
     coachBand(doc, d.coach);
@@ -1282,7 +1287,7 @@
   function ankle(d) {
     var doc = new Doc(), m = d.meta || {}, g = d.ago, title = 'Ankle-GO Return-to-Sport Score';
     header(doc, title, 'Lateral ankle sprain • 4 tests + 3 questionnaires • injured leg, out of 25');
-    meta(doc, [['Patient', m.name], ['Date', m.date], ['Injured side', m.injured], ['Wks since injury', m.weeks],
+    meta(doc, [['Client', m.name], ['Date', m.date], ['Injured side', m.injured], ['Wks since injury', m.weeks],
       ['Clinician', m.clinician], ['Sport', m.sport], ['Notes', m.notes]]);
     coachBand(doc, d.coach);
     band(doc, 'Ankle-GO', g.tested ? g.total + ' of ' + g.max + (g.band ? ' · ' + g.band.label + ': ' + g.band.short : (g.complete ? '' : ' so far')) : 'not scored yet', tallyChips('rehab', d.counts));
@@ -1369,7 +1374,7 @@
   function strength(d) {
     var doc = new Doc(), m = d.meta || {}, c = d.counts;
     header(doc, 'Lower-Limb Strength & Capacity', 'Strength battery • targets relative to body weight');
-    meta(doc, [['Patient', m.name], ['Date', m.date], ['Mass', clean(m.mass).trim() ? clean(m.mass).trim() + ' kg' : ''],
+    meta(doc, [['Client', m.name], ['Date', m.date], ['Mass', clean(m.mass).trim() ? clean(m.mass).trim() + ' kg' : ''],
       ['Sport', m.sport], ['Clinician', m.tester], ['Notes', m.notes]]);
     coachBand(doc, d.coach);
     band(doc, 'Scored against', 'BASE Health strength targets', tallyChips('target', c));
@@ -1789,7 +1794,7 @@
   function exercisesAt(d, k) {
     var doc = new Doc(), m = d.meta || {}, foot = exFoot(clean(exText(m.practitioner)).trim()), fsz = 8 * k;
     header(doc, 'Exercise Program', 'Prescribed exercises • sets, reps and load');
-    meta(doc, [['Patient', exText(m.name)], ['Date', m.date], ['Clinician', exText(m.practitioner)]], 10 * k);
+    meta(doc, [['Client', exText(m.name)], ['Date', m.date], ['Clinician', exText(m.practitioner)]], 10 * k);
     var title = clean(exText(d.title)).trim(), ts = 18 * k;
     if (title) {
       doc.y += px(2);
