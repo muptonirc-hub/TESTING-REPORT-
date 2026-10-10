@@ -166,14 +166,14 @@
   // What people read for a change flag, on screen and in the PDFs (v11). change() keeps its own text: the parity
   // tests pin it and the AI payload reads its numbers. The word carries the direction, so a real change is unsigned:
   //   '▲ real gain   +1.3 (+4%)'      -> '▲ Improved 1.3 (4%)'       '▼ real drop   -0.6 (-1%)' -> '▼ Worse 0.6 (1%)'
-  //   '– within noise   +1.3 (+4%)'   -> '+1.3 (+4%) · within noise'  '● meaningful shift   +2 (+5%)' -> '● Shifted +2 (+5%)'
+  //   '– within noise   +1.3 (+4%)'   -> '+1.3 (+4%) · no real change'  '● meaningful shift   +2 (+5%)' -> '● Shifted +2 (+5%)'
   function changeLabel(text, kind) {
     var s = String(text == null ? '' : text).replace(/\s+/g, ' ').trim();
     var m = /[+\-−]?\d[\d.]*(?: \([+\-−]?\d[\d.]*%\))?$/.exec(s);
     if (!m) return s;
     var amount = m[0];
     if (kind === 'gain' || kind === 'drop') return (kind === 'gain' ? '▲ Improved ' : '▼ Worse ') + amount.replace(/[+\-−](?=\d)/g, '');
-    if (kind === 'noise') return amount + ' · within noise';
+    if (kind === 'noise') return amount + ' · no real change';   // v48: was 'within noise' (jargon on a client's report)
     if (kind === 'shift') return '● Shifted ' + amount;
     return s;
   }
@@ -495,7 +495,7 @@
         if (idx < 0) used = metrics[0];
       }
       var unit = typeof c.unit === 'string' ? c.unit : (c.meta ? (META_UNITS[c.meta] || '') : (units[used] || ''));
-      if (unit === 'AU') unit = '';
+      if (unit === 'AU' || unit === '/100') unit = '';   // v48: a score's unit isn't printed ('IKDC ≥ 90')
       var u = unit ? (unit === '%' ? '%' : ' ' + unit) : '';
       var target = lo !== null && hi !== null ? pyStr(lo) + ' – ' + pyStr(hi) + u : (lo !== null ? '≥ ' + pyStr(lo) + u : '≤ ' + pyStr(hi) + u);
       var st = value === null ? 'untested' : ((lo === null || value >= lo) && (hi === null || value <= hi) ? 'met' : 'not');

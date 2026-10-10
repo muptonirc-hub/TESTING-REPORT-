@@ -138,7 +138,7 @@
    "metrics": [
     {
      "name": "HaOS score",
-     "unit": "AU",
+     "unit": "/100",
      "dir": "Higher",
      "thr": 6,
      "range": [0, 100]

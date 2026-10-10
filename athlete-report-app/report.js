@@ -442,7 +442,7 @@
       doc.circle(p[0], p[1], 3.2 * u, { fill: COL[sp.status] || C.NA, stroke: C.WHITE, lw: 1 * u });
     });
     doc.y = oy + H + px(2);
-    doc.text('Each axis = result vs the athlete’s age/sex norm target (dashed green ring). Dots show status.' + (quadNote ? ' Quad ISO @ 60° uses a placeholder norm.' : ''),
+    doc.text('Each axis = result vs the athlete’s age/sex norm target (dashed green ring). Dots show status.',   // v48: the "placeholder norm" caption went (Quad ISO has a sourced norm)
       ML + CW / 2, baseline(doc.y, 7.5), { style: 'italic', size: fs(7.5), color: C.MUTE, align: 'center' });
     doc.y += lineH(7.5);
     return true;
@@ -466,7 +466,7 @@
     });
     var lower = spokes.some(function (sp) { return sp.dir === 'Lower'; });
     var cap = wrap('Bar length = result as a % of the athlete’s norm target (dashed line = target).' +
-      (lower ? ' For times, a faster time gives a longer bar.' : '') + (quadNote ? ' Quad ISO @ 60° uses a placeholder norm.' : ''), 'italic', fs(7.5), CW - px(4));
+      (lower ? ' For times, a faster time gives a longer bar.' : ''), 'italic', fs(7.5), CW - px(4));   // v48: no placeholder caption
     var topH = lineH(7.5) + px(3), axH = px(4) + lineH(7.5), capH = px(6) + cap.length * lineH(7.5);
     var total = topH + rows.reduce(function (s, r) { return s + r.h; }, 0) + axH + capH;
     section(doc, 'Athlete profile — key components', { keep: total, size: headSize });
@@ -526,8 +526,8 @@
     var cw = prios.length ? Math.max.apply(null, prios.map(function (r) { return chipW(W[r.status] || r.status, { icon: r.status, size: sz.chip }); })) : 0;
     return prios.map(function (r) {
       var name = r.name, word = W[r.status] || r.status;
-      var detail = r.detail || ('= ' + E.fmt(r.result) + ' ' + r.unit + (r.side ? ' (' + r.side + ' higher)' : '') +
-        ' · needs ' + r.target + ' · ' + (r.source || '—'));
+      var detail = r.detail || ('= ' + E.fmt(r.result) + unitWord(r.unit) + (r.side ? ' (' + r.side + ' higher)' : '') +
+        ' · needs ' + r.target);                       // v48: the norm's source moved to the For clinicians note under the list
       var nameW = width(name, 'bold', fs(sz.name));
       var detW = CW - px(12) - cw - px(8) - nameW - px(8);
       var dl = wrap(detail, 'regular', fs(sz.detail), Math.max(detW, px(120)));
@@ -538,6 +538,22 @@
       var whatH = wl.length ? px(1) + wl.length * lineH(sz.what) : 0;
       return { r: r, name: name, word: word, dl: dl, wl: wl, nx: nx, contentH: contentH, h: contentH + whatH + px(8) + px(1) };
     });
+  }
+  // v48: units for a reader who isn't a clinician: none for a score or an index ('AU'), 'out of 100' for a questionnaire
+  function unitTxt(u) { u = String(u || '').trim(); return u === 'AU' ? '' : u; }   // v48: 'AU' (a score or index) prints as nothing
+  function unitWord(u) { u = String(u || '').trim(); return !u || u === 'AU' ? '' : u === '/100' ? ' out of 100' : (u === '%' ? '%' : ' ' + u); }
+  // v48: the norm sources once, under the priorities (until v47 each line ended with its star rating and population, which
+  // the client can't use); grouped by source, naming the tests each covers when there is more than one source
+  function sourceNote(prios) {
+    var by = {}, order = [];
+    prios.forEach(function (r) {
+      var src = clean(r.detail ? '' : r.source || '').trim();
+      if (!src) return;
+      if (!by[src]) { by[src] = []; order.push(src); }
+      by[src].push(r.name);
+    });
+    if (!order.length) return '';
+    return 'For clinicians — norm sources: ' + order.map(function (x) { return x + (order.length > 1 ? ' (' + by[x].join(', ') + ')' : ''); }).join('; ') + '.';
   }
   function emptyPrioH(sz) { return lineH((sz || PRIO_SZ).name) + px(9); }
   // the room the first n items need (so a heading is never left without them)
@@ -571,6 +587,13 @@
       doc.line(ML, top + h - px(0.5), ML + CW, top + h - px(0.5), { stroke: C.LINE, lw: px(1) });
       doc.y = top + h;
     });
+    var note = sourceNote(prios);                      // v48
+    if (note) {
+      var nls = wrap(note, 'italic', fs(sz.what), CW - px(12)), nh = px(4) + nls.length * lineH(sz.what);
+      doc.ensure(nh);
+      nls.forEach(function (l, i) { doc.text(l, ML + px(6), baseline(doc.y + px(4) + i * lineH(sz.what), sz.what), { style: 'italic', size: fs(sz.what), color: C.MUTE }); });
+      doc.y += nh;
+    }
   }
 
   function asymmetry(doc, groups, headSize, legs) {   // v43: legs: the clinic's tests measured on each leg ({ name, pct, higher })
@@ -672,7 +695,7 @@
     function rowLayout(r) {
       // name, unit (5px after the name) and "· L higher" flow together inside column 1
       var parts = [{ s: r.name, style: 'bold', size: 10, color: C.INK, gap: 0 },
-        { s: r.unit, style: 'regular', size: 8.5, color: C.MUTE, gap: px(5) }];
+        { s: unitTxt(r.unit), style: 'regular', size: 8.5, color: C.MUTE, gap: px(5) }];   // v48: no 'AU'
       if (r.side) parts.push({ s: '· ' + r.side + ' higher', style: 'bold', size: 8.5, color: C.BLUEINK, gap: width(' ', 'bold', fs(10)) });   // v32: 5.8:1
       var lines = [[]], lx = 0;
       parts.forEach(function (p) {
@@ -749,7 +772,8 @@
       wrap(para, 'regular', fs(size), maxW).forEach(function (l, i) { lines.push({ s: l, gap: i === 0 && lines.length ? paraGap : 0 }); });
     });
     if (!lines.length) return;
-    var note = it.ai ? 'Drafted with AI assistance and reviewed by the clinician.' : '';
+    // v48: "reviewed" only once the clinician edited the draft or passed it (until v47 every AI draft printed as reviewed)
+    var note = it.ai ? (it.reviewed === false ? 'Drafted with AI assistance.' : 'Drafted with AI assistance and reviewed by the clinician.') : '';
     var noteH = note ? px(4) + lineH(7.5) : 0;
     section(doc, 'Interpretation', { keep: 2 * padY + Math.min(3, lines.length) * lh, size: o.head });
     var i = 0;
@@ -832,9 +856,9 @@
       doc.y = top + bandH + headH;
     }
     var layout = p.rows.map(function (r) {
-      var nl = wrap(r.name, 'bold', fs(9), nameW), unitW = r.unit ? width(r.unit, 'regular', fs(8)) : 0;
+      var ru = unitTxt(r.unit), nl = wrap(r.name, 'bold', fs(9), nameW), unitW = ru ? width(ru, 'regular', fs(8)) : 0;   // v48: no 'AU'
       var lastW = width(nl[nl.length - 1], 'bold', fs(9));
-      var unitOwnLine = !!r.unit && lastW + px(5) + unitW > nameW;
+      var unitOwnLine = !!ru && lastW + px(5) + unitW > nameW;
       var lines = nl.length + (unitOwnLine ? 1 : 0);
       return { r: r, nl: nl, lastW: lastW, unitOwnLine: unitOwnLine, lines: lines, h: Math.max(lines * lineH(9), lineH(10)) + px(9) };
     });
@@ -851,8 +875,8 @@
       nl.forEach(function (l, i) {
         doc.text(l, x0, baseline(nTop + i * lineH(9), 9), { style: 'bold', size: fs(9), color: C.INK });
       });
-      if (r.unit) {
-        doc.text(r.unit, L.unitOwnLine ? x0 : x0 + L.lastW + px(5), baseline(nTop + (L.unitOwnLine ? nl.length : nl.length - 1) * lineH(9), 9), { style: 'regular', size: fs(8), color: C.MUTE });
+      if (unitTxt(r.unit)) {
+        doc.text(unitTxt(r.unit), L.unitOwnLine ? x0 : x0 + L.lastW + px(5), baseline(nTop + (L.unitOwnLine ? nl.length : nl.length - 1) * lineH(9), 9), { style: 'regular', size: fs(8), color: C.MUTE });
       }
       r.values.forEach(function (v, i) {
         var last = i === n - 1;
@@ -1053,6 +1077,12 @@
       rh && rh.ham != null ? [['Hamstring phase', rh.ham]] : [], rh && rh.acl != null ? [['ACL phase', rh.acl]] : [], [['Notes', m.notes]]), P.meta);
     coachBand(doc, d.coach);
     band(doc, 'Compared against', d.popLabel || '—', tallyChips('target', d.counts), P.band);
+    if (d.ageNote) {                                   // v48: a client over 60 against the all-ages norms
+      var al = wrap(clean(d.ageNote), 'italic', fs(P.meta), CW - px(4)), ah = al.length * lineH(P.meta) + px(4);
+      doc.ensure(ah);
+      al.forEach(function (l, i) { doc.text(l, ML + px(2), baseline(doc.y + i * lineH(P.meta), P.meta), { style: 'italic', size: fs(P.meta), color: C.INK }); });
+      doc.y += ah;
+    }
     interpretation(doc, d.interp, { size: P.interp, head: P.head });
     var cards = E.scorecard(d.groups);
     if (cards.length) { section(doc, 'Overview by area', { keep: px(45), size: P.head }); scorecard(doc, cards, P.cards); }
@@ -1064,7 +1094,7 @@
     section(doc, 'Top priorities — worst first', { keep: prioKeep(d.prios, 'target', P.prio, 2), size: P.head });
     priorities(doc, d.prios, null, 'target', P.prio);
     asymmetry(doc, d.groups, P.head, d.legs);
-    var foot = withNote('Confidence shown in grey (★★★ strong · ★★☆ moderate · ★☆☆ weak). ' +
+    var foot = withNote('Norm confidence, in the For clinicians note: ★★★ strong · ★★☆ moderate · ★☆☆ weak. ' +   // v48
       'Norms are population- and protocol-dependent; targets reflect the selected reference population only. ' +
       (custom ? 'Strength tests are scored relative to body weight against the clinic’s targets; the clinic’s own tests are rated only where a target was set. ' : '') +
       (custom && d.closePct != null ? 'Tests from the clinic’s battery builder are rated against the clinic’s target: Close = within ' + String(Math.round(d.closePct * 10) / 10) + '% of it' + (d.closeOwn ? ', or the test’s own % where one is set (shown with its result)' : '') + '. ' : '') +   // v43
@@ -1365,11 +1395,11 @@
 
   // ------------------------------------------------------------------ exercise program handout (v10)
   // The program the practitioner checked on screen, for the patient: the meta row, the title and a general instructions
-  // box when given, then one table. Exercise, Sets, Reps and Load always; Rest, Tempo, Side and Notes only when something
-  // is written for at least one exercise. A dark band per section heading. A row never splits across pages; after a page
+  // box when given, then one table. Exercise always; Sets, Reps, Load, Rest, Tempo, Side and Notes only when something
+  // is written for at least one exercise (v48: until v47 Sets, Reps and Load printed empty when no dose was given). A dark band per section heading. A row never splits across pages; after a page
   // break the section band (marked continued) and the column header repeat, and a band or header never ends a page.
   var EX_COLS = [['name', 'EXERCISE'], ['sets', 'SETS'], ['reps', 'REPS'], ['load', 'LOAD'], ['rest', 'REST'], ['tempo', 'TEMPO'], ['side', 'SIDE'], ['notes', 'NOTES']];
-  var EX_CORE = { name: 1, sets: 1, reps: 1, load: 1 };
+  var EX_CORE = { name: 1 };
   var EX_WMM = { sets: [9, 16], reps: [11, 26], load: [14, 30], rest: [10, 18], tempo: [11, 22], side: [12, 22] };   // short columns: narrowest, roomiest (mm)
   var EX_SZ = 13.33, EX_HEAD = 9.33, EX_BAND = 10.5, EX_MAXLINES = 40;           // CSS px: 10 pt cells, 7 pt column labels, 7.9 pt bands
   var EX_TINT = '#F2F5F7';
@@ -1771,7 +1801,7 @@
     }
     // v32: the block and the next review under the title, then Why this plan and the general instructions in one box
     var weeks = /^\d{1,2}$/.test(String(d.weeks || '')) && +d.weeks > 0 ? +d.weeks : 0, review = clean(exText(d.review)).trim(), cover = [];
-    if (weeks) cover.push(['Block', weeks + (weeks === 1 ? ' week' : ' weeks')]);
+    if (weeks) cover.push(['Program length', weeks + (weeks === 1 ? ' week' : ' weeks')]);   // v48: was 'Block'
     if (review) cover.push(['Next review', review]);
     if (cover.length) meta(doc, cover, 10 * k, !!title);
     exNotes(doc, [['Why this plan', exText(d.reason)], ['General instructions', exText(d.instructions)]]);

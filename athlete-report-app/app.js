@@ -34,6 +34,7 @@
     // v16: Return home in the report view, and the check it asks when some entries aren't in a client record
     home: $('homeBtn'), homeLabel: $('homeLabel'), homeDialog: $('homeDialog'), homeList: $('homeList'), homeKeep: $('homeKeep'), homeClear: $('homeClear'),
     toast: $('toast'), clearAll: $('clearAll'), clearDialog: $('clearDialog'), clearList: $('clearList'),
+    checkDialog: $('checkDialog'), checkList: $('checkList'), checkBack: $('checkBack'), checkGo: $('checkGo'),   // v48
     clearCancel: $('clearCancel'), clearConfirm: $('clearConfirm'),
     aiDialog: $('aiDialog'), aiKey: $('aiKey'), aiSave: $('aiSave'), aiCancel: $('aiCancel'), aiRemove: $('aiRemove'),
     aiKeyState: $('aiKeyState'), aiErr: $('aiErr'), aiLead: $('aiLead'),
@@ -120,7 +121,7 @@
   // ------------------------------------------------------------------ state
   var TOOLS = ['screen', 'str', 'ham', 'acl', 'ankle', 'custom'];   // the six reports (the Exercises tab, 'ex', is handled on its own); v36: + the Custom battery; v42: + Ankle-GO
   var TOOL_NAMES = { screen: 'Performance screen', str: 'LL Strength', ham: 'Hamstring rehab', acl: 'ACL rehab', ankle: 'Ankle-GO', custom: 'Custom battery', ex: 'Exercises' };   // v14: 'Screening' is the section
-  function freshInterp() { return { text: '', ai: false, basis: '' }; }
+  function freshInterp() { return { text: '', ai: false, basis: '', reviewed: true }; }   // v48: reviewed is false only for an AI draft nobody has edited or passed yet
   // For the coach (v8): the clinician's call on training, printed as a band on the report. Never worked out by the
   // app, never filled in from records and never sent to Claude.
   var COACH_STATUS = ['Full training', 'Modified', 'Rehab only'];
@@ -205,8 +206,9 @@
     TOOLS.forEach(function (t) {                     // drafts saved before the interpretation box existed
       var it = state[t].interp;
       if (!it || typeof it !== 'object') state[t].interp = freshInterp();
-      else { it.text = String(it.text || ''); it.ai = !!it.ai; it.basis = String(it.basis || ''); }
+      else { it.text = String(it.text || ''); it.ai = !!it.ai; it.basis = String(it.basis || ''); it.reviewed = it.reviewed !== false; }   // v48: reviewed (edited, or Looks right) unless marked not yet
       if (state[t].hist && typeof state[t].hist !== 'object') state[t].hist = null;
+      state[t].example = state[t].example === true;   // v48: Show example results filled this page: nothing on it is ever saved
       // boxes filled from scanned notes and not yet checked (kept with the draft so the highlight survives a reload)
       var sc = state[t].scanned;
       if (!sc || typeof sc !== 'object' || Array.isArray(sc)) state[t].scanned = {};
@@ -723,7 +725,9 @@
       : 'Scan notes: photo of handwritten results or a VALD app screenshot') + '">';
   }
   var DOC_ICON = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h6"/></svg>';
-  function scanLabel(t) { return t === 'ex' ? 'Scan exercise page' : t === 'screen' ? 'Photo of notes or a VALD screenshot' : 'Scan notes'; }
+  // v48 word list: one name for reading a photo on every page, "Scan photo" (until v47 Import results / Scan notes / Scan
+  // exercise page); on the Performance screen the menu's first item says what the photo can be
+  function scanLabel(t) { return t === 'screen' ? 'Photo of notes or a VALD screenshot' : 'Scan photo'; }
   // v18: the Import results menu (Performance screen): opened from its button; a tap elsewhere, Escape or a choice closes it
   function importMenu() { return $('importMenu'); }
   function setImportMenu(open, focusBtn) {
@@ -736,7 +740,7 @@
   }
   var PEOPLE = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.6"/><path d="M5 20a7 7 0 0 1 14 0"/></svg>';
   // the head of the details card: Choose client (report tabs), Scan, Import VALD CSV (Screening) and Done (v11)
-  var IMPORT_LABEL = 'Import<span class="il-more"> results</span>';   // v18: just Import on a phone, so it shares a row with Choose client
+  var IMPORT_LABEL = 'Scan<span class="il-more"> photo</span>';   // v18: just Scan on a phone, so it shares a row with Choose client; v48: was Import results
   function cardHead(t, h2id) {
     var open = state[t].cardOpen !== false;
     var out = '<div class="card-head"><h2 id="' + h2id + '">' + (t === 'ex' ? 'Patient' : Person(t)) + '</h2><div class="head-actions">';
@@ -746,7 +750,7 @@
       // label with its file input laid over it, so a tap lands on the input itself (as the buttons did)
       out += '<div class="import-wrap"><button type="button" class="ghost import-btn" id="importBtn" data-action="import-menu" aria-haspopup="menu" aria-expanded="false" aria-controls="importMenu">' +
         CAMERA + '<span data-label>' + IMPORT_LABEL + '</span><span class="chev-s" aria-hidden="true"></span></button>' +
-        '<div class="menu import-menu" id="importMenu" role="menu" aria-label="Import results" hidden>' +
+        '<div class="menu import-menu" id="importMenu" role="menu" aria-label="Scan photo or import a file" hidden>' +
         '<label class="menu-item file-btn scan-btn" id="scanBtn" for="scanFiles" role="menuitem">' + CAMERA + '<span data-label>' + scanLabel(t) + '</span>' + (open ? scanInputHtml(t) : '') + '</label>' +
         '<label class="menu-item file-btn" for="valdFiles" role="menuitem">' + DOC_ICON + '<span>VALD CSV export</span><input id="valdFiles" type="file" accept=".csv,text/csv" multiple></label>' +
         '</div></div>';
@@ -755,7 +759,7 @@
         (open ? scanInputHtml(t) : '') + '</label>';
     }
     // Done last on the right (on a phone, beside the title)
-    return out + '</div><button type="button" class="ghost done-btn" id="athleteDone" data-action="done-athlete"' + (essentials(t) ? '' : ' disabled') + '>Done</button></div>';
+    return out + '</div><button type="button" class="ghost done-btn" id="athleteDone" data-action="done-athlete"' + (essentials(t) ? '' : ' disabled') + '>Hide<span class="il-more"> details</span></button></div>';   // v48: was Done (read as "finished")
   }
   function athleteCard() {
     var t = state.tool, s = state[t];
@@ -763,7 +767,7 @@
     out += '<div class="fields">';
     if (t === 'screen') {
       out += field(t, 'name', Person(t) + ' name', { cls: 'wide', words: true }) + field(t, 'date', 'Test date', { type: 'date' }) +
-        seg(t, 'sex', 'Sex', ['Male', 'Female']) +
+        seg(t, 'sex', 'Sex', ['Female', 'Male']) +   // v48: Female | Male on every page (ACL's order)
         field(t, 'age', 'Age (years)', { mode: 'decimal' }) + field(t, 'mass', 'Mass (kg)', { mode: 'decimal' }) +
         field(t, 'sport', 'Sport', { words: true }) + field(t, 'tester', 'Clinician', { words: true }) +
         field(t, 'notes', 'Notes', { cls: 'full' });
@@ -771,7 +775,7 @@
       out += select('screen-pop', 'Compare against', pops, s.pop, 'data-choice="pop"', 'wide');
     } else if (t === 'custom') {                       // v36: the screen's details; the population was chosen first (changeable here)
       out += field(t, 'name', Person(t) + ' name', { cls: 'wide', words: true }) + field(t, 'date', 'Test date', { type: 'date' }) +
-        seg(t, 'sex', 'Sex', ['Male', 'Female']) +
+        seg(t, 'sex', 'Sex', ['Female', 'Male']) +   // v48: Female | Male on every page (ACL's order)
         field(t, 'age', 'Age (years)', { mode: 'decimal' }) + field(t, 'mass', 'Mass (kg)', { mode: 'decimal' }) +
         field(t, 'sport', 'Sport', { words: true }) + field(t, 'tester', 'Clinician', { words: true }) +
         field(t, 'notes', 'Notes', { cls: 'full' });
@@ -833,7 +837,7 @@
     var open = state[t].cardOpen !== false;
     return '<div class="strip" id="athleteStrip" role="group" aria-label="' + Person(t) + '"' + (open ? ' hidden' : '') + '>' +
       '<div class="strip-text" id="stripText"></div>' +
-      '<label class="strip-scan file-btn scan-btn" id="stripScan" for="scanFiles" title="' + (t === 'ex' ? 'Scan exercise page' : 'Scan notes') + '">' + CAMERA + (open ? '' : scanInputHtml(t)) + '</label>' +
+      '<label class="strip-scan file-btn scan-btn" id="stripScan" for="scanFiles" title="Scan photo">' + CAMERA + (open ? '' : scanInputHtml(t)) + '</label>' +
       '<button type="button" class="ghost strip-edit" data-action="edit-athlete" aria-label="Edit ' + person(t) + ' details">Edit</button></div>';
   }
   // 'General Clinical — Male · 20-30 yr' -> 'General Clinical M 20–30' (sport populations as they are)
@@ -999,9 +1003,9 @@
       '</b><span class="pv-d"><span class="vh">, </span>' + esc(shortDate(v.prevDate, state[tool].meta.date)) + '</span></span>' +
       '<button type="button" class="pv-edit" data-action="prev-edit" aria-label="Edit previous result">' + PENCIL + '</button></div>';
   }
-  // the change line on screen (E.changeLabel's words, v11): when it wraps, the amount and 'within noise' stay whole
+  // the change line on screen (E.changeLabel's words, v11): when it wraps, the amount and 'no real change' stay whole
   function changeHtml(text, kind) {
-    return esc(E.changeLabel(text, kind)).replace(/[▲▼●] \S+|[+\-]?\d[\d.]*(?: \([+\-]?\d[\d.]*%\))?|within noise/g, function (m) { return '<span class="nw">' + m + '</span>'; });
+    return esc(E.changeLabel(text, kind)).replace(/[▲▼●] \S+|[+\-]?\d[\d.]*(?: \([+\-]?\d[\d.]*%\))?|no real change/g, function (m) { return '<span class="nw">' + m + '</span>'; });
   }
   // v11: on a phone the column headings are hidden, so each box gets a small label above it (hidden on wider screens;
   // the boxes keep their own aria-labels)
@@ -1011,7 +1015,7 @@
   function metricRow(tool, m, gi, mi) {
     var v = val(tool, m.name), id = tool + '-' + gi + '-' + mi, nm = esc(m.name);
     var asym = SL(tool) && E.isAsym(m.name);
-    var hint = '<span class="m-unit">' + esc(m.unit) + '</span>';
+    var hint = '<span class="m-unit">' + esc(m.unit === '/100' ? 'score out of 100' : m.unit === 'AU' ? 'score' : m.unit) + '</span>';   // v48: KOOS, IKDC and the like are out of 100 (was 'AU')
     if (m.calc === 'PERKG' || m.calc === 'PERBW' || m.calc === 'NPCTBW') hint = '<span class="m-unit">enter force in N · scored as ' + esc(m.unit) + ' using mass</span>';   // v43: + a builder test as % BW
     if (m.calc === 'XBW' || m.calc === 'PCTBW') hint = '<span class="m-unit">' + esc((m.detail ? m.detail + ' · ' : '') + 'enter load in kg · scored as ' + m.unit + ' using mass') + '</span>';   // v36: LL Strength tests in a custom battery
     else if (m.str && m.input === 'N') hint = '<span class="m-unit">' + esc((m.detail ? m.detail + ' · ' : '') + 'enter force in N · scored as ' + m.unit + ' using mass') + '</span>';
@@ -1235,7 +1239,7 @@
   function batteryEmptyHtml() {
     return '<section class="card bat-empty" id="batEmpty" aria-labelledby="batEmptyH"' + (state.custom.battery.length ? ' hidden' : '') + '>' +
       '<h2 id="batEmptyH">Build the battery</h2>' +
-      '<p>Choose tests from the catalogue (the Performance screen’s, LL Strength’s and the Hamstring and ACL rehab tests, or your own), start from a saved battery, or photograph your handwritten results with <b>Scan notes</b> in the athlete card: the app matches what you wrote to the tests it knows and fills the results in.</p>' +
+      '<p>Choose tests from the catalogue (the Performance screen’s, LL Strength’s and the Hamstring and ACL rehab tests, or your own), start from a saved battery, or photograph your handwritten results with <b>Scan photo</b> in the client card: the app matches what you wrote to the tests it knows and fills the results in.</p>' +
       '<div class="bat-empty-acts"><button type="button" class="primary" data-action="bat-choose" aria-haspopup="dialog">Choose tests</button>' +
       batSecondBtn('') + '</div></section>';
   }
@@ -1308,7 +1312,7 @@
     if (c.k === 'ham' || c.k === 'acl') return REHAB_LABEL[c.k] + ' \u00b7 ' + rehabTargetText(c);   // v37; v38: whose test it is (the categories mix them)
     if (c.k === 'str') return (c.detail ? c.detail + ' · ' : '') + c.unit + ' each leg · target ' + (c.def.target_text || '');
     var norm = pop.population ? screenNorm(c.name, pop, 'screen') : null;
-    var unit = c.unit && c.unit !== 'AU' ? c.unit : (c.unit === 'AU' ? 'score' : '');
+    var unit = scoreUnit(c.unit);
     if (!pop.population) return unit;
     return (unit ? unit + ' · ' : '') + (norm ? (norm.dir === 'Guide' ? 'guides training' : 'target ' + E.targetStr(norm)) : 'no target for this population');
   }
@@ -1348,7 +1352,7 @@
   }
   // v37: a rehab test's line in Choose tests: its unit and its target at the phase chosen (or how it will be rated)
   function rehabTargetText(c) {
-    var unit = c.def.calc === 'LSI' ? 'left & right \u2192 LSI %' : c.unit && c.unit !== 'AU' ? c.unit : (c.unit === 'AU' ? 'score' : '');
+    var unit = c.def.calc === 'LSI' ? 'left & right \u2192 LSI %' : scoreUnit(c.unit);
     var ph = c.k === 'ham' ? state.custom.hamPhase : state.custom.aclPhase, key = rehabKeyFor(c.k);
     var norm = key ? ((DATA[c.k].norms || {})[key] || {})[c.name] : null;
     var where = !ph ? 'targets by rehab phase' : !key ? 'targets by phase and sex' : norm ? 'phase target ' + E.targetStr(norm) + ' (' + ph + ')' : 'no target at ' + ph;
@@ -1848,10 +1852,10 @@
     if (c.k === 'lib') return 'Clinic test · ' + ltHow(c.def) + ' · ' + ltTargetLine(c.def);
     if (c.k === 'own') { var o = c.own; return 'Made on the Custom page · ' + (o.unit ? o.unit + ' · ' : '') + (o.green === null ? 'no target' : 'target ' + (o.dir === 'Lower' ? '≤ ' : '≥ ') + E.fmt(o.green)); }
     if (c.ratio || c.k === 'str') return catTargetText(c, { population: null });
-    if (c.k === 'ham' || c.k === 'acl') return REHAB_LABEL[c.k] + ' · ' + (c.def.calc === 'LSI' ? 'left & right → LSI %' : c.unit && c.unit !== 'AU' ? c.unit : 'score') + ' · targets by rehab phase';
+    if (c.k === 'ham' || c.k === 'acl') return REHAB_LABEL[c.k] + ' · ' + (c.def.calc === 'LSI' ? 'left & right → LSI %' : scoreUnit(c.unit) || 'score') + ' · targets by rehab phase';
     var p = bld.edit.pop;
     if (p && p !== 'general' && E.sportPopulations(DATA.screen).indexOf(p) >= 0) return catTargetText(c, { population: p, ageBand: 'All ages', label: p });
-    var unit = c.unit && c.unit !== 'AU' ? c.unit : (c.unit === 'AU' ? 'score' : '');
+    var unit = scoreUnit(c.unit);
     return (unit ? unit + ' · ' : '') + (p === 'general' ? 'general norms by sex and age' : 'norms for the population chosen');
   }
   function bldOnKeys() { var e = bld.edit; return bldEntries().filter(function (c) { return e.on[c.key]; }); }
@@ -2480,7 +2484,9 @@
   // Nothing is blocked. Looks right is kept in the draft for that exact value (and previous), so any change re-checks.
   // Values filled by Scan notes are checked the same way.
   var typoList = [];
-  function typedUnit(u) { return !u || u === 'AU' || u === 'ratio' || u === 'count' ? '' : (u === '%' || u === '°' ? u : ' ' + u); }
+  // v48: a unit as said to the clinician: 'AU' is a score, '/100' a score out of 100 (KOOS, IKDC, HaOS, ACL-RSI…)
+  function scoreUnit(u) { return !u ? '' : u === 'AU' ? 'score' : u === '/100' ? 'score out of 100' : u; }
+  function typedUnit(u) { return !u || u === 'AU' || u === '/100' || u === 'ratio' || u === 'count' ? '' : (u === '%' || u === '°' ? u : ' ' + u); }   // v48: + /100
   function typoFlags(t, c) {
     var s = state[t], ok = s.typoOk || {}, out = [];
     // row: metric key; fields: the boxes to outline; shown: the value as typed; who: 'Left ' / 'LSI ' / ''
@@ -2855,7 +2861,7 @@
   function coachCardHtml() {
     var t = state.tool, co = state[t].coach, open = coachShown(t);
     return '<section class="card coach' + (open ? '' : ' folded') + '" id="coachCard" aria-labelledby="coachTitle">' +
-      '<div class="card-head"><div class="fold-t"><h2 id="coachTitle">' + (SL(t) ? 'For the coach' : 'Training status') + '</h2>' +
+      '<div class="card-head"><div class="fold-t"><h2 id="coachTitle">Training status</h2>' +   // v48: one name on every page (was For the coach on the sport pages)
       '<p class="coach-help">Optional: ' + (SL(t) ? 'training status' : 'status') + ', modifications and next retest, printed as a band at the top of the report.</p></div>' +
       '<button type="button" class="ghost fold-add" data-action="coach-open" aria-expanded="' + open + '" aria-controls="coachFields">+ Add</button></div>' +
       '<div class="coach-fields" id="coachFields"><div class="f coach-status"><span id="coachStatusL">' + (SL(state.tool) ? 'Training status' : 'Status') + '</span>' +
@@ -3481,6 +3487,8 @@
     if (b.dataset.appr && t === 'ankle') { setAppr(b); return; }
     if (b.dataset.action === 'typo-ok') { typoOk(b); return; }
     if (b.dataset.action === 'goto-check') { gotoCheck(); return; }
+    if (b.dataset.action === 'example-remove') { removeExample(); return; }   // v48
+    if (b.dataset.action === 'interp-ok') { interpOk(); return; }           // v48: the AI draft read and passed
     if (b.dataset.action === 'goto-metric') { gotoMetric(b.dataset.goto); return; }
     if (b.dataset.action === 'retest') { toggleRetest(); return; }
     if (b.dataset.seg) {
@@ -3574,9 +3582,23 @@
   // v18: from the ⋯ menu, and only on an empty page (until v17 the summary offered it after a client was loaded, where it
   // renamed them Example Athlete and replaced their previous results)
   function demoAllowed() { return !homeView && TOOLS.indexOf(state.tool) >= 0 && !clientContent(state.tool) && !(state.tool === 'custom' && state.custom.batId); }   // v30: not on Home; v43: nor on a clinic battery (its own tests)
+  // v48: the example is marked on the page and never saved: until v47 Create report saved "Example Athlete" into the clinic's
+  // records like any client, so every practitioner saw a fake client in Clients
+  function isExample(t) { return !!(state[t] && state[t].example === true); }
+  // the page about to be saved holds the example: this tool, or a program linked to an example report
+  function exampleOnPage() { var lt = linkedTool(); return isExample(state.tool) || (state.tool === 'ex' && !!lt && isExample(lt)); }
+  function removeExample() {
+    var t = state.tool;
+    if (!isExample(t)) return;
+    var undo = clearForClient(t);
+    render();
+    window.scrollTo(0, 0);
+    toast('Example results removed', { label: 'Undo', run: undo });
+  }
   function fillExample() {
     if (!demoAllowed()) return;
     var t = state.tool, s = state[t];
+    s.example = window.BH_EXAMPLE_SAVES !== true;      // (the suites' switch: the example as if typed, for the flows that save records)
     if (t === 'screen') {
       Object.assign(s.meta, { name: 'Example Athlete', sex: 'Male', age: '24', mass: '82', sport: 'AFL', notes: 'Example data — not a real athlete' });
       var ex = { 'Jump Height': ['38.2', '36.9'], 'Peak Power': ['51.8', '52.4'], 'CMJ Peak Force': ['2140', ''], 'RSI-modified': ['0.52', '0.47'],
@@ -3624,7 +3646,7 @@
     }
     foldBeforeRender(t);
     render();
-    toast('Example results filled in — Clear all data in the ⋯ menu clears them');
+    toast('Example results filled in — nothing on this page is saved to a record');
   }
 
   // ------------------------------------------------------------------ report
@@ -3649,7 +3671,7 @@
   function buildReport(tool) {                         // v19: any report tool (the builder makes the linked report)
     var t = tool || state.tool, c = computeFor(t), m = state[t].meta;
     if (blocker(c, t)) return null;
-    var it = state[t].interp, interp = blank(it.text) ? null : { text: String(it.text).trim(), ai: !!it.ai };
+    var it = state[t].interp, interp = blank(it.text) ? null : { text: String(it.text).trim(), ai: !!it.ai, reviewed: it.reviewed !== false };   // v48: the PDF's AI line says whether it was checked
     var progress = progressData(t, c);
     // each priority carries its plain-English explainer (printed under it in smaller text)
     function explained(list, keyOf) {
@@ -3679,6 +3701,7 @@
           rehab: t === 'custom' ? customRehabInfo() : null,   // v37: the injured side and the phases, while it has rehab tests
           meta: { name: m.name, date: E.displayIso(m.date), sport: m.sport, tester: m.tester, age: m.age, sex: m.sex, mass: m.mass, notes: m.notes },
           popLabel: c.pop.label, groups: c.groups, counts: c.counts, prios: explained(c.prios, function (r) { return explainKey(t, r.name); }),
+          ageNote: over60Note(t),                      // v48: a client over 60 against the all-ages norms (until age-matched norms are added)
           radarKeys: c.radarPicked.map(function (k) { return [k, labels[k]]; }), interp: interp, progress: progress, coach: coachData(t)
         })
       };
@@ -3837,9 +3860,104 @@
   }
   // v34: a handout with the library's photos loads them first (a few seconds at most; one that can't be had prints without)
   var photoWait = false;
+  // v48: the general norms stop at 60 (Matthew is finding 60+ reference values): a client over 60 is scored against all ages,
+  // and the report and the check before Create report both say so
+  function over60Note(t) {
+    var age = E.parseInput(state[t].meta.age);
+    if ((t !== 'screen' && t !== 'custom') || state[t].pop !== 'general' || age === null || age <= 60) return '';
+    return 'There are no age-matched reference values over 60, so these results are compared with adults of all ages: treat the colours as a rough guide, and the change from last time as the better measure.';
+  }
+  // ------------------------------------------------------------------ v48: the check before Create report / Create handout
+  // One step listing what is still open on the page: values the typo guard flagged, boxes filled from a photo and not
+  // checked since, an AI interpretation nobody has read, an age the norms don't cover, exercises with no sets or reps.
+  // Each has its own way through; Create anyway goes ahead. (Until v47 nothing paused: the counts were shown, that's all.)
+  function exNoDose() { return state.ex.items.filter(function (it) { return exFilled(it) && blank(it.sets) && blank(it.reps); }); }
+  function scannedOpen(t) { var sc = state[t].scanned || {}; return Object.keys(sc).filter(function (k) { return sc[k] === true; }).length; }
+  function preflightItems() {
+    var t = state.tool, ex = t === 'ex', lt = linkedTool(), rt = ex ? '' : t, items = [];
+    var withEx = ex || (lt && lt === t && exCounts().exercises > 0);
+    if (rt) {
+      var n1 = typoList.length;
+      if (n1) items.push({ k: 'typo', text: n1 + (n1 === 1 ? ' value is' : ' values are') + ' outside the usual range or far from last time', acts: [['Check now', 'typo']] });
+      var n2 = scannedOpen(rt);
+      if (n2) items.push({ k: 'scan', text: n2 + (n2 === 1 ? ' box was' : ' boxes were') + ' filled from a photo and not checked since', acts: [['Show me', 'scan'], ['All correct', 'scan-ok']] });
+      var it = state[rt].interp;
+      if (it.ai && !blank(it.text) && !it.reviewed) items.push({ k: 'ai', text: 'The AI interpretation hasn’t been checked', acts: [['Read it', 'interp'], ['Looks right', 'interp-ok']] });
+      var age = E.parseInput(state[rt].meta.age);
+      if ((rt === 'screen' || rt === 'custom') && state[rt].pop === 'general' && age !== null && age > 60) {
+        items.push({ k: 'age', text: 'Age ' + E.fmt(age) + ': there are no age-matched norms over 60, so the results are compared with all adults (the report says so)', acts: [] });
+      }
+    }
+    if (withEx) {
+      var nd = exNoDose().length;
+      if (nd) items.push({ k: 'dose', text: nd + (nd === 1 ? ' exercise has' : ' exercises have') + ' no sets or reps', acts: [[ex ? 'Show me' : 'Open the program', 'dose']] });
+    }
+    return items;
+  }
+  var checkOpts = null;
+  function openCheck(items, opts) {
+    checkOpts = opts || {};
+    $('checkTitle').textContent = 'Before you create the ' + (state.tool === 'ex' ? 'handout' : 'report');
+    renderCheckList(items);
+    openModal(els.checkDialog, els.checkBack);
+  }
+  function renderCheckList(items) {
+    els.checkList.innerHTML = items.map(function (x) {
+      return '<li class="ck-item"><span class="ck-t">' + statusIcon('Amber') + esc(x.text) + '</span>' +
+        (x.acts.length ? '<span class="ck-acts">' + x.acts.map(function (a) { return '<button type="button" class="quiet" data-check="' + a[1] + '">' + esc(a[0]) + '</button>'; }).join('') + '</span>' : '') + '</li>';
+    }).join('');
+    $('checkIntro').textContent = items.length ? 'Worth a look first:' : 'All checked.';
+    els.checkGo.textContent = items.length ? 'Create anyway' : (state.tool === 'ex' ? 'Create handout' : 'Create report');
+  }
+  function onCheckClick(e) {
+    var b = e.target.closest('button');
+    if (!b) return;
+    if (b === els.checkBack) { closeModal(); return; }
+    if (b === els.checkGo) { var o = checkOpts || {}; closeModal(false); openReport(Object.assign({}, o, { checked: true })); return; }
+    var a = b.dataset.check;
+    if (!a) return;
+    if (a === 'scan-ok') { state[state.tool].scanned = {}; applyScanMarks(); saveDraft(); renderCheckList(preflightItems()); return; }
+    if (a === 'interp-ok') { interpOk(true); renderCheckList(preflightItems()); return; }
+    closeModal(false);
+    if (a === 'typo') gotoCheck();
+    else if (a === 'scan') gotoScanned();
+    else if (a === 'interp') gotoInterp();
+    else if (a === 'dose') gotoNoDose();
+  }
+  function gotoScanned() {                             // the first box still carrying a scan's highlight
+    var el = els.entry.querySelector('.scanned');
+    if (!el) return;
+    var row = el.closest('.metric');
+    if (row) revealRow(row); else el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    setTimeout(function () { try { el.focus({ preventScroll: true }); } catch (e) { el.focus(); } }, 350);
+  }
+  function gotoNoDose() {                              // the first exercise with no sets or reps (opening the builder first from a report)
+    var first = exNoDose()[0];
+    if (!first) return;
+    var away = state.tool !== 'ex';
+    if (away) gotoProgram();
+    setTimeout(function () {
+      var row = $('ex-' + first.id), inp = $('ex-' + first.id + '-sets');
+      if (!row) return;
+      row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      if (inp) setTimeout(function () { try { inp.focus({ preventScroll: true }); } catch (e) { inp.focus(); } }, 350);
+    }, away ? 300 : 0);
+  }
+  // the rows with no sets or reps are outlined as the program is built (the check before Create handout counts them)
+  function applyExDose() {
+    els.entry.querySelectorAll('.ex-row[data-id]').forEach(function (row) {
+      var it = exItem(row.dataset.id);
+      row.classList.toggle('nodose', !!(it && exFilled(it) && blank(it.sets) && blank(it.reps)));
+    });
+  }
   // opts (v35): quiet (made again from the report view: no "Saved" message), focus (the id of what takes focus after)
+  // v48: checked (the check before creating was seen, or doesn't apply)
   function openReport(opts) {
     opts = opts && typeof opts === 'object' && !opts.target ? opts : {};   // (a click event is no options)
+    if (!opts.checked && !opts.quiet) {
+      var open = preflightItems();
+      if (open.length) { openCheck(open, opts); return; }
+    }
     var lt0 = linkedTool(), withEx = state.tool === 'ex' || (lt0 && lt0 === state.tool && exCounts().exercises > 0);
     var urls = withEx ? handoutPhotoUrls().filter(function (u) { return !photoData[u]; }) : [];
     if (!urls.length) { openReportNow(opts); return; }
@@ -3870,6 +3988,7 @@
       CLOUD.sync();                                    // (after the record's upload, if that is under way)
       phone = { token: sh.token, url: sh.url, day: sh.day, first: sh.first, key: sh.key };
     }
+    var example = exampleOnPage();                     // v48: the example is never saved, and the message says so
     if (saved) {
       if (!saved.ok) toast('The session couldn’t be saved to the client record (storage is full or blocked).');
       else {
@@ -3878,8 +3997,8 @@
           : saved.replaced ? 'Updated ' + saved.name + '’s record for this date' : 'Saved to ' + saved.name + '’s record (' + saved.count + (saved.count === 1 ? ' session)' : ' sessions)'));
       }
       refresh();
-    }
-    homeFrom = { tool: both || t, name: saved && saved.ok ? saved.name : '', saved: !!(saved && saved.ok) };
+    } else if (example && !opts.quiet) toast('Example report — nothing is saved to a record');
+    homeFrom = { tool: both || t, name: saved && saved.ok ? saved.name : '', saved: !!(saved && saved.ok), example: example };
     els.back.textContent = '‹ ' + (ex ? 'Back to the program' : 'Back to results');
     // v20: a Screening report made without a program: the report view offers one too (where Matthew looked for it once
     // the report was made); the program then prints after this report, in the same PDF
@@ -4017,6 +4136,7 @@
     return TOOLS.concat(['ex']).filter(function (t) {
       // v19: a linked program's name and date are the report's, so only exercises (or a title) count as its own
       var has = t === 'ex' && linkedTool() ? exHasContent() : clientContent(t);
+      if (t === 'ex' ? (linkedTool() && isExample(linkedTool())) : isExample(t)) return false;   // v48: the example is never saved, so never "unsaved"
       return has && state[t].savedSig !== contentSig(t);
     });
   }
@@ -4132,7 +4252,8 @@
   // 'Uploaded to Jane Doe’s clinic record — ready for the next client' and the like
   function homeMessage(from, st, kept) {
     var who = from.name ? from.name + '’s' : 'the client’s', lead;
-    if (!from.saved) lead = 'Not saved to a client record';
+    if (from.example) lead = 'Example results cleared, nothing saved';   // v48
+    else if (!from.saved) lead = 'Not saved to a client record';
     else if (!CLOUD) lead = 'Saved to ' + who + ' record on this device';
     else if (st && !st.pending) lead = 'Uploaded to ' + who + ' clinic record';
     else if (st && st.denied) lead = 'Saved on this device, not uploaded (see the bar at the top)';
@@ -4290,7 +4411,7 @@
   // and Check-ins under them. Each page is drawn on Home in place of the rest, as a client's page is (homeSub).
   var HUBS = [
     ['photo', 'Photo mode', 'Photograph the results and the exercise page at the end of the appointment: the report and the handout, ready to send.'],
-    ['screening', 'Screening', 'Choose the battery: Performance & readiness, LL Strength, Hamstring or ACL rehab, or Custom.'],
+    ['screening', 'Screening', 'Choose the battery: Performance & readiness, LL Strength, Hamstring, ACL or Ankle-GO rehab, or a Custom battery.'],   // v48: + Ankle-GO
     ['ex', 'Exercise programming', 'Build a program, or open the exercise library and the program templates.']
   ];
   var BACK_SVG = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg>';
@@ -4993,7 +5114,7 @@
       if (t === 'ankle' && v.appr !== 'No' && v.appr !== 'Yes') v.appr = '';
       s.values[k] = v;
     });
-    s.interp = { text: typeof x.interp === 'string' ? x.interp : '', ai: x.interpAi === true, basis: '' };
+    s.interp = { text: typeof x.interp === 'string' ? x.interp : '', ai: x.interpAi === true, basis: '', reviewed: x.interpReviewed !== false };   // v48: (sessions before v48 have no flag: as printed then)
     var co = m.coach && typeof m.coach === 'object' ? m.coach : null;
     if (co) s.coach = { status: COACH_STATUS.indexOf(co.status) >= 0 ? co.status : '', mods: typeof co.mods === 'string' ? co.mods : '', retest: typeof co.retest === 'string' && E.parseDate(co.retest, ['Y-m-d']) ? co.retest : '' };
     return s;
@@ -5106,7 +5227,7 @@
     });
     var pain = typeof o.pain === 'number' && o.pain >= 0 && o.pain <= 10 ? Math.round(o.pain) : null;
     return { id: e.id, token: e.token, day: o.day, at: String(e.at || ''), items: items, pain: pain, note: typeof o.note === 'string' ? o.note.trim().slice(0, 500) : '',
-      grp: cap(o.grp, 80), title: cap(o.title, 120) };
+      grp: cap(o.grp, 80), title: cap(o.title, 120), none: o.none === true };   // v48: none: "Couldn't do it today" (pain and a note, nothing done)
   }
   function clientTokens(key) {                         // the client's phone links, in the order first sent
     var cl = key ? clients.clients[key] : null, out = [];
@@ -5213,7 +5334,8 @@
     return /\b(every|each) day\b|\bdaily\b/i.test(t) ? 7 : null;
   }
   // the check-in for a client with a live link: pain of 4 or more in the last two weeks not yet marked as seen, and days
-  // without a session (counted from the last session, else from the program sent; a mark as seen starts the count again)
+  // without a session (counted from the last session, else from the program sent; a mark as seen starts the count again).
+  // v48: + a session they couldn't do, and any note they wrote (until v47 a note with low pain never reached Home)
   function checkinFor(key) {
     var l = clientLink(key);
     if (!logsOn() || !l || !linkLive(l)) return null;
@@ -5221,16 +5343,21 @@
     if (!e || !Array.isArray(e.list)) return null;    // not read yet
     var seenDoc = clients.checkins && clients.checkins[l.token], seenAt = seenDoc && !seenDoc.deleted && typeof seenDoc.seenAt === 'string' ? seenDoc.seenAt : '';
     var seenMs = Date.parse(seenAt) || 0, list = clientLogs(key), since = addDaysIso(todayIso(), -14);
-    var pain = list.filter(function (x) { return x.pain !== null && x.pain >= PAIN_FLAG && x.day >= since && (!seenMs || (Date.parse(x.at) || 0) > seenMs); });
-    var ref = list.length ? list[0].day : l.date, seenDay = localDay(seenAt);
+    function fresh(x) { return x.day >= since && (!seenMs || (Date.parse(x.at) || 0) > seenMs); }
+    var pain = list.filter(function (x) { return x.pain !== null && x.pain >= PAIN_FLAG && fresh(x); });
+    var skipped = list.filter(function (x) { return x.none && fresh(x); }), noted = list.filter(function (x) { return x.note && fresh(x); });   // v48
+    var done = list.filter(function (x) { return !x.none; });   // v48: a "couldn't do it" entry isn't a session
+    var ref = done.length ? done[0].day : l.date, seenDay = localDay(seenAt);
     if (seenDay && seenDay > ref) ref = seenDay;
     var quiet = !list.length && l.date < LOG_START ? null : daysBetween(ref, todayIso()), reasons = [];
     if (pain.length) {
       var worst = pain.slice().sort(function (a, b) { return b.pain - a.pain || (a.day < b.day ? 1 : -1); })[0];
       reasons.push({ kind: 'pain', text: 'Pain ' + worst.pain + '/10 on ' + logDay(worst.day) + (pain.length > 1 ? ' (' + pain.length + ' sessions)' : '') });
     }
-    if (quiet !== null && quiet >= QUIET_DAYS) reasons.push({ kind: 'quiet', text: list.length ? 'No session logged for ' + quiet + ' days' : 'Nothing logged yet (program sent ' + quiet + ' days ago)' });
-    return reasons.length ? { key: key, token: l.token, reasons: reasons, pain: pain.length ? pain[0].day : '', quiet: quiet || 0 } : null;
+    if (skipped.length) reasons.push({ kind: 'skip', text: 'Couldn’t do the session on ' + logDay(skipped[0].day) + (skipped.length > 1 ? ' (' + skipped.length + ' times)' : '') });
+    if (noted.length) reasons.push({ kind: 'note', text: 'Note on ' + logDay(noted[0].day) + ': “' + (noted[0].note.length > 70 ? noted[0].note.slice(0, 68).trim() + '…' : noted[0].note) + '”' + (noted.length > 1 ? ' (+' + (noted.length - 1) + ' more)' : '') });
+    if (quiet !== null && quiet >= QUIET_DAYS) reasons.push({ kind: 'quiet', text: done.length ? 'No session logged for ' + quiet + ' days' : 'Nothing logged yet (program sent ' + quiet + ' days ago)' });
+    return reasons.length ? { key: key, token: l.token, reasons: reasons, pain: pain.length ? pain[0].day : '', skip: skipped.length ? skipped[0].day : '', quiet: quiet || 0 } : null;
   }
   function liveTokens() {                              // every client's working link (for the check-ins)
     var out = [];
@@ -5282,14 +5409,14 @@
         (last.pain !== null ? ' · pain ' + last.pain + '/10 last time' : '');
     }
     return '<button type="button" class="cp-row cp-log" data-cp="log"><span class="tile-ic">' + LOG_ICON + '</span><span class="cp-text"><b>Training log</b><small>' + esc(line) + '</small>' +
-      (ck ? '<span class="cp-tags">' + ck.reasons.map(function (r) { return '<span class="cp-tag ' + (r.kind === 'pain' ? 'warn' : 'idle') + '">' + esc(r.text) + '</span>'; }).join('') + '</span>' : '') +
+      (ck ? '<span class="cp-tags">' + ck.reasons.map(function (r) { return '<span class="cp-tag ' + (r.kind === 'pain' || r.kind === 'skip' ? 'warn' : 'idle') + '">' + esc(r.text) + '</span>'; }).join('') + '</span>' : '') +
       '</span><span class="cp-go"><span>View log</span>' + HOME_ICON.go + '</span></button>';
   }
   // sessions per week, the last 8 weeks (Monday to Sunday), one bar each; the planned number as a dashed line
   function weeksSvg(list, plan) {
     var weeks = [], start = weekStartIso(todayIso());
     for (var i = 7; i >= 0; i--) weeks.push(addDaysIso(start, -7 * i));
-    var n = weeks.map(function (w) { var end = addDaysIso(w, 7); return list.filter(function (x) { return x.day >= w && x.day < end; }).length; });
+    var n = weeks.map(function (w) { var end = addDaysIso(w, 7); return list.filter(function (x) { return !x.none && x.day >= w && x.day < end; }).length; });   // v48: a "couldn't do it" entry isn't a session
     var top = Math.max(plan || 0, Math.max.apply(null, n), 3), W = 480, H = 170, L = 26, B = 140, T = 14, bw = (W - L - 4) / 8;
     var y = function (v) { return B - (B - T) * v / top; };
     var grid = [0, top].map(function (v) { return '<line class="lg-grid" x1="' + L + '" x2="' + W + '" y1="' + y(v) + '" y2="' + y(v) + '"/><text class="lg-ax" x="' + (L - 6) + '" y="' + (y(v) + 4) + '" text-anchor="end">' + v + '</text>'; }).join('');
@@ -5341,7 +5468,7 @@
   }
   function logSessionsHtml(list) {
     return '<div class="lg-sessions">' + list.map(function (l) {
-      var head = [logDay(l.day), l.grp, doneCount(l) + ' of ' + l.items.length + ' done'].filter(Boolean).join(' · ');
+      var head = [logDay(l.day), l.grp, l.none ? 'couldn’t do it' : doneCount(l) + ' of ' + l.items.length + ' done'].filter(Boolean).join(' · ');   // v48
       return '<details class="lg-s' + (l.pain !== null && l.pain >= PAIN_FLAG ? ' hi' : '') + '"><summary><span class="lg-s-h">' + esc(head) + '</span>' +
         (l.pain !== null ? '<span class="lg-pain' + (l.pain >= PAIN_FLAG ? ' hi' : '') + '">Pain ' + l.pain + '/10</span>' : '') +
         (l.note ? '<span class="lg-note">“' + esc(l.note) + '”</span>' : '') + '</summary><ul>' + l.items.map(function (it) {
@@ -5648,6 +5775,7 @@
     openModal(els.clearDialog, els.clearCancel);
   }
   function clearAllData() {
+    var snap = JSON.parse(draftJson()), wasLoaded = exLoaded, wasHome = homeView;   // v48: Undo in the message puts it all back
     // v36: the Custom battery's population and tests are set-up, like Tests today: kept (Choose tests › Untick all empties it)
     var cu = customSetup();                            // v43: + the clinic battery it runs
     TOOLS.forEach(function (t) { state[t] = freshTool(t); });
@@ -5674,8 +5802,11 @@
     closeModal(false);
     render();
     window.scrollTo(0, 0);
-    els.moreBtn.focus();                               // Clear all data is in the ⋯ menu (v11), which has closed
-    toast('All data cleared — ready for the next client');
+    els.moreBtn.focus();                               // Clear this iPad's screens is in the ⋯ menu (v11), which has closed
+    toast('Screens cleared — every record is kept', { label: 'Undo', run: function () {
+      undoHome(snap, wasLoaded);
+      if (wasHome) showHome(false);                    // (Undo from Home: back to Home, the entries kept)
+    } });
   }
 
   // ------------------------------------------------------------------ AI interpretation
@@ -5877,6 +6008,8 @@
     if (busy) { kind = 'busy'; html = 'Claude is writing the interpretation…'; }
     else if (interpMsg.tool === t && interpMsg.kind === 'error') { kind = 'error'; html = esc(interpMsg.text); }
     else if (isStale(t, c)) { kind = 'stale'; html = 'Results have changed since this was drafted. Redraft or edit it.'; }
+    // v48: an AI draft stays "not yet checked" until it is edited or passed with Looks right (the PDF's AI line says which)
+    else if (it.ai && !blank(it.text) && !it.reviewed) { kind = 'done'; html = 'Drafted by Claude: read it, then edit it or tap Looks right. <button type="button" class="quiet interp-ok" data-action="interp-ok">Looks right</button>'; }
     else if (interpMsg.tool === t && interpMsg.kind === 'done') { kind = 'done'; html = 'Drafted by Claude. Check it before creating the report.'; }
     if (!busy && interpUndo && interpUndo.tool === t) html += (html ? ' ' : '') + '<button type="button" class="quiet undo" data-action="ai-undo">Undo</button>';
     st.className = 'interp-status' + (kind ? ' ' + kind : '');
@@ -5905,6 +6038,7 @@
     if (interpMsg.tool === t && interpMsg.kind === 'error' && !interpMsg.blocker) return '<button type="button" class="quiet interp-flag stale" data-action="goto-interp">The AI draft didn’t work: see Interpretation</button>';
     if (blank(it.text)) return blocker(c) ? '' : '<button type="button" class="quiet interp-flag" data-action="ai-draft">' + SPARKLE + 'Add an AI interpretation</button>';
     if (isStale(t, c)) return '<button type="button" class="quiet interp-flag stale" data-action="goto-interp">Interpretation may be out of date</button>';
+    if (it.ai && !it.reviewed) return '<button type="button" class="quiet interp-flag stale" data-action="goto-interp">AI interpretation not checked yet</button>';   // v48
     return '<button type="button" class="quiet interp-flag ok" data-action="goto-interp">✓ Interpretation included</button>';
   }
   function gotoInterp() {
@@ -5929,13 +6063,23 @@
     it.text = el.value;
     fitInterp();
     if (blank(el.value)) { it.ai = false; it.basis = ''; }
+    it.reviewed = true;                                // v48: edited by hand counts as read
     interpUndo = null;
     if (interpMsg.tool === state.tool && interpMsg.kind === 'error') interpMsg = { tool: null, kind: '', text: '' };
     refresh();
   }
+  // v48: the AI draft read and passed as it is (Looks right on the card, or in the check before Create report)
+  function interpOk(quiet) {
+    var it = state[state.tool].interp;
+    if (!it.ai || blank(it.text) || it.reviewed) return;
+    it.reviewed = true;
+    if (interpMsg.tool === state.tool && interpMsg.kind === 'done') interpMsg = { tool: null, kind: '', text: '' };
+    refresh();
+    if (!quiet) toast('Interpretation checked');
+  }
   function undoInterp() {
     if (!interpUndo || interpUndo.tool !== state.tool) return;
-    state[state.tool].interp = { text: interpUndo.text, ai: interpUndo.ai, basis: interpUndo.basis };
+    state[state.tool].interp = { text: interpUndo.text, ai: interpUndo.ai, basis: interpUndo.basis, reviewed: interpUndo.reviewed !== false };
     interpUndo = null;
     interpMsg = { tool: null, kind: '', text: '' };
     var ta = $('interpText');
@@ -6029,8 +6173,8 @@
     callClaude(key, payload, interpGuideText(t)).then(function (text) {   // v24: the condition's evidence guide on rehab reports
       if (gen !== aiGen) return;                     // cleared while waiting
       var it = state[t].interp;
-      if (!blank(it.text)) interpUndo = { tool: t, text: it.text, ai: it.ai, basis: it.basis };
-      state[t].interp = { text: text, ai: true, basis: basis };
+      if (!blank(it.text)) interpUndo = { tool: t, text: it.text, ai: it.ai, basis: it.basis, reviewed: it.reviewed };
+      state[t].interp = { text: text, ai: true, basis: basis, reviewed: false };   // v48: not yet read by the clinician
       interpMsg = { tool: t, kind: 'done', text: '' };
     }, function (err) {
       if (gen !== aiGen) return;
@@ -6046,11 +6190,11 @@
       refresh();
     });
   }
-  var KEY_NOTE = 'The key is saved only on this device and is only sent to Anthropic when you use Draft with AI or Scan notes.';
+  var KEY_NOTE = 'The key is saved only on this device and is only sent to Anthropic when you use Draft with AI or Scan photo.';
   // v13, cloud mode: the key lives in the clinic store (meta/settings) and is cached on each device for offline use
-  var KEY_NOTE_CLOUD = 'The key is shared by the clinic: saved once, it reaches every signed-in device. It is kept on this device too and is only sent to Anthropic when you use Draft with AI or Scan notes.';
+  var KEY_NOTE_CLOUD = 'The key is shared by the clinic: saved once, it reaches every signed-in device. It is kept on this device too and is only sent to Anthropic when you use Draft with AI or Scan photo.';
   // v46: a practitioner who isn't an admin can't set the clinic's key (the rules let only an admin write it); theirs stays on the iPad
-  var KEY_NOTE_STAFF = 'The clinic’s shared key is set by an admin and reaches every signed-in device. A key pasted here stays on this iPad only and is only sent to Anthropic when you use Draft with AI or Scan notes.';
+  var KEY_NOTE_STAFF = 'The clinic’s shared key is set by an admin and reaches every signed-in device. A key pasted here stays on this iPad only and is only sent to Anthropic when you use Draft with AI or Scan photo.';
   function keyShared() { var a = CLOUD && CLOUD.account(); return !!CLOUD && !(a && a.staff && !a.admin); }
   function ONCE_NOTE() { return keyShared() ? 'You only need to do this once for the clinic.' : 'You only need to do this once on each device.'; }
   // then: what to do once a key is saved (e.g. carry on drafting or scanning)
@@ -6142,7 +6286,7 @@
   var CALCULATED = /LSI|% of|deficit|imbalance|asymmetry|diff %|ratio|relative/i;
   // what Claude should look for on the paper for one app metric (screening and rehab tabs)
   function scanWhat(t, m) {
-    var unit = m.unit && m.unit !== 'AU' ? m.unit : (m.unit === 'AU' ? 'score' : 'number');
+    var unit = scoreUnit(m.unit) || 'number';
     var w = m.calc === 'PERBW' || m.calc === 'PERKG' || m.calc === 'NPCTBW' ? 'force in N (the app divides by body mass)' : 'in ' + unit;
     if (m.calc === 'LSI') return 'left and right values in the same unit (the app works out the LSI)';
     if (/(\u2014 injured|\(injured\))$/.test(m.name)) w += ', injured side only';
@@ -6515,7 +6659,7 @@
     if (sc) {
       sc.classList.toggle('busy', busy);
       sc.setAttribute('aria-disabled', String(busy));
-      sc.title = busy ? 'Reading…' : (t === 'ex' ? 'Scan exercise page' : 'Scan notes');
+      sc.title = busy ? 'Reading…' : 'Scan photo';
     }
     var sg = $('exSuggest');                           // v21: Suggest from the report says it's working
     if (sg) { sg.classList.toggle('busy', suggestBusy); sg.setAttribute('aria-disabled', String(suggestBusy)); sg.querySelector('[data-label]').textContent = suggestBusy ? 'Suggesting…' : 'Suggest from the report'; }
@@ -6579,7 +6723,7 @@
   // v25: plus the condition's side (Left, Right or Both; '' while not chosen), so Claude can tell which findings the condition explains
   // v27: plus the physiotherapist's notes for Claude (brief): free text sent with the request, kept with the plan, never printed
   var PLAN = { sessions: ['2', '3', '4'], setting: ['Gym', 'Home', 'Both'], level: ['New', 'Trained'], weeks: ['4', '6', '8'] };
-  var PLAN_LABEL = { sessions: 'Sessions a week', setting: 'Where', level: 'Experience (new to training, or trained)', weeks: 'Block (weeks)' };
+  var PLAN_LABEL = { sessions: 'Sessions a week', setting: 'Where', level: 'Experience (new to training, or trained)', weeks: 'Program length (weeks)' };   // v48: was Block
   var STAGES_DEFAULT = ['Early', 'Middle', 'Late', 'Ongoing'], SIDES_DEFAULT = ['Left', 'Right', 'Both'];
   function stageList() { var g = DATA.guideIndex; return g && Array.isArray(g.stages) && g.stages.length ? g.stages.map(clean1).filter(Boolean) : STAGES_DEFAULT; }
   function sideList() { var g = DATA.guideIndex; return g && Array.isArray(g.sides) && g.sides.length ? g.sides.map(clean1).filter(Boolean) : SIDES_DEFAULT; }
@@ -6723,7 +6867,8 @@
       else {
         EX_FIELDS.forEach(function (f) { o[f] = exStr(it[f]); });
         o.lib = typeof it.lib === 'string' && LIB_ID.test(it.lib) ? it.lib : '';   // v15: the library exercise it came from
-        if (!o.lib && typeof it.libWas === 'string' && LIB_ID.test(it.libWas)) o.libWas = it.libWas;   // v17: its link before the name was typed over
+        if (typeof it.libWas === 'string' && LIB_ID.test(it.libWas) && it.libWas !== o.lib) o.libWas = it.libWas;   // v17: its link before the name was typed over (v48: kept while linked to another)
+        if (!o.lib && typeof it.noAuto === 'string' && it.noAuto) o.noAuto = it.noAuto.slice(0, 120);   // v48: the name unlinked by hand (its key): it doesn't link itself again
         if (!blank(it.why)) o.why = clean1(it.why).slice(0, 120);   // v21: the finding a suggested exercise is for
       }
       list.push(o);
@@ -6761,9 +6906,10 @@
     state.ex.items.forEach(function (it) { if (it.kind === 'section') { if (!blank(it.heading)) s++; } else if (exFilled(it)) n++; });
     return { exercises: n, sections: s };
   }
-  function exColumns() {
-    var u = exUsed();
-    return ['name'].concat(EX_MAIN, EX_DETAIL.filter(function (f) { return u[f]; }));
+  function exColumns() {                               // v48: the handout's columns: Exercise, then each column with something in it
+    var u = exUsed(), main = {};
+    state.ex.items.forEach(function (it) { if (it.kind === 'ex') EX_MAIN.forEach(function (f) { if (!blank(it[f])) main[f] = true; }); });
+    return ['name'].concat(EX_MAIN.filter(function (f) { return main[f]; }), EX_DETAIL.filter(function (f) { return u[f]; }));
   }
 
   // ---- the screen: patient card (with the scan button), program card (title, instructions, the table)
@@ -6833,7 +6979,7 @@
       ' placeholder="Optional: a sentence or two on what this block works on and how it links to their testing" autocapitalize="sentences">' + esc(x.reason) + '</textarea></label>' +
       '<label class="f" for="ex-instructions"><span>General instructions</span><textarea id="ex-instructions" data-ex="instructions" rows="2" maxlength="' + EX_LEN.instructions + '"' +
       ' placeholder="Optional, e.g. 3 × per week. Ice after if sore." autocapitalize="sentences">' + esc(x.instructions) + '</textarea></label>' +
-      '<div class="ex-cover"><label class="f ex-weeks" for="ex-weeks"><span>Block length</span><span class="ex-suffix"><input id="ex-weeks" data-ex="weeks" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="2"' +
+      '<div class="ex-cover"><label class="f ex-weeks" for="ex-weeks"><span>Program length</span><span class="ex-suffix"><input id="ex-weeks" data-ex="weeks" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="2"' +
       ' value="' + esc(x.weeks) + '" placeholder="e.g. 6" autocomplete="off" enterkeyhint="next"><span aria-hidden="true">weeks</span></span></label>' +
       '<label class="f ex-review" for="ex-review"><span>Next review</span><input id="ex-review" data-ex="review" type="date" value="' + esc(x.review) + '"></label></div>' +
       '<p class="ex-past" id="exPast" role="status"' + (exReviewPast() ? '' : ' hidden') + '>This date has passed.</p>' : '') +
@@ -6856,8 +7002,11 @@
   // under the name of a linked row: the cues (as printed on the handout) and ▶ when there is a video
   function exLibStripHtml(it) {
     var e = exLinked(it), pic = thumbOf(e);
-    if (!e || (!e.cues.length && !hasVideo(e) && !pic)) return '';
-    return (pic ? '<button type="button" class="el-pic" data-action="ex-photo" aria-label="See ' + esc(e.name) + (e.photo ? ' photo' : ' video') + '"><img src="' + esc(pic) + '" alt=""></button>' : '') +   // v34
+    if (!e) return '';
+    // v48: the link is said in words, with Unlink beside it (until v47 only More › Unlink showed a row was linked)
+    var tag = '<span class="el-tag">From the library</span><button type="button" class="quiet el-unlink" data-action="ex-unlink">Unlink<span class="vh"> ' + esc(e.name) + ' from the library</span></button>';
+    if (!e.cues.length && !hasVideo(e) && !pic) return tag;
+    return tag + (pic ? '<button type="button" class="el-pic" data-action="ex-photo" aria-label="See ' + esc(e.name) + (e.photo ? ' photo' : ' video') + '"><img src="' + esc(pic) + '" alt=""></button>' : '') +   // v34
       '<span class="el-cues">' + esc(e.cues.join(' · ')) + '</span>' +   // v18: no Draft badge here (the library page shows it)
       (hasVideo(e) ? '<button type="button" class="el-play" data-action="ex-video" aria-label="Watch ' + esc(e.name) + ' video">' + PLAY + '</button>' : '');
   }
@@ -6881,12 +7030,28 @@
     var k = ' ' + E.libKey(name) + ' ';
     return [e.name].concat(Array.isArray(e.aliases) ? e.aliases : []).some(function (n) { var nk = E.libKey(n); return !!nk && k.indexOf(' ' + nk + ' ') >= 0; });
   }
+  // v48: a typed name that is exactly a library exercise (or one of its other names) links by itself, so its cues and video
+  // print; the row shows "From the library" with Unlink. Unlinked by hand, that exact name (it.noAuto, its key) never
+  // links itself again; another library name typed in its place does.
+  // it.libWas (v17) is the link that went last, kept while the row is linked to another exercise too (v48), so a variation
+  // typed after it ("Split squat with band" after "Rear-foot elevated split squat") finds its way back.
   function exRelink(it) {
-    var cur = it.lib ? libGet(it.lib) : null, was = !it.lib && it.libWas ? libGet(it.libWas) : null, e = cur || was;
-    if (!e) return false;
-    var m = E.libMatch(it.name, libList()), holds = nameHolds(it.name, e) && (!m || m.id === e.id);
-    if (cur && !holds) { it.libWas = cur.id; it.lib = ''; return true; }
-    if (was && holds) { it.lib = was.id; delete it.libWas; return true; }
+    var cur = it.lib ? libGet(it.lib) : null, was = it.libWas ? libGet(it.libWas) : null;
+    var m = E.libMatch(it.name, libList()), auto = !!m && it.noAuto !== E.libKey(it.name);
+    function holds(e) { return !!e && nameHolds(it.name, e) && (!m || m.id === e.id); }
+    if (auto) {                                        // v48: exactly a library exercise (or one of its other names)
+      if (cur && cur.id === m.id) return false;
+      if (cur) it.libWas = cur.id;
+      it.lib = m.id; delete it.noAuto;
+      if (it.libWas === it.lib) delete it.libWas;
+      return true;
+    }
+    if (cur) {
+      if (holds(cur)) return false;
+      if (was && was.id !== cur.id && holds(was)) { it.lib = was.id; delete it.libWas; return true; }
+      it.libWas = cur.id; it.lib = ''; return true;
+    }
+    if (holds(was)) { it.lib = was.id; delete it.libWas; return true; }
     return false;
   }
   // The name and the notes wrap (a one-line box that grows, so a long name can be checked against the page in full);
@@ -6957,6 +7122,7 @@
     renderExTop();                                     // v32: and the handout's cover opens when a suggestion fills it
     fitExWraps();
     applyExMarks();
+    applyExDose();                                     // v48: rows with no sets or reps
     applyExLogged();                                   // v40: what the client logged last, under each exercise
     refreshEx();
   }
@@ -7123,7 +7289,7 @@
         '<div class="ex-linkacts"><button type="button" class="quiet" data-action="back-to-report">‹ Back to the report</button>' +
         '<button type="button" class="quiet" data-action="unlink-program">Print on its own</button></div></div>'
       : cand ? '<button type="button" class="quiet ex-flag" data-action="link-report" data-tool="' + cand + '">' + EX_ICON + 'Print with ' + esc(whose + toolName(cand)) + ' report</button>' : '';
-    var cols = exColumns(), later = EX_DETAIL.filter(function (f) { return cols.indexOf(f) < 0; }).map(function (f) { return EX_LABEL[f]; });
+    var cols = exColumns(), later = EX_MAIN.concat(EX_DETAIL).filter(function (f) { return cols.indexOf(f) < 0; }).map(function (f) { return EX_LABEL[f]; });   // v48: Sets, Reps and Load print only when given
     var laterText = later.length ? (later.length > 1 ? later.slice(0, -1).join(', ') + ' and ' + later[later.length - 1] : later[0]) + (later.length > 1 ? ' are' : ' is') + ' added when used.' : '';
     // v15: how many filled rows are linked to the library, and how many of those print a video QR code
     var linked = 0, vids = 0, pics = 0;
@@ -7131,7 +7297,7 @@
     // v18: the panel says it in two short lines (until v17: tiles, a column list and notes)
     var counts = c.exercises + (c.exercises === 1 ? ' exercise' : ' exercises') + (c.sections ? ' · ' + c.sections + (c.sections === 1 ? ' section' : ' sections') : '') +
       (pics ? ' · ' + pics + (pics === 1 ? ' photo' : ' photos') : '') + (vids ? ' · ' + vids + (vids === 1 ? ' video' : ' videos') : '');
-    var prints = 'Prints ' + andList(cols.slice(1).map(function (f) { return EX_LABEL[f]; })) + '.' + (laterText ? ' ' + laterText : '');
+    var prints = (cols.length > 1 ? 'Prints ' + andList(cols.slice(1).map(function (f) { return EX_LABEL[f]; })) + '.' : 'Prints the exercise names.') + (laterText ? ' ' + laterText : '');
     // v31: the panel is redrawn as the program is typed; a findings list scrolled down stays where it was
     var was = els.summary.querySelector('.ex-sum .sum-scroll'), keepTop = was ? was.scrollTop : 0;
     els.summary.innerHTML = '<div class="sum ex-sum"><div class="sum-scroll"><h2>Exercise handout</h2>' +
@@ -7197,6 +7363,7 @@
     if (el.tagName === 'TEXTAREA') { el.style.height = 'auto'; el.style.height = (el.scrollHeight + 2) + 'px'; }
     it[f] = el.value;
     if (x.scanned[it.id]) { delete x.scanned[it.id]; row.classList.remove('scanned'); }   // edited: checked
+    if (it.kind === 'ex') row.classList.toggle('nodose', exFilled(it) && blank(it.sets) && blank(it.reps));   // v48
     if (EX_DETAIL.indexOf(f) >= 0) syncExDetails(row);
     if (it.kind === 'ex' && f === 'name') {             // v15: the library's suggestions, and Link to / Save to library follow the name
       var relinked = exRelink(it);                     // v17: and so does the link itself
@@ -7232,6 +7399,7 @@
     if (!it || !e) return;
     it.name = e.name; it.lib = e.id;
     delete it.libWas;                                  // v17: a link chosen by hand
+    delete it.noAuto;                                  // v48
     DOSE.forEach(function (f) { if (blank(it[f])) it[f] = e.dose[f] || ''; });
     delete state.ex.scanned[it.id];
     hideSuggest();
@@ -7271,6 +7439,7 @@
       if (a === 'ex-linkto' && !to) return true;
       it.lib = to ? to.id : '';
       delete it.libWas;                                // v17: chosen by hand (a typed name won't bring the old link back)
+      if (to) delete it.noAuto; else it.noAuto = E.libKey(it.name) || '';   // v48: nor link itself again under this name
       renderExTable();
       var back = $('ex-' + it.id + '-libact');           // keep the place: the row's new link action (no keyboard)
       focusQuiet(back && back.querySelector('button'));
@@ -9551,7 +9720,7 @@
   }
   function saveSession(t, c) {
     var m = state[t].meta, name = String(m.name || '').trim(), key = E.nameKey(name);
-    if (!key) return null;
+    if (!key || isExample(t)) return null;            // v48: the example never reaches a record
     var date = m.date || todayIso(), meta = {};
     Object.keys(m).forEach(function (k) { if (k !== 'name' && !blank(m[k])) meta[k] = String(m[k]).trim(); });
     if (SL(t)) meta.pop = state[t].pop;              // v36: the Custom battery's too
@@ -9570,7 +9739,7 @@
       if (Object.keys(snap).length) sess.libTests = snap;
     }
     // v39: so the client's page can make the report again as printed: the summary's AI note and the radar's chosen axes
-    if (sess.interp && state[t].interp.ai) sess.interpAi = true;
+    if (sess.interp && state[t].interp.ai) { sess.interpAi = true; if (state[t].interp.reviewed === false) sess.interpReviewed = false; }   // v48: printed as not yet checked
     if (SL(t) && Array.isArray(state[t].radar)) sess.radar = state[t].radar.filter(function (k) { return typeof k === 'string'; }).slice(0, 6);
     // v39: and the previous results the page had that the values don't keep: LL Strength's each leg (with that day's mass and
     // date), and the body mass a Custom battery's previous load was scored with
@@ -9606,7 +9775,7 @@
   // included) as an Exercises session: no results, so nothing that reads results or previous values ever uses it
   function saveProgram(program) {
     var m = state.ex.meta, name = String(m.name || '').trim(), key = E.nameKey(name);
-    if (!key || !program) return null;
+    if (!key || !program || (linkedTool() && isExample(linkedTool()))) return null;   // v48: nor a program linked to an example report
     var sess = { tool: 'ex', date: m.date || todayIso(), savedAt: new Date().toISOString(), meta: {}, values: {}, results: {}, mass: null, interp: '', program: program };
     if (!blank(m.practitioner)) sess.meta.practitioner = clean1(m.practitioner);
     if (userName()) sess.savedBy = userName();
@@ -9668,7 +9837,13 @@
   function refreshExClientBar() {
     var bar = $('clientBar');
     if (!bar) return;
-    var key = E.nameKey(state.ex.meta.name), cl = key ? clients.clients[key] : null;
+    var key = E.nameKey(state.ex.meta.name), cl = key ? clients.clients[key] : null, lt = linkedTool();
+    if (lt && isExample(lt)) {                         // v48: linked to the example report: nothing here is saved either
+      bar.hidden = false; bar.className = 'client-bar example';
+      bar.innerHTML = '<b>Example results</b> — this program goes with the example report, so it isn’t saved to any record.';
+      applyExLogged();
+      return;
+    }
     if (!cl) { bar.hidden = true; bar.innerHTML = ''; bar.className = 'client-bar'; return; }
     var progs = exPrograms(cl), n = progs.length, last = n ? progs[n - 1].date : '';
     bar.hidden = false;
@@ -9866,6 +10041,11 @@
     if (!bar) return;
     var key = E.nameKey(s.meta.name), cl = key ? clients.clients[key] : null, date = s.meta.date || todayIso();
     var h = s.hist;
+    if (isExample(t)) {                                // v48: the example's banner, in place of any record of that name
+      bar.hidden = false; bar.className = 'client-bar example';
+      bar.innerHTML = exampleBarHtml();
+      return;
+    }
     if (cl && h && h.key === key) {
       bar.hidden = false; bar.className = 'client-bar loaded';
       var on = retest.on && retest.tool === t;
@@ -9883,8 +10063,12 @@
         '<button type="button" class="quiet" data-action="load-history" data-client="' + esc(key) + '">' + (earlier ? 'Load previous results' : 'Fill in details') + '</button>';
     } else { bar.hidden = true; bar.innerHTML = ''; }
   }
+  function exampleBarHtml() {
+    return '<b>Example results</b> — not saved to any record. <button type="button" class="quiet" data-action="example-remove">Remove</button>';
+  }
   function clientLine(t) {
     var name = String(state[t].meta.name || '').trim(), cl = clientFor(name);
+    if (t === 'ex' ? (linkedTool() && isExample(linkedTool())) : isExample(t)) return 'Example results: nothing on this page is saved to a record.';   // v48
     if (!name) return t === 'ex' ? 'Add a patient name to save this program to a ' + recordWord() + '.' : 'Add a name to save this session to a ' + recordWord() + '.';
     var date = state[t].meta.date || todayIso();
     // one line each (v11); the client bar in the details card says how many sessions there are
@@ -9931,13 +10115,15 @@
     els.clientsClose.textContent = pick ? 'Cancel' : 'Close';
     els.clientsClose.className = pick ? 'ghost' : 'primary';
     els.clientsFine.hidden = pick;
+    // v48: Back up records… is an admin's, so a practitioner's login isn't pointed at it
+    if (CLOUD) els.clientsFine.textContent = 'Records are kept in the clinic store and shared by every signed-in device; this device keeps a copy for when the Wi\u2011Fi is poor.' + (isAdmin() ? ' Back up records\u2026 in the \u22ef menu still saves a file.' : '');
     syncClientsEdit();
     renderClientsList();
     // no box focused at first (the iPad keyboard would cover the list): the first client, else New client / Close
     openModal(els.clientsDialog, els.clientsList.querySelector('.cl-pick') || (pick ? els.clientsNew : els.clientsClose));
   }
-  function syncClientsEdit() {                         // v18: Edit (manage mode, with clients to delete) ↔ Done
-    els.clientsEdit.hidden = clientsMode !== 'manage' || !clientKeys().length;
+  function syncClientsEdit() {                         // v18: Edit (manage mode, with clients to delete) ↔ Done; v48: admins only
+    els.clientsEdit.hidden = clientsMode !== 'manage' || !isAdmin() || (!clientKeys().length && !recentDeleted().length);
     els.clientsEdit.textContent = clientsEditing ? 'Done' : 'Edit';
     els.clientsEdit.setAttribute('aria-pressed', String(clientsEditing));
   }
@@ -9967,20 +10153,75 @@
     syncClientsEdit();
     keys.forEach(function (k) { total += clients.clients[k].sessions.length; });
     var loads = state.tool === 'ex' ? 'Loading a client fills in their name and their last saved program.' : 'Loading a client fills in their details and their results from last time.';
+    var del = !pick && clientsEditing && isAdmin();    // v18: Delete only in Edit; otherwise every row loads its client. v48: admins
     els.clientsSummary.textContent = !keys.length ? 'No saved clients yet. A record starts when you create a report with a name filled in.'
       : pick ? loads
         : keys.length + (keys.length === 1 ? ' client, ' : ' clients, ') + total + (total === 1 ? ' session' : ' sessions') + (CLOUD ? ', in the clinic store. ' : ', saved on this device. ') +
-          (clientsEditing ? 'Tap Delete to remove a client.' : homeView ? 'Tap a name to open their page.' : 'Tap a name to load it here.');
+          (del ? 'Tap Delete to remove a client (Undo is in the message after).' : homeView ? 'Tap a name to open their page.' : 'Tap a name to load it here.');
     els.clientsSearchWrap.hidden = !keys.length;
     var shown = q ? keys.filter(function (k) { return k.indexOf(q) >= 0; }) : keys;
-    if (!keys.length) { els.clientsList.innerHTML = ''; return; }
-    if (!shown.length) { els.clientsList.innerHTML = '<p class="client-none" role="status">No clients match “' + esc(typed) + '”.</p>'; return; }
-    var del = !pick && clientsEditing;                 // v18: Delete only in Edit; otherwise every row loads its client
+    var recent = del ? recentDeletedHtml() : '';       // v48: under the list, in Edit
+    if (!keys.length) { els.clientsList.innerHTML = recent; return; }
+    if (!shown.length) { els.clientsList.innerHTML = '<p class="client-none" role="status">No clients match “' + esc(typed) + '”.</p>' + recent; return; }
     els.clientsList.innerHTML = '<ul class="client-list' + (del ? '' : ' pick') + '">' + shown.map(function (k) {
       var cl = clients.clients[k], d = '<b>' + esc(cl.name) + '</b><span>' + esc(clientDetail(cl)) + '</span>';
       return !del ? '<li><button type="button" class="cl-pick" data-action="pick-client" data-key="' + esc(k) + '">' + d + '</button></li>'
         : '<li><div class="cl-main">' + d + '</div><button type="button" class="quiet cl-del" data-action="delete-client" data-key="' + esc(k) + '">Delete</button></li>';
-    }).join('') + '</ul>';
+    }).join('') + '</ul>' + recent;
+  }
+  // ---- v48: Recently deleted. A deleted client's record is kept on this iPad for 30 days (in the clinic store its sessions
+  // are tombstones, hidden from every device); Undo in the message, or Restore here, puts it back: the record as it was,
+  // and in cloud mode each session written again (a tombstone still waiting to upload is replaced in the queue).
+  var RECENT_DEL = 'bh-athlete-report-deleted-v1', RECENT_DAYS = 30, RECENT_MAX = 20;
+  function recentScope() { return CLOUD ? 'cloud' : 'local'; }   // (any admin on this iPad sees them; the records are one clinic's)
+  function recentDeleted() {
+    var list = null;
+    try { list = JSON.parse(localStorage.getItem(RECENT_DEL)); } catch (e) { list = null; }
+    if (!Array.isArray(list)) return [];
+    var cut = Date.now() - RECENT_DAYS * 86400000, scope = recentScope();
+    return list.filter(function (x) { return x && typeof x === 'object' && x.scope === scope && typeof x.key === 'string' && Array.isArray(x.sessions) && (Date.parse(x.at) || 0) > cut; });
+  }
+  function saveRecent(list) {
+    var scope = recentScope(), other = [];
+    try { other = (JSON.parse(localStorage.getItem(RECENT_DEL)) || []).filter(function (x) { return x && x.scope !== scope; }); } catch (e) { other = []; }
+    try { localStorage.setItem(RECENT_DEL, JSON.stringify(other.concat(list.slice(-RECENT_MAX)))); } catch (e) { /* storage full: Undo in the message still works */ }
+  }
+  function rememberDeleted(key, cl) {
+    var entry = { scope: recentScope(), key: key, name: cl.name, sessions: cl.sessions, at: new Date().toISOString(), by: userName() };
+    saveRecent(recentDeleted().filter(function (x) { return x.key !== key; }).concat([entry]));
+    return entry;
+  }
+  function forgetDeleted(entry) { saveRecent(recentDeleted().filter(function (x) { return !(x.key === entry.key && x.at === entry.at); })); }
+  function restoreDeleted(entry) {
+    var cl = clients.clients[entry.key];
+    if (!cl) { cl = clients.clients[entry.key] = { name: entry.name, sessions: [] }; }
+    entry.sessions.forEach(function (x) {
+      if (!x || !x.tool || !x.date) return;
+      if (cl.sessions.some(function (y) { return y.tool === x.tool && y.date === x.date; })) return;   // saved again since: that one stays
+      cl.sessions.push(x);
+      if (CLOUD) CLOUD.putSession(entry.key, cl.name, x);
+    });
+    cl.sessions = E.sortSessions(cl.sessions);
+    saveClients();
+    if (CLOUD) CLOUD.sync();
+    forgetDeleted(entry);
+    if (openModalEl === els.clientsDialog) { syncClientsEdit(); renderClientsList(); }
+    refresh();
+    if (homeView) renderHome();
+    toast('Restored ' + entry.name + '’s record');
+  }
+  function agoWords(iso) {                            // 'just now', '25 min ago', '3 h ago', 'yesterday', '6 days ago'
+    var ms = Date.now() - (Date.parse(iso) || 0), m = Math.floor(ms / 60000), h = Math.floor(m / 60), d = Math.floor(h / 24);
+    return m < 1 ? 'just now' : m < 60 ? m + ' min ago' : h < 24 ? h + ' h ago' : d === 1 ? 'yesterday' : d + ' days ago';
+  }
+  function recentDeletedHtml() {
+    var list = recentDeleted().slice().reverse();
+    if (!list.length) return '';
+    return '<div class="cl-recent"><h3>Recently deleted</h3><p class="modal-fine">Kept on this iPad for ' + RECENT_DAYS + ' days.</p><ul class="client-list">' + list.map(function (x) {
+      var n = x.sessions.length;
+      return '<li><div class="cl-main"><b>' + esc(x.name) + '</b><span>' + n + (n === 1 ? ' session' : ' sessions') + ' · deleted ' + esc(agoWords(x.at)) + (x.by ? ' by ' + esc(x.by) : '') + '</span></div>' +
+        '<button type="button" class="quiet cl-restore" data-action="restore-client" data-key="' + esc(x.key) + '" data-at="' + esc(x.at) + '">Restore</button></li>';
+    }).join('') + '</ul></div>';
   }
   // a client chosen (Choose client, or v18 a name tapped in Clients): the name and the existing load (details and
   // previous results), then the card folds if it can. v18: a page holding another client's entries starts clean first
@@ -10019,8 +10260,14 @@
     var pk = e.target.closest('button[data-action="pick-client"]');
     if (pk && homeView && clientsMode === 'manage') { closeModal(false); openClientPage(pk.dataset.key); return; }   // v30: what to do for them; v39: their page
     if (pk) { pickFromDialog(pk.dataset.key); return; }
+    var rb = e.target.closest('button[data-action="restore-client"]');   // v48
+    if (rb) {
+      var hit = recentDeleted().filter(function (x) { return x.key === rb.dataset.key && x.at === rb.dataset.at; })[0];
+      if (hit) restoreDeleted(hit);
+      return;
+    }
     var b = e.target.closest('button[data-action="delete-client"]');
-    if (!b) return;
+    if (!b || !isAdmin()) return;
     var key = b.dataset.key;
     if (!b.classList.contains('armed')) {
       els.clientsList.querySelectorAll('.cl-del.armed').forEach(function (x) { x.classList.remove('armed'); x.textContent = 'Delete'; });
@@ -10031,16 +10278,18 @@
     }
     clearTimeout(delTimer);
     var cl = clients.clients[key], name = cl ? cl.name : key;
+    var entry = cl ? rememberDeleted(key, JSON.parse(JSON.stringify(cl))) : null;   // v48: Undo, and Recently deleted
     delete clients.clients[key];
     saveClients();
     if (CLOUD && cl) {                                 // v13: a tombstone per session (the data stays in the store, hidden)
       cl.sessions.forEach(function (x) { CLOUD.tombstone(key, cl.name, x); });
       CLOUD.sync();
     }
+    syncClientsEdit();
     renderClientsList();
     refresh();
     if (homeView && clientPage) renderHome();          // v39: their page, if it was open, gives way to Home
-    toast('Deleted ' + name + '’s record');
+    toast('Deleted ' + name + '’s record', entry ? { label: 'Undo', run: function () { restoreDeleted(entry); } } : undefined);
   }
   function backupClients() {
     if (!Object.keys(clients.clients).length) { toast('No client records to back up yet'); return; }
@@ -10257,10 +10506,10 @@
   var team = { busy: false, msg: '', editUid: '' };
   function teamHtml() {
     var a = CLOUD.account(), list = CLOUD.staffList(), admin = !!(a && a.admin);
-    var html = subHeadHtml('Team', 'Everyone who can sign in. Each person has their own login and PIN, their own work in progress and, soon, their own favourites.', 'data-home="back"', 'Home');
+    var html = subHeadHtml('Team', 'Everyone who can sign in. Each person has their own login and PIN and their own work in progress.', 'data-home="back"', 'Home');
     if (!admin) return html + '<p class="client-none bld-none">Only an admin can add people or change the team. Ask one of the admins listed below.</p>' + teamListHtml(list, a, false);
     html += '<section class="bld-sec" aria-labelledby="teamListH"><div class="bld-head"><h2 id="teamListH">People</h2><button type="button" class="primary" data-team="add">+ Add a practitioner</button></div>' +
-      '<p class="team-lead">Adding someone creates their login and emails them a link to set their own password (the email is called “Reset your password for BASE Health Report”, from noreply@base-health-report.firebaseapp.com: worth a look in Junk). If they forget it, “Forgot your password?” on the sign-in screen emails them a new link: nothing for you to do.</p>' +
+      '<p class="team-lead">Adding someone creates their login and emails them a link to set their own password (the email is called “Reset your password for BASE Health Report”; it can land in Junk). If they forget it, “Forgot your password?” on the sign-in screen emails them a new link: nothing for you to do.</p>' +
       (team.msg ? '<p class="ai-err" role="alert">' + esc(team.msg) + '</p>' : '') + teamListHtml(list, a, true) + '</section>';
     if (a && !a.staff) html += '<p class="team-lead">You’re using the shared clinic login. Add yourself with your own email to get your own login; the shared one keeps working until everyone has moved across.</p>';
     return html;
@@ -10482,9 +10731,14 @@
     focusQuiet(els.signinPassword);
   }
   // the ⋯ menu's account line and items (stamped from the template in cloud mode)
+  // v48: who may delete a client or move the records in and out (Back up / Restore): an admin, or the shared clinic login;
+  // with no clinic store (local mode) the iPad's one user
+  function isAdmin() { var a = CLOUD && CLOUD.account(); return !CLOUD || !!(a && a.admin); }
   function renderMenuAccount() {
     var line = $('menuAccount'), a = CLOUD.account();
     if (!line) return;
+    var adm = isAdmin();                               // v48: Back up / Restore are an admin's
+    ['adminSep', 'clientsBackup', 'restoreItem'].forEach(function (id) { var el = $(id); if (el) el.hidden = !adm; });
     // v46: a staff login goes by its Team name and role; the shared clinic login by the name typed on this device
     line.innerHTML = a ? (a.staff ? 'Signed in as <b>' + esc(a.name || a.email) + '</b> · ' + esc(a.email) + ' · ' + (a.role === 'admin' ? 'Admin' : 'Practitioner')
       : 'Signed in as <b>' + esc(a.email) + '</b> · ' + esc(userName() || 'no name yet') + ' (the shared clinic login)') : '';
@@ -10768,6 +11022,7 @@
       els.demoItem.addEventListener('click', menuAction(fillExample));   // v18
       els.clearCancel.addEventListener('click', function () { closeModal(); });
       els.clearConfirm.addEventListener('click', clearAllData);
+      els.checkDialog.addEventListener('click', onCheckClick);   // v48: the check before Create report
       els.aiSave.addEventListener('click', saveAiKey);
       els.aiCancel.addEventListener('click', function () { closeModal(); });
       els.aiRemove.addEventListener('click', removeAiKey);
@@ -10784,7 +11039,7 @@
       els.testsAll.addEventListener('click', function () { setAllTests(true); });
       els.testsNone.addEventListener('click', function () { setAllTests(false); });
       els.testsDone.addEventListener('click', function () { closeModal(); });
-      [els.clearDialog, els.aiDialog, els.clientsDialog, els.testsDialog, els.homeDialog, els.homeAsk, els.homeClientDialog].forEach(function (d) {   // v30: + the two Home dialogs
+      [els.clearDialog, els.aiDialog, els.clientsDialog, els.testsDialog, els.homeDialog, els.homeAsk, els.homeClientDialog, els.checkDialog].forEach(function (d) {   // v30: + the two Home dialogs; v48: + the check
         d.addEventListener('click', function (e) { if (e.target === d) closeModal(); });
       });
       // tapping a suggested client must not blur the name box before the tap lands

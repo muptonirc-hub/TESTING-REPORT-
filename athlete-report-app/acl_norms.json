@@ -17,70 +17,70 @@
       "metrics": [
         {
           "name": "IKDC",
-          "unit": "AU",
+          "unit": "/100",
           "dir": "Higher",
           "thr": 5,
           "range": [0, 100]
         },
         {
           "name": "KOOS — ADL",
-          "unit": "AU",
+          "unit": "/100",
           "dir": "Higher",
           "thr": 5,
           "range": [0, 100]
         },
         {
           "name": "KOOS — Pain",
-          "unit": "AU",
+          "unit": "/100",
           "dir": "Higher",
           "thr": 5,
           "range": [0, 100]
         },
         {
           "name": "KOOS — QOL",
-          "unit": "AU",
+          "unit": "/100",
           "dir": "Higher",
           "thr": 5,
           "range": [0, 100]
         },
         {
           "name": "KOOS — Sport & Rec",
-          "unit": "AU",
+          "unit": "/100",
           "dir": "Higher",
           "thr": 5,
           "range": [0, 100]
         },
         {
           "name": "KOOS — Symptoms",
-          "unit": "AU",
+          "unit": "/100",
           "dir": "Higher",
           "thr": 5,
           "range": [0, 100]
         },
         {
           "name": "ACL-RSI",
-          "unit": "AU",
+          "unit": "/100",
           "dir": "Higher",
           "thr": 5,
           "range": [0, 100]
         },
         {
           "name": "Cincinnati Knee Score",
-          "unit": "AU",
+          "unit": "/100",
           "dir": "Higher",
           "thr": 5,
           "range": [0, 100]
         },
         {
           "name": "GRS Perceived Function",
-          "unit": "AU",
+          "unit": "/100",
           "dir": "Higher",
           "thr": 5,
           "range": [0, 100]
         },
         {
           "name": "Pedi-IKDC",
-          "unit": "AU",
+          "unit": "/100",
           "dir": "Higher",
           "thr": 5,
           "range": [0, 100]

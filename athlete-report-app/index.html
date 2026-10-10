@@ -496,6 +496,8 @@ p.ex-flag { display: flex; align-items: center; justify-content: center; color: 
 .ck-open .tile-ic svg { width: 20px; height: 20px; }
 .ck-open small { display: flex; flex-wrap: wrap; gap: 4px 10px; }
 .ck-why.ck-pain { color: var(--amber-ink); font-weight: 650; }
+.ck-why.ck-skip { color: var(--amber-ink); }           /* v48: couldn't do the session; a note in the client's words */
+.ck-why.ck-note { font-style: italic; }
 .ck-more { margin-top: 8px; min-height: 40px; }
 .ck-seen { flex: none; align-self: center; min-height: 40px; margin-right: 10px; padding: 0 14px; background: var(--surface); }
 .lg-check { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 16px; padding: 12px 12px 12px 16px; border: 1px solid color-mix(in srgb, var(--amber) 45%, var(--line)); border-radius: 12px; background: var(--amber-soft); color: var(--amber-ink); }
@@ -1171,6 +1173,14 @@ p.ex-flag { display: flex; align-items: center; justify-content: center; color: 
 .clear-list li + li { border-top: 1px solid var(--line); }
 .clear-list .cl-t { font-weight: 650; font-size: 14.5px; white-space: nowrap; }
 .clear-list .cl-d { color: var(--muted); font-size: 13.5px; text-align: right; min-width: 0; overflow-wrap: anywhere; }
+/* v48: the check before Create report: each open point with its buttons */
+.check-list { list-style: none; margin: 14px 0 0; padding: 0; border: 1px solid var(--line); border-radius: 12px; background: var(--field); }
+.check-list li { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px; padding: 10px 14px; }
+.check-list li + li { border-top: 1px solid var(--line); }
+.check-list .ck-t { display: inline-flex; align-items: flex-start; gap: 6px; font-size: 15px; line-height: 1.35; flex: 1 1 240px; }
+.check-list .ck-t svg { flex: none; margin-top: 3px; }
+.check-list .ck-acts { display: flex; flex-wrap: wrap; gap: 6px; margin-left: auto; }
+.check-list .ck-acts .quiet { min-height: 40px; padding-inline: 12px; border: 1px solid var(--line); background: var(--surface); font-size: 14px; }
 .clear-list li.has-data .cl-d { color: var(--fg); }
 .modal-actions { display: flex; gap: 10px; margin-top: 18px; }
 .modal-actions button { flex: 1; }
@@ -1198,6 +1208,9 @@ p.ex-flag { display: flex; align-items: center; justify-content: center; color: 
 .client-bar.loaded { background: var(--green-soft); border-color: color-mix(in srgb, var(--green) 35%, transparent); color: var(--green-ink); }
 .client-bar .quiet { min-height: 36px; padding-inline: 8px; font-size: 14px; }
 .client-bar.loaded .quiet { color: var(--green-ink); }
+/* v48: the example's banner (never saved) */
+.client-bar.example { background: var(--amber-soft); border-color: color-mix(in srgb, var(--amber) 45%, transparent); color: var(--amber-ink); }
+.client-bar.example .quiet { color: var(--amber-ink); border: 1px solid color-mix(in srgb, var(--amber) 45%, transparent); background: var(--surface); padding-inline: 12px; }
 .client-bar .retest { border: 1px solid color-mix(in srgb, var(--green) 45%, transparent); background: var(--surface); padding-inline: 12px; }
 .client-bar .retest-n { font-size: 13px; font-weight: 600; }
 .m-prevnote { color: var(--muted); }
@@ -1213,6 +1226,12 @@ p.ex-flag { display: flex; align-items: center; justify-content: center; color: 
 .client-list span { color: var(--muted); font-size: 12.5px; }
 .client-list .cl-del { min-height: 36px; padding-inline: 8px; color: var(--red-ink); flex: none; white-space: nowrap; }
 .client-list .cl-del.armed { background: var(--red); color: #fff; border-radius: 9px; }
+/* v48: Recently deleted (Edit, admins): Restore puts a record back */
+.cl-recent { margin-top: 16px; }
+.cl-recent h3 { margin: 0; font-size: 15px; font-weight: 650; }
+.cl-recent .modal-fine { margin: 2px 0 0; }
+.cl-recent .client-list { max-height: 24vh; }
+.client-list .cl-restore { min-height: 36px; padding-inline: 10px; border: 1px solid var(--line); background: var(--surface); flex: none; white-space: nowrap; }
 .clients-actions { flex-wrap: wrap; }
 /* v11: a search box over the list; in Choose client each row is one 48 px button that loads the client */
 .client-search { display: flex; align-items: center; gap: 8px; height: 44px; margin: 14px 0 0; padding: 0 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--field); color: var(--muted); }
@@ -1587,6 +1606,12 @@ html.row-dragging, html.row-dragging * { cursor: grabbing !important; user-selec
 .ex-lib .el-cues { flex: 0 1 auto; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .ex-lib .el-cues:empty { display: none; }
 .ex-lib .badge { height: 20px; font-size: 11.5px; }
+/* v48: "From the library" with Unlink beside it, on every linked row */
+.ex-lib .el-tag { flex: none; font-size: 11.5px; font-weight: 650; letter-spacing: .01em; color: var(--teal-ink); }
+.ex-lib .el-unlink { flex: none; min-height: 26px; padding: 0 6px; font-size: 12.5px; color: var(--muted); text-decoration: underline; text-underline-offset: 2px; }
+/* v48: an exercise with no sets or reps (the check before Create handout counts them) */
+.ex-row.nodose .c-sets .ex-in, .ex-row.nodose .c-reps .ex-in { border-color: var(--amber); box-shadow: inset 0 0 0 1px var(--amber); }
+.ex-row.nodose .c-sets .ex-in:focus, .ex-row.nodose .c-reps .ex-in:focus { box-shadow: 0 0 0 3px color-mix(in srgb, var(--amber) 32%, transparent); }
 /* v21: under a suggested row, the finding it is for (in the app only) */
 .ex-why { display: flex; align-items: flex-start; gap: 6px; padding: 0 2px 4px 11px; font-size: 12.5px; line-height: 1.35; color: var(--scan-ink); }
 .ex-why svg { flex: none; width: 14px; height: 14px; margin-top: 2px; }
@@ -1753,7 +1778,7 @@ html.row-dragging, html.row-dragging * { cursor: grabbing !important; user-selec
   .tools { margin-left: 0; order: 3; width: 100%; }
   .tools button { flex: 1; padding-inline: 8px; }
   .appbar .clients-btn { margin-left: auto; }
-  .import-btn .il-more { display: none; }                         /* v18: Import, so it fits beside Choose client */
+  .import-btn .il-more, .done-btn .il-more { display: none; }     /* v18: Import, so it fits beside Choose client; v48: Hide (details) beside the title */
   /* v18: the Import menu is a card under the buttons, as wide as the details card (the button sits mid-row on a phone) */
   .athlete .card-head { position: relative; }
   .import-wrap { position: static; }
@@ -1862,20 +1887,6 @@ html.row-dragging, html.row-dragging * { cursor: grabbing !important; user-selec
         </button>
         <div class="menu-sep" role="separator"></div>
       </template>
-      <button class="menu-item menu-danger" id="clearAll" type="button" role="menuitem" tabindex="-1" aria-haspopup="dialog">
-        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/></svg>
-        <span>Clear all data…</span>
-      </button>
-      <div class="menu-sep" role="separator"></div>
-      <button class="menu-item" id="clientsBackup" type="button" role="menuitem" tabindex="-1">
-        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11M7.5 10.5 12 15l4.5-4.5M5 19h14"/></svg>
-        <span>Back up records…</span>
-      </button>
-      <button class="menu-item" id="restoreItem" type="button" role="menuitem" tabindex="-1">
-        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V4M7.5 8.5 12 4l4.5 4.5M5 19h14"/></svg>
-        <span>Restore records…</span>
-      </button>
-      <div class="menu-sep" role="separator"></div>
       <button class="menu-item" id="aiItem" type="button" role="menuitem" tabindex="-1" aria-haspopup="dialog">
         <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="currentColor"><path d="M10 2.5l1.8 5.2 5.2 1.8-5.2 1.8L10 16.5l-1.8-5.2L3 9.5l5.2-1.8zM18.5 13l.95 2.55 2.55.95-2.55.95-.95 2.55-.95-2.55L15 16.5l2.55-.95z"/></svg>
         <span>AI settings…</span>
@@ -1885,6 +1896,22 @@ html.row-dragging, html.row-dragging * { cursor: grabbing !important; user-selec
       <button class="menu-item" id="demoItem" type="button" role="menuitem" tabindex="-1" hidden>
         <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19h16M7 16V10M12 16V6M17 16v-4"/></svg>
         <span>Show example results</span>
+      </button>
+      <!-- v48: admins only (hidden for a practitioner's login): the records in and out of the store -->
+      <div class="menu-sep" id="adminSep" role="separator"></div>
+      <button class="menu-item" id="clientsBackup" type="button" role="menuitem" tabindex="-1">
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11M7.5 10.5 12 15l4.5-4.5M5 19h14"/></svg>
+        <span>Back up records…</span>
+      </button>
+      <button class="menu-item" id="restoreItem" type="button" role="menuitem" tabindex="-1">
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V4M7.5 8.5 12 4l4.5 4.5M5 19h14"/></svg>
+        <span>Restore records…</span>
+      </button>
+      <div class="menu-sep" role="separator"></div>
+      <!-- v48: "Clear this iPad's screens" (was Clear all data, under the account items): the screens only, every record kept -->
+      <button class="menu-item menu-danger" id="clearAll" type="button" role="menuitem" tabindex="-1" aria-haspopup="dialog">
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/></svg>
+        <span>Clear this iPad’s screens…</span>
       </button>
       <!-- v20: the version running (app.js fills it in from its own ?v=), so an update can be seen to have arrived -->
       <div class="menu-sep" role="separator"></div>
@@ -2001,15 +2028,29 @@ html.row-dragging, html.row-dragging * { cursor: grabbing !important; user-selec
   </div>
 </div>
 
+<!-- v48: "Clear this iPad's screens" (until v47 "Clear all data", whose button said Delete everything although every record is kept); Undo in the message after -->
 <div class="modal" id="clearDialog" role="alertdialog" aria-modal="true" aria-labelledby="clearTitle" aria-describedby="clearIntro" hidden>
   <div class="modal-card">
-    <h2 id="clearTitle">Clear all data?</h2>
-    <p id="clearIntro">This clears everything entered in every section, including names, notes, clinician details and the exercise program. Saved client records are kept; manage those under Clients.</p>
+    <h2 id="clearTitle">Clear this iPad’s screens?</h2>
+    <p id="clearIntro">This clears what is on the screens of this iPad: names, results, notes, clinician details and the exercise program being built. Saved client records aren’t touched; manage those under Clients.</p>
     <ul class="clear-list" id="clearList"></ul>
-    <p class="modal-fine">Save or share any reports you need first. This can’t be undone.</p>
+    <p class="modal-fine">Save or share any report you still need first. Undo is in the message afterwards.</p>
     <div class="modal-actions">
       <button class="ghost" id="clearCancel" type="button">Cancel</button>
-      <button class="danger" id="clearConfirm" type="button">Delete everything</button>
+      <button class="danger" id="clearConfirm" type="button">Clear the screens</button>
+    </div>
+  </div>
+</div>
+
+<!-- v48: the check before Create report / Create handout: what is still open on the page, each with its way through -->
+<div class="modal" id="checkDialog" role="alertdialog" aria-modal="true" aria-labelledby="checkTitle" aria-describedby="checkIntro" hidden>
+  <div class="modal-card">
+    <h2 id="checkTitle">Before you create the report</h2>
+    <p id="checkIntro">Worth a look first:</p>
+    <ul class="check-list" id="checkList"></ul>
+    <div class="modal-actions">
+      <button class="ghost" id="checkBack" type="button">Go back</button>
+      <button class="primary" id="checkGo" type="button">Create anyway</button>
     </div>
   </div>
 </div>
@@ -2408,13 +2449,13 @@ html.row-dragging, html.row-dragging * { cursor: grabbing !important; user-selec
 
 <div class="toast" id="toast" role="status" hidden></div>
 
-<script src="engine.js?v=47" defer></script>
-<script src="report-fonts.js?v=47" defer></script>
-<script src="jspdf.umd.min.js?v=47" defer></script>
-<script src="qrcode.js?v=47" defer></script>
-<script src="report.js?v=47" defer></script>
-<script src="cloud-config.js?v=47" defer></script>
-<script src="cloud.js?v=47" defer></script>
-<script src="app.js?v=47" defer></script>
+<script src="engine.js?v=48" defer></script>
+<script src="report-fonts.js?v=48" defer></script>
+<script src="jspdf.umd.min.js?v=48" defer></script>
+<script src="qrcode.js?v=48" defer></script>
+<script src="report.js?v=48" defer></script>
+<script src="cloud-config.js?v=48" defer></script>
+<script src="cloud.js?v=48" defer></script>
+<script src="app.js?v=48" defer></script>
 </body>
 </html>

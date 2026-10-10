@@ -19,9 +19,11 @@
    v45: the clinic's photo on Home (clinic-wide.jpg for wider screens, clinic-tall.jpg for phones).
    v46: each practitioner their own login (no new files).
    v47: photos behind two pages' headings: the testing room on Screening (screening-wide.jpg, screening-tall.jpg), two
-   practitioners at a laptop on Exercise programming (exercise-wide.jpg, exercise-tall.jpg). */
-var CACHE = 'bh-athlete-report-v47';
-var FILES = ['./', 'index.html', 'app.js?v=47', 'engine.js?v=47', 'qrcode.js?v=47', 'report.js?v=47', 'report-fonts.js?v=47', 'jspdf.umd.min.js?v=47', 'cloud-config.js?v=47', 'cloud.js?v=47',
+   practitioners at a laptop on Exercise programming (exercise-wide.jpg, exercise-tall.jpg).
+   v48: the usability review's first round: the example is never saved, a check before Create report, library names link
+   themselves, admin-only deletes with Undo, one word list (no new files). */
+var CACHE = 'bh-athlete-report-v48';
+var FILES = ['./', 'index.html', 'app.js?v=48', 'engine.js?v=48', 'qrcode.js?v=48', 'report.js?v=48', 'report-fonts.js?v=48', 'jspdf.umd.min.js?v=48', 'cloud-config.js?v=48', 'cloud.js?v=48',
   'norms.json', 'strength_norms.json', 'hamstring_norms.json', 'acl_norms.json', 'ankle_go.json', 'interpretation.json', 'explainers.json', 'exercise_library.json', 'programming_guide.md', 'manifest.webmanifest',
   'guides/index.json', 'guides/training-variables.md', 'guides/rehab-principles.md', 'guides/muscle-strains.md', 'guides/acl.md', 'guides/tendinopathy.md', 'guides/ankle-sprain.md',
   'guides/groin-pain.md', 'guides/rotator-cuff.md', 'guides/pfp-oa.md', 'guides/low-back-pain.md', 'guides/performance-tests.md', 'guides/rehab-performance.md', 'guides/block-design.md',
