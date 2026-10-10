@@ -15,13 +15,15 @@
    v41: Home's three buttons (Photo mode, Screening, Exercise programming) and their pages (no new files).
    v42: the Ankle-GO battery (its rows, points and cut-offs in ankle_go.json).
    v43: the Battery builder: the clinic's own batteries and tests (kept in the clinic store; no new files).
-   v44: the app notices a new version (Home updates by itself, elsewhere a bar offers Update; no new files). */
-var CACHE = 'bh-athlete-report-v44';
-var FILES = ['./', 'index.html', 'app.js?v=44', 'engine.js?v=44', 'qrcode.js?v=44', 'report.js?v=44', 'report-fonts.js?v=44', 'jspdf.umd.min.js?v=44', 'cloud-config.js?v=44', 'cloud.js?v=44',
+   v44: the app notices a new version (Home updates by itself, elsewhere a bar offers Update; no new files).
+   v45: the clinic's photo on Home (clinic-wide.jpg for wider screens, clinic-tall.jpg for phones). */
+var CACHE = 'bh-athlete-report-v45';
+var FILES = ['./', 'index.html', 'app.js?v=45', 'engine.js?v=45', 'qrcode.js?v=45', 'report.js?v=45', 'report-fonts.js?v=45', 'jspdf.umd.min.js?v=45', 'cloud-config.js?v=45', 'cloud.js?v=45',
   'norms.json', 'strength_norms.json', 'hamstring_norms.json', 'acl_norms.json', 'ankle_go.json', 'interpretation.json', 'explainers.json', 'exercise_library.json', 'programming_guide.md', 'manifest.webmanifest',
   'guides/index.json', 'guides/training-variables.md', 'guides/rehab-principles.md', 'guides/muscle-strains.md', 'guides/acl.md', 'guides/tendinopathy.md', 'guides/ankle-sprain.md',
   'guides/groin-pain.md', 'guides/rotator-cuff.md', 'guides/pfp-oa.md', 'guides/low-back-pain.md', 'guides/performance-tests.md', 'guides/rehab-performance.md', 'guides/block-design.md',
-  'icon-192.png', 'icon-512.png', 'icon-maskable-512.png', 'apple-touch-icon.png', 'rajdhani-600.woff2', 'rajdhani-700.woff2'];
+  'icon-192.png', 'icon-512.png', 'icon-maskable-512.png', 'apple-touch-icon.png', 'rajdhani-600.woff2', 'rajdhani-700.woff2',
+  'clinic-wide.jpg', 'clinic-tall.jpg'];
 
 self.addEventListener('install', function (event) {
   event.waitUntil(

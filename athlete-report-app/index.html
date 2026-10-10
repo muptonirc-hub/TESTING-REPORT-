@@ -224,6 +224,17 @@ html:not(.home-on) .home, html.signed-out .home { display: none !important; }
 .home-hello h1 { margin: 0; font: 700 34px/1.08 var(--font-brand); letter-spacing: .2px; text-transform: uppercase; text-wrap: balance; }
 .home-hello h1:focus { outline: none; }
 .home-hello p { margin: 6px 0 0; color: var(--muted); font-size: 15px; }
+/* v45: the clinic's photo behind the greeting and the client search: the blue turf on wider screens (clinic-wide.jpg), the
+   whole room on phones (clinic-tall.jpg); a dark wash on the left and the foot keeps the white words readable */
+.home-top {
+  position: relative; min-height: 250px; padding: 26px 28px; border-radius: 20px; box-shadow: var(--shadow);
+  background-color: var(--band);
+  background-image: linear-gradient(90deg, rgba(10, 14, 22, .82) 0%, rgba(10, 14, 22, .55) 42%, rgba(10, 14, 22, .12) 75%),
+    linear-gradient(0deg, rgba(10, 14, 22, .55), rgba(10, 14, 22, 0) 55%), url("clinic-wide.jpg");
+  background-position: 0 0, 0 0, 50% 50%; background-size: auto, auto, cover; background-repeat: no-repeat;
+}
+.home-top .home-hello h1 { color: #fff; font-size: 40px; text-shadow: 0 1px 12px rgba(0, 0, 0, .35); }
+.home-top .home-hello p { color: rgba(255, 255, 255, .88); text-shadow: 0 1px 8px rgba(0, 0, 0, .3); }
 .home-find { position: relative; flex: 0 1 380px; min-width: 260px; }
 .home-find .client-search { margin: 0; height: 48px; background: var(--surface); border-color: var(--line-strong); box-shadow: var(--shadow); }
 .home-find .suggest { top: calc(100% + 6px); }
@@ -496,6 +507,12 @@ p.ex-flag { display: flex; align-items: center; justify-content: center; color: 
 @media (max-width: 599px) {
   .home { gap: 22px; padding-top: 18px; padding-inline: max(16px, env(safe-area-inset-left, 0px)) max(16px, env(safe-area-inset-right, 0px)); }
   .home-hello h1 { font-size: 27px; }
+  /* v45: on a phone the photo is taller, the words and the search box at its foot */
+  .home-top { min-height: 300px; padding: 20px 18px; border-radius: 16px; flex-direction: column; align-items: stretch; justify-content: flex-end;
+    background-image: linear-gradient(0deg, rgba(10, 14, 22, .9) 0%, rgba(10, 14, 22, .84) 42%, rgba(10, 14, 22, .3) 68%, rgba(10, 14, 22, .04) 100%), url("clinic-tall.jpg");   /* the white turf lettering sits behind the words: a heavier wash */
+    background-position: 0 0, 50% 40%; background-size: auto, cover; }
+  .home-top .home-hello h1 { font-size: 30px; }
+  .home-top .home-find { flex-basis: auto; min-width: 0; }
   .home-find { min-width: 0; }
   .home-tiles { grid-template-columns: minmax(0, 1fr); gap: 10px; }
   .tile { min-height: 78px; padding: 12px 14px; border-radius: 14px; }
@@ -2264,13 +2281,13 @@ html.row-dragging, html.row-dragging * { cursor: grabbing !important; user-selec
 
 <div class="toast" id="toast" role="status" hidden></div>
 
-<script src="engine.js?v=44" defer></script>
-<script src="report-fonts.js?v=44" defer></script>
-<script src="jspdf.umd.min.js?v=44" defer></script>
-<script src="qrcode.js?v=44" defer></script>
-<script src="report.js?v=44" defer></script>
-<script src="cloud-config.js?v=44" defer></script>
-<script src="cloud.js?v=44" defer></script>
-<script src="app.js?v=44" defer></script>
+<script src="engine.js?v=45" defer></script>
+<script src="report-fonts.js?v=45" defer></script>
+<script src="jspdf.umd.min.js?v=45" defer></script>
+<script src="qrcode.js?v=45" defer></script>
+<script src="report.js?v=45" defer></script>
+<script src="cloud-config.js?v=45" defer></script>
+<script src="cloud.js?v=45" defer></script>
+<script src="app.js?v=45" defer></script>
 </body>
 </html>
