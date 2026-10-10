@@ -10,9 +10,13 @@
    load, and the boxes start from what they did last time, so loads carry forward; a pain score (0-10) and a note for the
    session; no progression nudges. A session goes to shared/<key>/logs/<id> (the store's rules take it only while the
    link works, and only in this shape); it is kept on the phone first and sent when there is a connection, and the
-   client can change or remove it later. The clinic reads the log with its own login. */
+   client can change or remove it later. The clinic reads the log with its own login.
+   v4 (10 Oct, with the app's v48, from the usability review): the pain buttons in two rows at 44 px with words under them;
+   "Couldn't do it today" logs pain and a note with nothing ticked (the clinic's Home flags it); Call the clinic (the number
+   in CLINIC below); "your clinician" rather than "your physio". */
 (function () {
   'use strict';
+  var CLINIC = { name: 'BASE Health Noosa', phone: '07 5211 1573' };   // v4: the clinic's phone number as shown (Matthew, 11 Oct); the button dials it (blank: no Call button)
   var CFG = window.BH_CLOUD || {}, PROJECT = String(CFG.projectId || '').trim();
   var KEY_RE = /^[A-Za-z0-9]{20,64}$/, LAST = 'bh-program-key', COPY = 'bh-program-copy:';
   var LOGS = 'bh-program-logs:', OUTBOX = 'bh-program-outbox:', LOG_ID = /^[0-9]{8}-[A-Za-z0-9]{12}$/;   // v3
@@ -109,6 +113,7 @@
     var out = { v: 1, day: o.day, at: typeof o.at === 'string' ? o.at.slice(0, 40) : '', prog: isoDay(o.prog), title: one(o.title, 120), grp: one(o.grp, 80),
       items: items, pain: pain, note: str(o.note, 500).trim() };
     if (o.removed === true) out.removed = true;
+    if (o.none === true) out.none = true;              // v4: couldn't do the session (pain and a note, nothing ticked)
     return out;
   }
   function logsList(key) {                             // newest first; sessions removed by the client left out
@@ -127,7 +132,14 @@
     }
     return null;
   }
+  // v4: a button that dials the clinic (only once CLINIC.phone is filled in)
+  function callHtml() {
+    var tel = String(CLINIC.phone || '').replace(/[^\d+]/g, '');
+    if (!tel) return '';
+    return '<a class="btn call" href="tel:' + esc(tel) + '"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4h4l2 5-2.5 1.5a10 10 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2z"/></svg>Call ' + esc(CLINIC.name) + ' · ' + esc(CLINIC.phone) + '</a>';
+  }
   function doneOf(l) {
+    if (l.none) return 'couldn’t do it';               // v4
     var d = l.items.filter(function (it) { return it.done; }).length;
     return d + ' of ' + l.items.length + (l.items.length === 1 ? ' exercise' : ' exercises');
   }
@@ -203,7 +215,7 @@
   function logCardHtml(key) {
     var list = logsList(key), box = outbox(key).length, last = list[0], since = addDays(today(), -6);
     var week = list.filter(function (l) { return l.day >= since; }).length;
-    var line = !list.length ? 'Done a session? Log it in a few taps so your physio can see how you’re going.'
+    var line = !list.length ? 'Done a session? Log it in a few taps so your clinician can see how you’re going.'
       : 'Last logged ' + dayName(last.day) + ' · ' + doneOf(last) + (week ? ' · ' + week + (week === 1 ? ' session' : ' sessions') + ' in the last 7 days' : '');
     var wait = !box ? '' : '<p class="lc-wait" role="status">' + (cur.refused
       ? (box === 1 ? '1 session' : box + ' sessions') + ' couldn’t be sent to the clinic yet. ' + (box === 1 ? 'It stays' : 'They stay') + ' on this phone and will be sent when the clinic can take ' + (box === 1 ? 'it.' : 'them.')
@@ -223,7 +235,7 @@
       '<h1 id="progH" tabindex="-1">' + esc(first ? first + '’s exercise program' : 'Your exercise program') + '</h1>' +
       '<p class="by">' + esc((who ? 'From ' + who + ' at BASE Health Noosa' : 'From BASE Health Noosa') + (nice(p.date) ? ' · ' + nice(p.date) : '')) + '</p>' +
       (title ? '<p class="title">' + esc(title) + '</p>' : '') +
-      (weeks || review ? '<ul class="cover">' + (weeks ? '<li><b>Block</b> ' + weeks + (weeks === 1 ? ' week' : ' weeks') + '</li>' : '') + (review ? '<li><b>Next review</b> ' + esc(review) + '</li>' : '') + '</ul>' : '') +
+      (weeks || review ? '<ul class="cover">' + (weeks ? '<li><b>Program length</b> ' + weeks + (weeks === 1 ? ' week' : ' weeks') + '</li>' : '') + (review ? '<li><b>Next review</b> ' + esc(review) + '</li>' : '') + '</ul>' : '') +
       (reason || instr ? '<section class="box">' + (reason ? '<h2>Why this plan</h2><p>' + esc(reason) + '</p>' : '') + (instr ? '<h2>Instructions</h2><p>' + esc(instr) + '</p>' : '') + '</section>' : '') +
       (exList(p).length ? logCardHtml(cur.key) : '');
     (Array.isArray(p.groups) ? p.groups : []).slice(0, 30).forEach(function (g) {
@@ -233,8 +245,8 @@
       out += (h ? '<h2 class="day">' + esc(h) + '</h2>' : '') + rows.map(exHtml).join('');
     });
     var until = untilText(copy.expires);
-    out += tipHtml() + '<p class="foot">' + esc('Prepared by ' + (who ? who + ' · ' : '') + 'BASE Health Noosa. Follow your clinician’s instructions. This page is for you: please don’t share its link' +
-      (until ? ', which works until ' + until : '') + '.') + '</p>';
+    out += tipHtml() + callHtml() + '<p class="foot">' + esc('Prepared by ' + (who ? who + ' · ' : '') + 'BASE Health Noosa. Follow your clinician’s instructions. This page is for you: please don’t share its link' +
+      (until ? ', which works until ' + until : '') + '.') + '</p>';   // v4: + Call the clinic
     main.innerHTML = out;
     wireTip();
   }
@@ -260,7 +272,7 @@
   // each exercise's boxes holding what they did last time (else the plan)
   function startForm(edit) {
     var list = exList(cur.copy.program), days = daysOf(list), logs = logsList(cur.key);
-    var f = { id: edit ? edit.id : '', day: edit ? edit.day : today(), grp: '', rows: {}, open: {}, pain: edit ? edit.pain : null, note: edit ? edit.note : '', warn: '', arm: false };
+    var f = { id: edit ? edit.id : '', day: edit ? edit.day : today(), grp: '', rows: {}, open: {}, pain: edit ? edit.pain : null, note: edit ? edit.note : '', warn: '', arm: false, none: !!(edit && edit.none) };   // v4: none
     if (edit) f.grp = days.indexOf(edit.grp) >= 0 ? edit.grp : '';
     else if (days.length) { var k = logs.length ? days.indexOf(logs[0].grp) : -1; f.grp = days[(k + 1) % days.length]; }
     list.forEach(function (x) {
@@ -306,10 +318,13 @@
         (open ? '<div class="lx-edit">' + fieldHtml(x, r, 'sets', 'Sets', 'numeric') + fieldHtml(x, r, 'reps', 'Reps', '') + fieldHtml(x, r, 'load', 'Load', '') + '</div>' : '') +
         '</div></div>';
     }).join('') + '</div>';
+    // v4: "Couldn't do it today" (pain and a note still go to the clinic), the pain buttons in two rows with words under them
+    html += '<button type="button" class="btn skip" data-act="none" aria-pressed="' + f.none + '">' + (f.none ? 'Couldn’t do it today ✓' : 'Couldn’t do it today') + '</button>';
     html += '<fieldset class="pain"><legend>Pain during or after <span>(0 = none, 10 = worst)</span></legend><div class="pain-grid">' +
-      [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(function (n) { return '<button type="button" data-pain="' + n + '" aria-pressed="' + (f.pain === n) + '">' + n + '</button>'; }).join('') + '</div></fieldset>' +
-      '<label class="lnote"><span>Anything to tell your physio? <small>(optional)</small></span><textarea id="logNote" rows="3" maxlength="500">' + esc(f.note) + '</textarea></label>' +
-      '<p class="privacy">BASE Health Noosa can see what you log. It isn’t checked every day: if your pain is getting worse, contact the clinic.</p>' +
+      [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(function (n) { return '<button type="button" data-pain="' + n + '" aria-pressed="' + (f.pain === n) + '" aria-label="Pain ' + n + ' out of 10">' + n + '</button>'; }).join('') + '</div>' +
+      '<div class="pain-words" aria-hidden="true"><span>0 none</span><span>5 moderate</span><span>10 worst</span></div></fieldset>' +
+      '<label class="lnote"><span>Anything to tell your clinician? <small>(optional)</small></span><textarea id="logNote" rows="3" maxlength="500">' + esc(f.note) + '</textarea></label>' +
+      '<p class="privacy">' + esc(CLINIC.name) + ' can see what you log. It isn’t checked every day: if your pain is getting worse, call the clinic.</p>' + callHtml() +
       (f.warn ? '<p class="warn" role="alert">' + esc(f.warn) + '</p>' : '') +
       '<div class="form-acts"><button type="button" class="btn primary" data-act="save">' + (f.id ? 'Save changes' : 'Save session') + '</button>' +
       (f.id ? '<button type="button" class="btn danger" data-act="remove">' + (f.arm ? 'Tap again to remove it' : 'Remove this session') + '</button>' : '') + '</div>';
@@ -322,8 +337,8 @@
       return { n: x.name, g: x.g, done: !!r.done, sets: r.done ? v.sets : '', reps: r.done ? v.reps : '', load: r.done ? v.load : '', rx: x.rx,
         changed: !!r.done && (v.sets !== x.rx.sets || v.reps !== x.rx.reps || v.load !== x.rx.load) };
     });
-    if (!items.some(function (it) { return it.done; })) {
-      f.warn = 'Tick at least one exercise you did (or tap All done).';
+    if (!f.none && !items.some(function (it) { return it.done; })) {
+      f.warn = 'Tick at least one exercise you did (or tap All done). If you couldn’t do the session, tap “Couldn’t do it today”.';
       draw(true);
       var w = main.querySelector('.warn');
       if (w) { try { w.scrollIntoView({ block: 'center' }); } catch (e) { /* old browser */ } focusEl(w); }
@@ -332,7 +347,7 @@
     var day = isoDay(f.day) && f.day <= today() ? f.day : today();
     var id = f.id || day.replace(/-/g, '') + '-' + randomId(12);
     var m = logMap(key), was = f.id ? tidyLog(m.logs[f.id]) : null;   // a session changed keeps when it was first logged (its place in the list)
-    m.logs[id] = tidyLog({ day: day, at: was && was.at ? was.at : new Date().toISOString(), prog: p.date, title: p.title, grp: f.grp, items: items, pain: f.pain, note: f.note });
+    m.logs[id] = tidyLog({ day: day, at: was && was.at ? was.at : new Date().toISOString(), prog: p.date, title: p.title, grp: f.grp, items: items, pain: f.pain, note: f.note, none: f.none });   // v4: none
     saveLogMap(key, m);
     var box = outbox(key).filter(function (x) { return x !== id; }); box.push(id); setOutbox(key, box);
     finishForm(f.id ? 'Session changed.' : 'Session saved.');
@@ -389,14 +404,19 @@
     }
     if (!f || cur.view !== 'log') return;
     f.warn = '';
-    if (act === 'tick') { var r = f.rows[b.getAttribute('data-i')]; if (r) r.done = !r.done; f.arm = false; draw(true); refocus('[data-act="tick"][data-i="' + b.getAttribute('data-i') + '"]'); }
+    if (act === 'tick') { var r = f.rows[b.getAttribute('data-i')]; if (r) { r.done = !r.done; if (r.done) f.none = false; } f.arm = false; draw(true); refocus('[data-act="tick"][data-i="' + b.getAttribute('data-i') + '"]'); }
     else if (act === 'change') { var i = b.getAttribute('data-i'); f.open[i] = !f.open[i]; draw(true); refocus(f.open[i] ? 'input[data-i="' + i + '"][data-f="sets"]' : '[data-act="change"][data-i="' + i + '"]'); }
-    else if (act === 'all') { shownRows().forEach(function (x) { f.rows[x.i].done = true; }); draw(true); refocus('[data-act="all"]'); }
+    else if (act === 'all') { shownRows().forEach(function (x) { f.rows[x.i].done = true; }); f.none = false; draw(true); refocus('[data-act="all"]'); }
     else if (b.hasAttribute('data-grp')) {
       f.grp = b.getAttribute('data-grp'); draw(true);
       Array.prototype.forEach.call(main.querySelectorAll('[data-grp]'), function (c) { if (c.getAttribute('data-grp') === f.grp) focusEl(c); });
     }
     else if (b.hasAttribute('data-pain')) { var n = +b.getAttribute('data-pain'); f.pain = f.pain === n ? null : n; draw(true); refocus('[data-pain="' + n + '"]'); }
+    else if (act === 'none') {                         // v4: couldn't do it: nothing ticked, the session still goes to the clinic
+      f.none = !f.none; f.warn = '';
+      if (f.none) Object.keys(f.rows).forEach(function (k) { f.rows[k].done = false; });
+      draw(true); refocus('[data-act="none"]');
+    }
     else if (act === 'save') saveForm();
     else if (act === 'remove') removeLog();
   });

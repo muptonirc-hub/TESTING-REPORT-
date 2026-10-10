@@ -53,6 +53,8 @@
   v3 (6 Oct): the training log (program.js): Log a session (tick what was done, Change the sets, reps or load, pain 0-10,
   a note), Your sessions (change or remove one), Last time on each exercise. Sessions go to the clinic store under the
   link (shared/<key>/logs) and wait on the phone while it is offline.
+  v4 (10 Oct, with the app's v48): for older clients: the pain buttons in two rows at 44 px with words under them,
+  "Couldn't do it today" (pain and a note without any exercise ticked), Call the clinic, "your clinician".
 -->
 <style>
 @font-face { font-family: "Rajdhani"; font-weight: 700; font-display: swap; src: url("../athlete-report-app/rajdhani-700.woff2") format("woff2"); }
@@ -154,8 +156,13 @@ h1:focus { outline: none; }
 .pain { margin: 20px 0 0; padding: 0; border: 0; }
 .pain legend { padding: 0; font-weight: 650; }
 .pain legend span { color: var(--muted); font-weight: 500; font-size: 15px; }
-.pain-grid { display: grid; grid-template-columns: repeat(11, minmax(0, 1fr)); gap: 6px; margin-top: 8px; }
-.pain-grid button { min-height: 44px; padding: 0; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); color: var(--fg); font: inherit; font-weight: 650; font-variant-numeric: tabular-nums; cursor: pointer; }
+.pain-grid { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; margin-top: 8px; }   /* v4: two rows (0–5, 6–10), each button at least 44 px wide */
+.pain-grid button { min-height: 48px; min-width: 44px; padding: 0; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); color: var(--fg); font: inherit; font-size: 18px; font-weight: 650; font-variant-numeric: tabular-nums; cursor: pointer; }
+.pain-words { display: flex; justify-content: space-between; margin: 6px 2px 0; color: var(--muted); font-size: 14px; }   /* v4: none · moderate · worst */
+.skip { width: 100%; margin-top: 14px; }                 /* v4: Couldn't do it today */
+.skip[aria-pressed="true"] { border-color: var(--amber-ink); background: var(--amber-soft); color: var(--amber-ink); }
+.call { margin-top: 12px; width: 100%; text-decoration: none; }   /* v4: tap to call */
+.call svg { width: 20px; height: 20px; }
 .pain-grid button[aria-pressed="true"] { border-color: var(--accent); background: var(--accent); color: #fff; }
 .lnote { display: block; margin: 18px 0 0; }
 .lnote span { display: block; margin-bottom: 6px; font-weight: 650; }
@@ -173,7 +180,6 @@ h1:focus { outline: none; }
 .hist small { color: var(--fg); font-size: 14.5px; }
 .hist em { font-style: normal; color: var(--amber-ink); font-size: 13.5px; font-weight: 650; }
 @media (max-width: 380px) {
-  .pain-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); }
   .lx-edit { grid-template-columns: 1fr 1fr; }
   .lx-edit .lx-f:last-child { grid-column: 1 / -1; }
 }

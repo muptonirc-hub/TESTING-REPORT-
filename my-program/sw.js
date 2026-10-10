@@ -4,7 +4,8 @@
    here (the page keeps its own copy of the program; the browser's cache keeps the pictures). */
 // v2: the home-screen icon on an iPhone opens the program (index.html links a manifest whose start_url carries the key)
 // v3: the training log (program.js); the clinic store's log requests go to another origin, never cached here
-var CACHE = 'bh-program-v3';
+// v4: the pain buttons in two rows, "Couldn't do it today", Call the clinic (program.js and index.html)
+var CACHE = 'bh-program-v4';
 var FILES = ['./', 'index.html', 'program.js', 'manifest.webmanifest', '../athlete-report-app/cloud-config.js',
   '../athlete-report-app/rajdhani-700.woff2', '../athlete-report-app/icon-192.png', '../athlete-report-app/apple-touch-icon.png'];
 self.addEventListener('install', function (event) {
