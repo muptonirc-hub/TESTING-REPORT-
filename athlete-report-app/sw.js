@@ -17,14 +17,16 @@
    v43: the Battery builder: the clinic's own batteries and tests (kept in the clinic store; no new files).
    v44: the app notices a new version (Home updates by itself, elsewhere a bar offers Update; no new files).
    v45: the clinic's photo on Home (clinic-wide.jpg for wider screens, clinic-tall.jpg for phones).
-   v46: each practitioner their own login (no new files). */
-var CACHE = 'bh-athlete-report-v46';
-var FILES = ['./', 'index.html', 'app.js?v=46', 'engine.js?v=46', 'qrcode.js?v=46', 'report.js?v=46', 'report-fonts.js?v=46', 'jspdf.umd.min.js?v=46', 'cloud-config.js?v=46', 'cloud.js?v=46',
+   v46: each practitioner their own login (no new files).
+   v47: photos behind two pages' headings: the testing room on Screening (screening-wide.jpg, screening-tall.jpg), two
+   practitioners at a laptop on Exercise programming (exercise-wide.jpg, exercise-tall.jpg). */
+var CACHE = 'bh-athlete-report-v47';
+var FILES = ['./', 'index.html', 'app.js?v=47', 'engine.js?v=47', 'qrcode.js?v=47', 'report.js?v=47', 'report-fonts.js?v=47', 'jspdf.umd.min.js?v=47', 'cloud-config.js?v=47', 'cloud.js?v=47',
   'norms.json', 'strength_norms.json', 'hamstring_norms.json', 'acl_norms.json', 'ankle_go.json', 'interpretation.json', 'explainers.json', 'exercise_library.json', 'programming_guide.md', 'manifest.webmanifest',
   'guides/index.json', 'guides/training-variables.md', 'guides/rehab-principles.md', 'guides/muscle-strains.md', 'guides/acl.md', 'guides/tendinopathy.md', 'guides/ankle-sprain.md',
   'guides/groin-pain.md', 'guides/rotator-cuff.md', 'guides/pfp-oa.md', 'guides/low-back-pain.md', 'guides/performance-tests.md', 'guides/rehab-performance.md', 'guides/block-design.md',
   'icon-192.png', 'icon-512.png', 'icon-maskable-512.png', 'apple-touch-icon.png', 'rajdhani-600.woff2', 'rajdhani-700.woff2',
-  'clinic-wide.jpg', 'clinic-tall.jpg'];
+  'clinic-wide.jpg', 'clinic-tall.jpg', 'screening-wide.jpg', 'screening-tall.jpg', 'exercise-wide.jpg', 'exercise-tall.jpg'];
 
 self.addEventListener('install', function (event) {
   event.waitUntil(

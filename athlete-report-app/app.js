@@ -4331,9 +4331,9 @@
     window.scrollTo(0, 0);
     focusQuiet(els.homeSec.querySelector('[data-home="hub:' + was + '"]') || $('homeHello'));
   }
-  function subHeadHtml(title, line, backAttr, backLabel) {
+  function subHeadHtml(title, line, backAttr, backLabel, cls) {   // v47: cls (the Screening page's photo band)
     return '<button type="button" class="cp-back quiet" ' + (backAttr || 'data-home="back"') + '>' + BACK_SVG + esc(backLabel || 'Home') + '</button>' +
-      '<div class="cp-head"><h1 id="hsubH" tabindex="-1">' + esc(title) + '</h1>' + (line ? '<p>' + esc(line) + '</p>' : '') + '</div>';
+      '<div class="cp-head' + (cls ? ' ' + cls : '') + '"><h1 id="hsubH" tabindex="-1">' + esc(title) + '</h1>' + (line ? '<p>' + esc(line) + '</p>' : '') + '</div>';
   }
   // the page drawn only when it changed (a sync redraws Home: Photo mode's search box and its keyboard stay put)
   function renderHomeSub() {
@@ -4358,7 +4358,7 @@
   function batTileLine(b) { return b.about || (batteryLineFor(b.items) + ' \u00b7 ' + batPopLabel(b)); }
   function screenHubHtml() {
     var bats = tileBats(), run = state.custom.batId || '', cbusy = homeBusy('custom'), runShown = !!run && bats.some(function (b) { return b.id === run; });
-    return subHeadHtml('Screening', 'Choose the battery. Results on paper or in the VALD app? Photo mode reads them for you.') +
+    return subHeadHtml('Screening', 'Choose the battery. Results on paper or in the VALD app? Photo mode reads them for you.', '', '', 'cp-photo cp-screen') +   // v47: the testing room behind the heading
       '<div class="home-tiles" id="homeTests">' + TOOLS.map(function (t) {
         var busy = t === 'custom' ? cbusy && !runShown : homeBusy(t);
         return '<button type="button" class="tile" data-home="tool:' + t + '">' + homeTile(HEAD[t][0], homeLine(t), HOME_ICON[t], busy ? 'In progress' : '') + '</button>';
@@ -4373,7 +4373,7 @@
   }
   function exHubHtml() {
     var exBusy = homeBusy('ex');
-    return subHeadHtml('Exercise programming', 'Build a program for a client, or keep the clinic’s exercise library and templates up to date.') +
+    return subHeadHtml('Exercise programming', 'Build a program for a client, or keep the clinic’s exercise library and templates up to date.', '', '', 'cp-photo cp-ex') +   // v47: two practitioners at a laptop
       '<div class="home-tiles" id="homeEx">' +
       '<button type="button" class="tile" data-home="ex:builder">' + homeTile('Build a program', homeLine('builder'), HOME_ICON.builder, exBusy ? 'In progress' : '') + '</button>' +
       '<button type="button" class="tile" data-home="ex:library">' + homeTile('Exercise library', homeLine('library'), HOME_ICON.library, '') + '</button>' +

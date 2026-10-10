@@ -433,6 +433,31 @@ p.ex-flag { display: flex; align-items: center; justify-content: center; color: 
 .cp-head h1 { margin: 0; font: 700 34px/1.08 var(--font-brand); letter-spacing: .2px; text-transform: uppercase; text-wrap: balance; overflow-wrap: anywhere; }
 .cp-head h1:focus { outline: none; }
 .cp-head p { margin: 6px 0 0; color: var(--muted); font-size: 15px; }
+/* v47: a photo band behind two Home pages' headings, the heading in white (as Home's clinic photo) */
+.cp-head.cp-photo {
+  position: relative; display: flex; flex-direction: column; justify-content: flex-end; min-height: 230px; padding: 24px 28px;
+  border-radius: 20px; box-shadow: var(--shadow); background-color: #0a0e16; background-repeat: no-repeat;
+}
+.cp-head.cp-photo h1 { color: #fff; font-size: 40px; text-shadow: 0 1px 12px rgba(0, 0, 0, .35); }
+.cp-head.cp-photo p { max-width: 46ch; color: rgba(255, 255, 255, .9); text-shadow: 0 1px 8px rgba(0, 0, 0, .35); }
+/* Screening: the clinic's testing room (the ForceFrame, ForceDecks and NordBord): screening-wide.jpg on wider screens,
+   screening-tall.jpg on phones, a dark wash on the left and the foot */
+.cp-head.cp-photo.cp-screen {
+  background-image: linear-gradient(90deg, rgba(10, 14, 22, .84) 0%, rgba(10, 14, 22, .6) 40%, rgba(10, 14, 22, .14) 78%),
+    linear-gradient(0deg, rgba(10, 14, 22, .6), rgba(10, 14, 22, 0) 60%), url("screening-wide.jpg");
+  background-position: 0 0, 0 0, 50% 60%; background-size: auto, auto, cover;   /* the ForceFrame's bar to the right of the words */
+}
+/* Exercise programming: two practitioners at a laptop. On an iPad held sideways the photo stands at the band's full height on
+   its right, its left edge fading into the dark where the words are (nobody's face under them); upright and on a phone
+   (exercise-tall.jpg) the faces are at the top and the words at the foot over a dark wash */
+.cp-head.cp-photo.cp-ex { background-image: url("exercise-wide.jpg"); background-size: auto 100%; background-position: right center; }
+.cp-head.cp-photo.cp-ex h1, .cp-head.cp-photo.cp-ex p { max-width: 300px; }
+@media (max-width: 999px) {
+  .cp-head.cp-photo.cp-ex { min-height: 360px;
+    background-image: linear-gradient(0deg, rgba(10, 14, 22, .94) 0%, rgba(10, 14, 22, .86) 30%, rgba(10, 14, 22, .3) 50%, rgba(10, 14, 22, 0) 64%), url("exercise-tall.jpg");
+    background-size: auto, cover; background-position: 0 0, 50% 0; }
+  .cp-head.cp-photo.cp-ex h1, .cp-head.cp-photo.cp-ex p { max-width: 46ch; }
+}
 .cp-cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 22px 26px; align-items: start; }
 .cp-sec { min-width: 0; }
 .cp-sec-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 40px; margin: 0 0 8px; }
@@ -526,6 +551,14 @@ p.ex-flag { display: flex; align-items: center; justify-content: center; color: 
 @media (max-width: 599px) { .lg-charts { grid-template-columns: minmax(0, 1fr); } .ck-list { grid-template-columns: minmax(0, 1fr); } .lg-tile b { font-size: 21px; } }
 @media (max-width: 599px) {
   .cp-head h1 { font-size: 27px; }
+  /* v47: on a phone the testing room is taller (the ForceFrame), the heading at its foot over a heavier wash */
+  .cp-head.cp-photo { min-height: 250px; padding: 18px; border-radius: 16px; }
+  .cp-head.cp-photo.cp-screen {
+    background-image: linear-gradient(0deg, rgba(10, 14, 22, .9) 0%, rgba(10, 14, 22, .8) 40%, rgba(10, 14, 22, .25) 70%, rgba(10, 14, 22, .04) 100%), url("screening-tall.jpg");
+    background-position: 0 0, 50% 30%; background-size: auto, cover; }
+  .cp-head.cp-photo.cp-ex { min-height: 340px;   /* a two-line heading on a narrow phone stays on the dark; the faces above it */
+    background-image: linear-gradient(0deg, rgba(10, 14, 22, .94) 0%, rgba(10, 14, 22, .88) 44%, rgba(10, 14, 22, .35) 58%, rgba(10, 14, 22, 0) 70%), url("exercise-tall.jpg"); }
+  .cp-head.cp-photo h1 { font-size: 30px; }
   .cp-go > span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }   /* the chevron alone on a phone */
   .cp-row { padding-inline: 10px 8px; }
 }
@@ -2375,13 +2408,13 @@ html.row-dragging, html.row-dragging * { cursor: grabbing !important; user-selec
 
 <div class="toast" id="toast" role="status" hidden></div>
 
-<script src="engine.js?v=46" defer></script>
-<script src="report-fonts.js?v=46" defer></script>
-<script src="jspdf.umd.min.js?v=46" defer></script>
-<script src="qrcode.js?v=46" defer></script>
-<script src="report.js?v=46" defer></script>
-<script src="cloud-config.js?v=46" defer></script>
-<script src="cloud.js?v=46" defer></script>
-<script src="app.js?v=46" defer></script>
+<script src="engine.js?v=47" defer></script>
+<script src="report-fonts.js?v=47" defer></script>
+<script src="jspdf.umd.min.js?v=47" defer></script>
+<script src="qrcode.js?v=47" defer></script>
+<script src="report.js?v=47" defer></script>
+<script src="cloud-config.js?v=47" defer></script>
+<script src="cloud.js?v=47" defer></script>
+<script src="app.js?v=47" defer></script>
 </body>
 </html>
